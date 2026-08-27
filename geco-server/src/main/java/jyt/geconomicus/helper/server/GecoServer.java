@@ -202,7 +202,7 @@ public class GecoServer
 			// l'application (inscription joueur, animateur...), seul le scan caméra
 			// d'achat de cartes a besoin de https://.
 			if (httpsEnabled)
-				config.plugins.register(new io.javalin.community.ssl.SslPlugin(ssl -> {
+				config.registerPlugin(new io.javalin.community.ssl.SslPlugin(ssl -> {
 					ssl.pemFromPath(certPath.toString(), keyPath.toString());
 					ssl.insecure = true;
 					ssl.insecurePort = port;
