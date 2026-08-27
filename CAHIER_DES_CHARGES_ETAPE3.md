@@ -1,8 +1,6 @@
 # Cahier des charges — Ğeconomicus Helper / GecoLab, Étape 3
 
-Document de passation à utiliser en ouverture d'une nouvelle conversation avec
-Claude, pour reprendre le projet sans perdre le contexte accumulé pendant
-l'étape 2. Rédigé en fin d'étape 2, à partir de tout ce qui a été discuté et
+Rédigé en fin d'étape 2, à partir de tout ce qui a été discuté et
 construit ensemble.
 
 ---
