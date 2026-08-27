@@ -1,0 +1,60 @@
+{
+  "id": "troc",
+  "apiVersion": 1,
+  "displayName": { "fr": "Troc", "en": "Barter" },
+  "shortDescription": {
+    "fr": "Échange direct de biens, sans monnaie ni valeur imposée.",
+    "en": "Direct exchange of goods, with no money and no imposed value."
+  },
+  "hasBank": false,
+  "hasMoneyMass": false,
+
+  "note_rollback": "Retour utilisateur (22/08/2026) : les échanges de service et le temps de vie, présents dans une première version de ce manifeste, ont été entièrement retirés après un premier essai. Le troc ne connaît plus qu'un seul type de transaction : l'échange bien-contre-bien. Jamais de don sans contrepartie, jamais de monnaie ni de jeton d'aucune sorte. Voir docs/10-etape-plugins-troc.md pour l'historique complet de la décision.",
+
+  "configFields": [
+    { "key": "startingGoods", "type": "integer", "default": 4, "min": 1,
+      "label": { "fr": "Cartes de départ", "en": "Starting cards" } }
+  ],
+
+  "eventTypes": [
+    {
+      "code": "GOODS_TRADE",
+      "label": { "fr": "Échange bien contre bien", "en": "Goods-for-goods trade" },
+      "roles": ["initiator", "counterparty"],
+      "fields": [
+        { "key": "goodsFromInitiator", "type": "integer", "min": 0 },
+        { "key": "goodsFromCounterparty", "type": "integer", "min": 0 }
+      ],
+      "note": "Une carte compte pour 1 quel que soit son niveau (faible/moyen/fort) - le niveau reste une mécanique de jeu (les carrés, comme dans les deux autres systèmes : réunir 4 cartes identiques pour monter de niveau), sans effet sur la valeur : voir docs/10-etape-plugins-troc.md, règle 7. Un échange doit toujours être une vraie transaction dans les deux sens (goodsFromInitiator > 0 ET goodsFromCounterparty > 0) - jamais un don à sens unique."
+    }
+  ],
+
+  "playerState": {
+    "goodsCount": { "type": "integer", "initial": "$config.startingGoods" }
+  },
+
+  "deathRebirth": {
+    "inventoryFields": ["goodsCount"],
+    "onRebirth": { "goodsCount": "$config.startingGoods" }
+  },
+
+  "wealthFormula": { "field": "goodsCount" },
+
+  "extraStats": [
+    {
+      "key": "tradeCount",
+      "label": { "fr": "Échanges réalisés", "en": "Trades made" },
+      "aggregate": "count",
+      "eventType": "GOODS_TRADE"
+    }
+  ],
+
+  "wizardSteps": [
+    { "block": "death-selection" },
+    { "block": "death-inventory", "fields": ["goodsCount"] },
+    { "block": "turn-summary" }
+  ],
+  "note_wizardSteps": "L'échange (GOODS_TRADE) n'est volontairement PAS une étape de l'assistant de fin de tour : il se produit en continu pendant le tour, au fur et à mesure des négociations entre joueurs - exactement comme un nouveau crédit peut être accordé à tout moment en monnaie dette, pas seulement pendant l'assistant. Il est donc exposé comme une action générale du tableau de bord (voir 'Échange entre joueurs' dans app.js), pas comme un bloc 'transaction-form' de l'assistant. La renaissance (dotation de départ en biens) est entièrement automatique côté moteur (voir Event.applyEvent, cas DEATH) - aucune étape d'assistant dédiée n'est nécessaire pour ça non plus.",
+
+  "documentation": { "fr": "docs/regles.fr.html", "en": "docs/regles.en.html" }
+}

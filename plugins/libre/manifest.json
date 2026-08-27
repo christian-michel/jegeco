@@ -1,0 +1,54 @@
+{
+  "id": "libre",
+  "apiVersion": 1,
+  "displayName": { "fr": "Monnaie libre (June)", "en": "Free money (June)" },
+  "shortDescription": {
+    "fr": "Monnaie libre selon la TRM de Stéphane Laborde.",
+    "en": "Free currency based on Stéphane Laborde's RTM."
+  },
+  "hasBank": false,
+  "hasMoneyMass": true,
+
+  "configFields": [
+    { "key": "moneyCardsFactor", "type": "integer", "default": 1, "min": 1,
+      "label": { "fr": "Facteur carte/monnaie", "en": "Card/money factor" } },
+    { "key": "weakCoinValue", "type": "number", "default": 0.5, "min": 0.1,
+      "label": { "fr": "Valeur d'une pièce faible", "en": "Weak coin value" } },
+    { "key": "tokenPenalty", "type": "boolean", "default": false,
+      "label": { "fr": "Pénalité d'un jeton à la rotation", "en": "One-token penalty on rotation" } }
+  ],
+
+  "eventTypes": [],
+  "note_eventTypes": "Aucun type d'événement spécifique : en monnaie libre, seuls les événements du socle commun (JOIN/TURN/DEATH/QUIT/END) sont utilisés - la distribution du DU est un calcul indicatif affiché par l'assistant (computeCurrentDU), jamais un événement enregistré en tant que tel.",
+
+  "playerState": {},
+
+  "deathRebirth": {
+    "inventoryFields": ["weakCoins", "mediumCoins", "strongCoins"],
+    "onRebirth": {
+      "note": "Le joueur renaît avec le DU seul (pas de dotation fixe) - le montant dépend de la masse monétaire au moment de la renaissance (computeCurrentDU), pas une valeur constante comme au démarrage de partie. Ne rentre pas dans le format 'onRebirth: {champ: valeur fixe}' utilisé par le troc - à revoir : peut-être 'onRebirth' doit-il accepter soit une valeur fixe, soit une référence à une formule (ex. \"$formula.currentDU\")."
+    }
+  },
+
+  "moneyMassRules": {
+    "onJoin": "+7 * moneyCardsFactor",
+    "onTurnStart": "converge vers 7 * moneyCardsFactor * nb_joueurs_actifs (la moitié de l'écart à chaque tour)",
+    "onDeath": "+8 * moneyCardsFactor (approximation fixe héritée de l'app originale, distincte du DU affiché à l'écran - voir Event.java, un écart documenté mais non résolu)",
+    "note": "Ces règles sont trop spécifiques (formules avec des constantes 7/8 propres à la conception TRM du jeu) pour rentrer dans un format déclaratif générique en l'état - elles resteront câblées dans le moteur central pour ce plugin précis, comme le calcul de la banque en monnaie dette."
+  },
+
+  "wealthFormula": { "field": "assessedFinalWealth" },
+
+  "extraStats": [],
+  "specialCharts": ["galilee-relative-wealth-over-time"],
+
+  "wizardSteps": [
+    { "block": "death-selection" },
+    { "block": "death-inventory", "fields": ["weakCoins", "mediumCoins", "strongCoins"] },
+    { "block": "rebirth-grant", "value": "$formula.currentDU" },
+    { "block": "turn-start-reset", "target": "other-active-players", "value": "$formula.currentDU", "note": "Distribution indicative du DU aux joueurs restants - pas un event enregistré, juste un calcul affiché (voir contrat, limite notée ci-dessus)." },
+    { "block": "turn-summary" }
+  ],
+
+  "documentation": { "fr": "docs/regles.fr.html", "en": "docs/regles.en.html" }
+}

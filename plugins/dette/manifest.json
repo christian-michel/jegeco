@@ -1,0 +1,108 @@
+{
+  "id": "dette",
+  "apiVersion": 1,
+  "displayName": { "fr": "Monnaie dette", "en": "Debt money" },
+  "shortDescription": {
+    "fr": "Le crédit crée la monnaie, avec intérêts.",
+    "en": "Credit creates money, with interest."
+  },
+  "hasBank": true,
+  "hasMoneyMass": true,
+
+  "configFields": [
+    { "key": "moneyCardsFactor", "type": "integer", "default": 1, "min": 1,
+      "label": { "fr": "Facteur carte/monnaie", "en": "Card/money factor" } },
+    { "key": "weakCoinValue", "type": "integer", "default": 1, "min": 1,
+      "label": { "fr": "Valeur d'une pièce faible", "en": "Weak coin value" } }
+  ],
+
+  "eventTypes": [
+    {
+      "code": "NEW_CREDIT",
+      "label": { "fr": "Nouveau crédit", "en": "New credit" },
+      "roles": ["debtor"],
+      "fields": [
+        { "key": "principal", "type": "integer", "min": 0 },
+        { "key": "interest", "type": "integer", "min": 0 }
+      ]
+    },
+    {
+      "code": "INTEREST_ONLY",
+      "label": { "fr": "Remboursement (intérêt seul)", "en": "Repayment (interest only)" },
+      "roles": ["debtor"],
+      "fields": [ { "key": "interest", "type": "integer", "min": 0 } ]
+    },
+    {
+      "code": "REIMB_CREDIT",
+      "label": { "fr": "Remboursement crédit", "en": "Credit repayment" },
+      "roles": ["debtor"],
+      "fields": [
+        { "key": "principal", "type": "integer", "min": 0 },
+        { "key": "interest", "type": "integer", "min": 0 }
+      ]
+    },
+    {
+      "code": "CANNOT_PAY",
+      "label": { "fr": "Ne peut pas payer (saisie)", "en": "Cannot pay (seizure)" },
+      "roles": ["debtor"],
+      "fields": [
+        { "key": "seizedCoins", "type": "integer", "min": 0 },
+        { "key": "seizedWeakCards", "type": "integer", "min": 0 },
+        { "key": "seizedMediumCards", "type": "integer", "min": 0 },
+        { "key": "seizedStrongCards", "type": "integer", "min": 0 }
+      ],
+      "note": "BANKRUPT/PRISON restent des issues possibles de ce même formulaire (voir classifyCannotPay côté moteur), pas des eventTypes distincts déclarés ici."
+    },
+    {
+      "code": "SIDE_INVESTMENT",
+      "label": { "fr": "Investissement banque", "en": "Bank investment" },
+      "roles": [],
+      "fields": [
+        { "key": "investedMoney", "type": "integer", "min": 0 },
+        { "key": "investedWeakCards", "type": "integer", "min": 0 },
+        { "key": "investedMediumCards", "type": "integer", "min": 0 },
+        { "key": "investedStrongCards", "type": "integer", "min": 0 }
+      ]
+    },
+    {
+      "code": "ASSESSMENT_FINAL",
+      "label": { "fr": "Bilan final banque", "en": "Final bank assessment" },
+      "roles": [],
+      "fields": [
+        { "key": "assessedMoney", "type": "integer", "min": 0 },
+        { "key": "assessedWeakCards", "type": "integer", "min": 0 },
+        { "key": "assessedMediumCards", "type": "integer", "min": 0 },
+        { "key": "assessedStrongCards", "type": "integer", "min": 0 }
+      ]
+    }
+  ],
+
+  "playerState": {
+    "curDebt": { "type": "integer", "initial": 0 },
+    "curInterest": { "type": "integer", "initial": 0 },
+    "visitedBank": { "type": "boolean", "initial": true, "resetEachTurnTo": false }
+  },
+
+  "deathRebirth": {
+    "inventoryFields": ["remainingMoney", "weakCards", "mediumCards", "strongCards"],
+    "onRebirth": { "curDebt": 0, "curInterest": 0 },
+    "note": "Contrairement au troc/à la libre, une renaissance en dette ne redonne pas de dotation fixe : le joueur reprend simplement à 0 dette, son patrimoine en cartes reste géré manuellement par l'animateur (règle héritée de l'app originale, voir Déroulement_partie.pdf)."
+  },
+
+  "bankWealthFormula": {
+    "description": "Voir StatsService.computeBankWealth : rejoue l'historique et soustrait le principal détruit lors d'un défaut - trop spécifique pour rentrer dans le format d'agrégation simple utilisé par extraStats. Reste une fonction câblée dans le moteur central pour ce plugin, identifiée par hasBank=true, plutôt qu'une formule déclarative pour l'instant."
+  },
+  "wealthFormula": { "field": "assessedFinalWealth" },
+
+  "extraStats": [],
+
+  "wizardSteps": [
+    { "block": "death-selection" },
+    { "block": "debt-settlement-check", "note": "Bilan des joueurs endettés (obligatoire pour les mourants, facultatif pour les autres) - bloc spécifique à hasBank=true, pas encore généralisé en transaction-form." },
+    { "block": "death-inventory", "fields": ["remainingMoney", "weakCards", "mediumCards", "strongCards"] },
+    { "block": "transaction-form", "eventType": "NEW_CREDIT" },
+    { "block": "turn-summary" }
+  ],
+
+  "documentation": { "fr": "docs/regles.fr.html", "en": "docs/regles.en.html" }
+}

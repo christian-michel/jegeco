@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Cartes Ğeconomicus — étape 3</title>
+<style>
+	:root {
+		--primaire: #F5C542; --primaire-bg: #fdf3d9;
+		--secondaire: #4A90E2; --secondaire-bg: #e8f0fc;
+		--electronique: #43B581; --electronique-bg: #e6f7ee;
+		--informatique: #E94F4F; --informatique-bg: #fce9e9;
+	}
+	body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #eef0f4; padding: 1.5rem 2rem; margin: 0; }
+	h1 { font-size: 1.3rem; margin-bottom: 0.25rem; }
+	.subtitle { color: #6b7280; font-size: 0.85rem; margin-bottom: 1rem; }
+	.toolbar { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
+	.toolbar input, .toolbar select {
+		padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid #d1d5db; font-size: 0.85rem;
+	}
+	.stats { font-size: 0.8rem; color: #6b7280; }
+
+	.sector-heading {
+		font-size: 1rem; font-weight: 800; margin: 1.5rem 0 0.75rem; padding-bottom: 0.35rem;
+		border-bottom: 3px solid; display: none;
+	}
+	.sector-heading.has-cards { display: block; }
+	.sector-heading.sec-Primaire { border-color: var(--primaire); color: #92610a; }
+	.sector-heading.sec-Secondaire { border-color: var(--secondaire); color: #1d4ed8; }
+	.sector-heading.sec-Électronique { border-color: var(--electronique); color: #15803d; }
+	.sector-heading.sec-Informatique { border-color: var(--informatique); color: #b91c1c; }
+
+	.gallery { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 1rem; }
+
+	/* ===== Gabarit de carte ===== */
+	.card {
+		width: 220px; height: 320px; border-radius: 20px; position: relative;
+		display: flex; flex-direction: column; align-items: center; justify-content: center;
+		box-shadow: 0 6px 18px rgba(0,0,0,0.12); overflow: hidden; padding: 1rem; box-sizing: border-box;
+	}
+	.card.sec-Primaire { background: linear-gradient(160deg, var(--primaire-bg), var(--primaire) 140%); }
+	.card.sec-Secondaire { background: linear-gradient(160deg, var(--secondaire-bg), var(--secondaire) 140%); }
+	.card.sec-Électronique { background: linear-gradient(160deg, var(--electronique-bg), var(--electronique) 140%); }
+	.card.sec-Informatique { background: linear-gradient(160deg, var(--informatique-bg), var(--informatique) 140%); }
+
+	.card-circle {
+		width: 140px; height: 140px; border-radius: 50%; background: #fff;
+		display: flex; align-items: center; justify-content: center; overflow: hidden;
+		box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 4px solid rgba(255,255,255,0.8);
+	}
+	.card-circle img { width: 100%; height: 100%; object-fit: cover; }
+	.card-circle .fallback { font-size: 0.7rem; color: #9ca3af; text-align: center; padding: 0.5rem; }
+
+	.card-title { margin-top: 0.75rem; font-size: 1rem; font-weight: 800; color: #1f2430; text-align: center; }
+
+	.card-corner {
+		position: absolute; display: flex; flex-direction: column; align-items: center; gap: 0.1rem; width: 52px;
+	}
+	.card-corner .icon-box {
+		width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.85);
+		display: flex; align-items: center; justify-content: center; overflow: hidden;
+	}
+	.card-corner img { width: 100%; height: 100%; object-fit: cover; }
+	.card-corner .fallback { font-size: 0.55rem; color: #6b7280; }
+	.card-corner span { font-size: 0.58rem; font-weight: 700; color: #1f2430; text-align: center; line-height: 1.1; margin-top: 0.1rem; }
+	.corner-tr { top: 12px; right: 12px; }
+	.corner-bl { bottom: 12px; left: 12px; }
+
+	.card-label {
+		position: absolute; top: 12px; left: 12px; font-size: 0.55rem; font-weight: 700;
+		text-transform: uppercase; letter-spacing: 0.03em; color: rgba(31,36,48,0.5);
+	}
+	.card-missing-badge {
+		position: absolute; bottom: 8px; right: 8px; font-size: 0.55rem; font-weight: 700;
+		background: rgba(0,0,0,0.55); color: #fff; padding: 0.1rem 0.4rem; border-radius: 999px;
+	}
+</style>
+</head>
+<body>
+	<h1>Cartes Ğeconomicus — étape 3</h1>
+	<p class="subtitle">
+		Gabarit piloté par les données (<code>cards-data.js</code>, généré depuis le classeur Excel). Les
+		illustrations manquantes affichent un repli automatique (nom du fichier attendu) au lieu de bloquer
+		l'affichage — déposez les images reçues dans <code>illustrations/</code> avec le nom exact indiqué
+		dans <code>prompts-illustrations.csv</code>, puis rechargez cette page.
+	</p>
+
+	<div class="toolbar">
+		<input type="text" id="search" placeholder="Filtrer par produit ou constituant...">
+		<select id="sectorFilter">
+			<option value="">Tous les secteurs</option>
+			<option value="Primaire">Primaire</option>
+			<option value="Secondaire">Secondaire</option>
+			<option value="Électronique">Électronique</option>
+			<option value="Informatique">Informatique</option>
+		</select>
+		<span class="stats" id="stats"></span>
+	</div>
+
+	<div id="root"></div>
+
+	<script src="cards-data.js"></script>
+	<script>
+		const rootEl = document.getElementById("root");
+		const searchInput = document.getElementById("search");
+		const sectorFilterEl = document.getElementById("sectorFilter");
+		const statsEl = document.getElementById("stats");
+
+		function escapeHtml(str) {
+			const div = document.createElement("div");
+			div.textContent = str;
+			return div.innerHTML;
+		}
+
+		function cardImgOrFallback(path, label, isCircle) {
+			// Pas de gestionnaire onerror inline : un nom contenant une apostrophe (ex.
+			// "Jus d'orange", présent dans le catalogue) casserait la chaîne JS générée.
+			// On passe l'info nécessaire via des attributs data-*, et on attache le vrai
+			// gestionnaire d'erreur en JS après coup (voir attachFallbacks ci-dessous).
+			const icon = isCircle ? "📦" : "🔸";
+			return `<img src="illustrations/${escapeHtml(path)}" alt="${escapeHtml(label)}"
+				class="card-img" data-fallback-label="${escapeHtml(icon + " " + label)}">`;
+		}
+
+		// Une image manquante déclenche 'error' : on la remplace par un repli textuel
+		// plutôt que de casser l'affichage des autres cartes. Boucle manuelle plutôt que
+		// .forEach() sur la NodeList, par prudence de compatibilité.
+		function attachFallbacks() {
+			const imgs = rootEl.querySelectorAll(".card-img");
+			for (let i = 0; i < imgs.length; i++) {
+				imgs[i].addEventListener("error", function () {
+					const fallback = document.createElement("div");
+					fallback.className = "fallback";
+					fallback.textContent = this.getAttribute("data-fallback-label");
+					this.replaceWith(fallback);
+				});
+			}
+		}
+
+		function renderCard(c) {
+			const sectorClass = "sec-" + c.secteur;
+			return `
+				<div class="card ${sectorClass}">
+					<span class="card-label">${c.secteur}</span>
+					<div class="card-corner corner-tr">
+						<div class="icon-box">${cardImgOrFallback(c.constituantImg, c.constituant, false)}</div>
+						<span>${c.constituant}</span>
+					</div>
+					<div class="card-circle">${cardImgOrFallback(c.produitImg, c.produit, true)}</div>
+					<div class="card-title">${c.produit}</div>
+					<div class="card-corner corner-bl">
+						<div class="icon-box">${cardImgOrFallback(c.constituantImg, c.constituant, false)}</div>
+						<span>${c.constituant}</span>
+					</div>
+				</div>`;
+		}
+
+		function render() {
+			const query = searchInput.value.trim().toLowerCase();
+			const sector = sectorFilterEl.value;
+			const bySector = { Primaire: [], Secondaire: [], "Électronique": [], Informatique: [] };
+
+			let shown = 0;
+			for (const c of CARDS) {
+				if (sector && c.secteur !== sector) continue;
+				if (query && !c.produit.toLowerCase().includes(query) && !c.constituant.toLowerCase().includes(query)) continue;
+				bySector[c.secteur].push(c);
+				shown++;
+			}
+
+			const sectorOrder = ["Primaire", "Secondaire", "Électronique", "Informatique"];
+			rootEl.innerHTML = sectorOrder.map((sec) => {
+				const cards = bySector[sec];
+				return `
+					<h2 class="sector-heading sec-${sec} ${cards.length ? "has-cards" : ""}">${sec} (${cards.length})</h2>
+					<div class="gallery">${cards.map(renderCard).join("")}</div>`;
+			}).join("");
+
+			statsEl.textContent = `${shown} carte(s) affichée(s) sur ${CARDS.length} au total`;
+			attachFallbacks();
+		}
+
+		searchInput.addEventListener("input", render);
+		sectorFilterEl.addEventListener("change", render);
+		render();
+	</script>
+</body>
+</html>
