@@ -505,6 +505,22 @@ body.money-libre .panel-actions .btn.active-mode { background: var(--accent-libr
 .catalog-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
 .catalog-row-title { font-weight: 600; }
 .catalog-row-meta { font-size: 0.8rem; color: var(--text-dim); }
+
+/* ============ Accordéon des groupes de catalogue (par niveau/genre) ============ */
+.catalog-group { margin-bottom: 0.6rem; }
+.catalog-group-header {
+	display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
+	background: #f7f8fb; border: 1px solid var(--border); border-radius: 10px;
+	padding: 0.6rem 0.8rem; cursor: pointer; font-size: 0.92rem;
+}
+.catalog-group-header:hover { border-color: var(--accent-debt); }
+.catalog-group-chevron { color: var(--text-dim); font-size: 0.75rem; width: 1em; }
+.catalog-group-title { font-weight: 600; flex: 1; }
+.catalog-group-count {
+	background: var(--border); color: var(--text-dim); border-radius: 999px;
+	font-size: 0.75rem; padding: 0.1rem 0.55rem;
+}
+.catalog-group-body { padding: 0.6rem 0 0 0.4rem; }
 .catalog-zoombox-preview {
 	display: flex; justify-content: center; margin-bottom: 1rem;
 }

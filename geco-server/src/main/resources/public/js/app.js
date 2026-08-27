@@ -793,6 +793,35 @@ function catalogThumbHtml(pUrl, pClass) {
 		+ `onerror="this.outerHTML='<div class=&quot;${pClass || "catalog-row-thumb"}-fallback&quot;>🖼️</div>'">`;
 }
 
+// Étape 3, mode smartphone : groupes repliables (accordéon) par table - vu le
+// volume réel (104 cartes/visuels, 76 avatars), tout afficher à plat rendait
+// l'écran interminable. Regroupement par le champ le plus naturel de chaque
+// catalogue (niveau pour cartes/visuels, genre pour avatars) ; conservé PAR
+// onglet (changer d'onglet et revenir garde les groupes ouverts tels quels).
+// "fonds" n'a que 4 entrées fixes : pas de regroupement, affichage à plat.
+const mSettingsCatalogExpanded = { cartes: new Set(), visuels: new Set(), avatars: new Set(), fonds: new Set() };
+
+// Clé de regroupement d'une entrée pour un type de catalogue donné, ou null
+// si ce catalogue ne se regroupe pas (fonds).
+function catalogGroupKey(pKind, pEntry) {
+	if ((pKind === "cartes") || (pKind === "visuels")) return pEntry.niveau || "";
+	if (pKind === "avatars") return pEntry.genre || "";
+	return null;
+}
+
+// Libellé + ordre d'affichage des groupes pour un type de catalogue donné.
+function catalogGroupOrder(pKind) {
+	if ((pKind === "cartes") || (pKind === "visuels")) return ["faible", "moyenne", "forte", "tresforte"];
+	if (pKind === "avatars") return ["homme", "femme", "neutre"];
+	return [];
+}
+
+function catalogGroupLabel(pKind, pGroupKey) {
+	if ((pKind === "cartes") || (pKind === "visuels")) return catalogEnumLabel("level", pGroupKey);
+	if (pKind === "avatars") return catalogEnumLabel("avatar_genre", pGroupKey);
+	return pGroupKey;
+}
+
 async function renderCatalogsPanel() {
 	const t = window.GecoI18n.t;
 	document.querySelectorAll(".settings-catalog-tab").forEach((btn) => {
@@ -814,7 +843,41 @@ async function renderCatalogsPanel() {
 		return;
 	}
 
-	container.innerHTML = entries.map((entry) => renderCatalogRowHtml(mSettingsCatalogKind, entry, visuals)).join("");
+	const expanded = mSettingsCatalogExpanded[mSettingsCatalogKind];
+
+	if (mSettingsCatalogKind === "fonds") {
+		// Pas de regroupement : 4 entrées fixes, affichage à plat comme avant.
+		container.innerHTML = entries.map((entry) => renderCatalogRowHtml(mSettingsCatalogKind, entry, visuals)).join("");
+	} else {
+		const order = catalogGroupOrder(mSettingsCatalogKind);
+		container.innerHTML = order
+			.map((groupKey) => {
+				const groupEntries = entries.filter((e) => catalogGroupKey(mSettingsCatalogKind, e) === groupKey);
+				if (groupEntries.length === 0) return ""; // groupe vide (ex. "neutre" sans avatar) : pas affiché du tout
+				const isOpen = expanded.has(groupKey);
+				return `
+				<div class="catalog-group">
+					<button type="button" class="catalog-group-header" data-group="${escapeHtml(groupKey)}">
+						<span class="catalog-group-chevron">${isOpen ? "▾" : "▸"}</span>
+						<span class="catalog-group-title">${escapeHtml(catalogGroupLabel(mSettingsCatalogKind, groupKey))}</span>
+						<span class="catalog-group-count">${groupEntries.length}</span>
+					</button>
+					<div class="catalog-group-body ${isOpen ? "" : "hidden"}">
+						${groupEntries.map((entry) => renderCatalogRowHtml(mSettingsCatalogKind, entry, visuals)).join("")}
+					</div>
+				</div>`;
+			})
+			.join("");
+
+		container.querySelectorAll(".catalog-group-header").forEach((header) => {
+			header.addEventListener("click", () => {
+				const key = header.dataset.group;
+				if (expanded.has(key)) expanded.delete(key); else expanded.add(key);
+				renderCatalogsPanel();
+			});
+		});
+	}
+
 	container.querySelectorAll(".catalog-row").forEach((row) => {
 		row.addEventListener("click", () => {
 			const entry = entries.find((e) => e.id === row.dataset.id);
