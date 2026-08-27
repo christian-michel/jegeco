@@ -2034,8 +2034,8 @@ async function renderGameDetail(gameId) {
 		const eventBtn = isDebt ? buttons[2] : null; // absent (undefined) en monnaie libre/troc
 		renameBtn.onclick = () => openRenamePlayerDialog(p);
 		deleteBtn.onclick = () => confirmDeletePlayer(p);
-		if (linkBtn) linkBtn.onclick = () => {
-			const link = `${window.location.origin}/player-view.html?gameId=${game.id}&token=${p.accessToken}`;
+		if (linkBtn) linkBtn.onclick = async () => {
+			const link = await buildPlayerLink(game.id, p.accessToken);
 			navigator.clipboard.writeText(link).then(() => {
 				linkBtn.textContent = "✓";
 				setTimeout(() => { linkBtn.textContent = "🔗"; }, 1500);
@@ -2371,14 +2371,15 @@ async function renderConnect() {
 	const container = el("connectAddresses");
 	container.innerHTML = '<p style="color:var(--text-dim)">Détection des adresses réseau...</p>';
 
-	let addresses;
+	let networkInfo;
 	try {
-		addresses = await Api.getNetworkInfo();
+		networkInfo = await Api.getNetworkInfo();
 	} catch (err) {
 		container.innerHTML = '<p style="color:var(--danger)">Impossible de détecter les adresses réseau. '
 			+ "Vérifiez votre configuration ou consultez docs/05-etape3-connectivite.md.</p>";
 		return;
 	}
+	const addresses = networkInfo.addresses;
 	if (!addresses || addresses.length === 0) {
 		container.innerHTML = '<p style="color:var(--danger)">Aucune adresse réseau détectée. '
 			+ "Vérifiez que l'ordinateur est bien connecté à un réseau (Wifi local ou partage de connexion).</p>";
@@ -2409,6 +2410,26 @@ async function renderConnect() {
 				"QR indisponible (bibliothèque non chargée)";
 		}
 	}
+
+	// Remonté par un utilisateur (test réel avec un téléphone, 27/08/2026) :
+	// rappelle explicitement que le scan caméra d'achat de cartes (étape 3)
+	// exige HTTPS - la connexion "Rejoindre la partie" ci-dessus, elle, n'en a
+	// pas besoin (voir docs/05-etape3-connectivite.md). Sans ce rappel, rien
+	// n'indique qu'une IP différente doit être utilisée pour ce cas précis.
+	const noteEl = document.createElement("p");
+	noteEl.className = "galilee-explainer";
+	noteEl.style.marginTop = "1rem";
+	if (networkInfo.httpsPort) {
+		const preferred = addresses.find((a) => a.likelyHotspotOrLan) || addresses[0];
+		noteEl.innerHTML = `📷 Pour que l'<strong>achat de cartes par scan caméra</strong> fonctionne (mode smartphone), `
+			+ `chaque joueur doit ouvrir son lien personnel en <strong>https://</strong> (pas http://), par exemple `
+			+ `<code>https://${escapeHtml(preferred.address)}:${networkInfo.httpsPort}</code> - un avertissement de sécurité `
+			+ `apparaîtra la première fois (certificat auto-signé), c'est normal : choisissez "Continuer quand même" / "Avancé".`;
+	} else {
+		noteEl.innerHTML = `⚠️ Le certificat HTTPS n'a pas pu être généré sur cette installation : `
+			+ `le scan caméra d'achat de cartes (mode smartphone) ne fonctionnera pas. Consultez les logs du serveur au démarrage.`;
+	}
+	container.appendChild(noteEl);
 }
 
 
@@ -2752,6 +2773,38 @@ let mAppSettings = { defaultLanguage: "fr", soundMuted: false, soundVolume: 100,
 // Étape 3, mode smartphone (écran Paramètres) : onglet actif du panneau des
 // trois tableaux (Cartes/Visuels/Avatars) - voir renderCatalogsPanel().
 let mSettingsCatalogKind = "cartes";
+// Cache du GET /api/network-info (adresses locales + port HTTPS) - remonté par
+// un utilisateur (27/08/2026, premier test réel sur téléphone) : le lien
+// personnel d'un joueur ne doit JAMAIS être construit à partir de
+// window.location.origin (ça vaudrait "localhost" si l'animateur consulte le
+// tableau de bord via localhost - inutilisable depuis un autre appareil).
+// Voir buildPlayerLink() ci-dessous. Mis en cache car appelé à chaque clic sur
+// le lien "🔗" d'un joueur, pas seulement depuis l'écran "Connexion joueurs".
+let mNetworkInfoCache = null;
+async function getCachedNetworkInfo() {
+	if (!mNetworkInfoCache) mNetworkInfoCache = await Api.getNetworkInfo();
+	return mNetworkInfoCache;
+}
+// Construit le lien personnel d'un joueur (voir Player.accessToken) en HTTPS
+// + IP locale quand c'est possible (nécessaire pour que le scan caméra
+// d'achat de cartes, étape 3, fonctionne directement depuis ce lien - une
+// page chargée en HTTPS peut tout faire qu'une page HTTP peut faire, jamais
+// l'inverse) ; repli en HTTP si le certificat n'a pas pu être généré sur
+// cette installation (le reste de la page fonctionne quand même, seul le
+// scan caméra serait alors indisponible).
+async function buildPlayerLink(gameId, accessToken) {
+	const info = await getCachedNetworkInfo();
+	const addr = (info.addresses || []).find((a) => a.likelyHotspotOrLan) || (info.addresses || [])[0];
+	if (!addr) {
+		// Aucune adresse réseau détectée : dernier recours, l'origine actuelle
+		// (mieux qu'un lien qui ne se construit pas du tout, même si ce sera
+		// "localhost" si c'est ce que l'animateur utilise).
+		return `${window.location.origin}/player-view.html?gameId=${gameId}&token=${accessToken}`;
+	}
+	const scheme = info.httpsPort ? "https" : "http";
+	const port = info.httpsPort || (location.port || "7000");
+	return `${scheme}://${addr.address}:${port}/player-view.html?gameId=${gameId}&token=${accessToken}`;
+}
 async function refreshAppSettings() {
 	try {
 		const res = await fetch("/api/settings");

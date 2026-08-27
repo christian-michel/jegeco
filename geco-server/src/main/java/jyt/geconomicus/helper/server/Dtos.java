@@ -236,4 +236,14 @@ public class Dtos
 					pOffer.strongCoins(), pOffer.expiresAtEpochMs());
 		}
 	}
+
+	// Réponse de GET /api/network-info (étape 3, écran "Connexion joueurs" +
+	// génération du lien personnel d'un joueur, voir app.js) : les adresses
+	// locales détectées, et le port HTTPS s'il est disponible (null sinon -
+	// voir SelfSignedCertService/GecoServer.mHttpsPort). Sans ce port, le
+	// frontend n'a aucun moyen de savoir sur quel port se trouve le
+	// connecteur HTTPS (il diffère du port HTTP normal).
+	public record NetworkInfoDto(java.util.List<NetworkUtils.NetworkAddress> addresses, Integer httpsPort)
+	{
+	}
 }

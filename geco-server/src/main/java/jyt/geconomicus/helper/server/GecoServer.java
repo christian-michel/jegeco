@@ -109,6 +109,12 @@ public class GecoServer
 	// durée de vie, voir TradeOfferService pour le raisonnement complet
 	// (code court, scan caméra ET saisie manuelle partagent ce même service).
 	private final TradeOfferService mTradeOfferService = new TradeOfferService();
+	// Port du connecteur HTTPS (voir main()), null si indisponible - exposé
+	// via GET /api/network-info pour que le frontend puisse construire des
+	// liens joueur corrects (voir app.js, génération du lien "🔗" et écran
+	// "Connexion joueurs") sans avoir à deviner ou dupliquer le calcul
+	// "port + 8363" fait côté serveur.
+	private Integer mHttpsPort;
 
 	public GecoServer(final GameService pGameService)
 	{
@@ -168,6 +174,7 @@ public class GecoServer
 		final EntityManagerFactory emf = Persistence.createEntityManagerFactory(DB_DEFAULT_NAME);
 		final GameService gameService = new GameService(emf);
 		final GecoServer server = new GecoServer(gameService);
+		server.mHttpsPort = httpsEnabled ? httpsPort : null;
 
 		final Javalin app = Javalin.create(config -> {
 			// Sert le front HTML/CSS/JS directement depuis les ressources embarquées dans le jar
@@ -805,9 +812,7 @@ public class GecoServer
 		// docs/05-etape3-connectivite.md pour le contexte complet. Le port n'est pas
 		// renvoyé ici : le front le connaît déjà via window.location.port (même
 		// processus Javalin, même port pour l'API et pour lui-même).
-		pApp.get("/api/network-info", ctx -> { //$NON-NLS-1$
-			ctx.json(NetworkUtils.listLocalAddresses());
-		});
+		pApp.get("/api/network-info", ctx -> ctx.json(new Dtos.NetworkInfoDto(NetworkUtils.listLocalAddresses(), mHttpsPort))); //$NON-NLS-1$
 
 		// --- Joueurs ---
 
