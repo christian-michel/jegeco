@@ -852,6 +852,16 @@ function renderCatalogRowHtml(pKind, pEntry, pVisuals) {
 			</span>
 		</button>`;
 	}
+	if (pKind === "fonds") {
+		return `
+		<button type="button" class="catalog-row" data-id="${escapeHtml(pEntry.id)}">
+			${catalogThumbHtml(`/cartes/${pEntry.filename}`)}
+			<span class="catalog-row-main">
+				<span class="catalog-row-title">${escapeHtml(catalogEnumLabel("level", pEntry.niveau))}</span>
+				<span class="catalog-row-meta">${escapeHtml(pEntry.filename)}</span>
+			</span>
+		</button>`;
+	}
 	// pKind === "avatars"
 	const meta = [catalogEnumLabel("avatar_genre", pEntry.genre), catalogEnumLabel("avatar_age", pEntry.ageCategory)]
 		.filter(Boolean).join(" · ");
@@ -902,6 +912,17 @@ function openCatalogZoombox(pKind, pEntry, pVisuals) {
 			<p class="galilee-explainer" style="margin-top:1rem;">${escapeHtml(t("settings.catalog_field_label_intro"))}</p>
 			${catalogTextFieldsHtml("etiquette", pEntry.etiquette)}
 		`;
+	} else if (pKind === "fonds") {
+		// Un fond de carte est structurellement lié à son niveau (id = niveau,
+		// voir CatalogSeeds.seedBackgrounds côté serveur) : rien à réassigner
+		// ni à renommer ici, uniquement un agrandissement pour vérifier que le
+		// bon fichier a bien été déposé au bon endroit.
+		previewUrl = `/cartes/${pEntry.filename}`;
+		bodyHtml = `
+			<p class="galilee-explainer">${escapeHtml(t("settings.catalog_field_level"))} : <strong>${escapeHtml(catalogEnumLabel("level", pEntry.niveau))}</strong></p>
+			<p class="galilee-explainer">${escapeHtml(t("settings.catalog_field_filename_label"))} : <strong>${escapeHtml(pEntry.filename)}</strong></p>
+			<p class="galilee-explainer">${escapeHtml(t("settings.catalog_background_readonly"))}</p>
+		`;
 	} else {
 		// avatars
 		previewUrl = `/avatars/${pEntry.filename}`;
@@ -920,6 +941,7 @@ function openCatalogZoombox(pKind, pEntry, pVisuals) {
 
 	const previewHtml = `<div class="catalog-zoombox-preview">${catalogThumbHtml(previewUrl, "catalog-row-thumb")}</div>`;
 	openDialog(t("settings.catalog_zoombox_title"), previewHtml + bodyHtml, async () => {
+		if (pKind === "fonds") return; // rien à éditer, la zoombox ne sert qu'à l'agrandissement
 		let fields;
 		if (pKind === "cartes") {
 			fields = {

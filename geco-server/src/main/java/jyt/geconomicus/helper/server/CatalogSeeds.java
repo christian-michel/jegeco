@@ -99,6 +99,33 @@ final class CatalogSeeds
 		return m;
 	}
 
+	// Étape 3 (remonté par un utilisateur le 27/08/2026) : les 4 fonds de carte
+	// par niveau (fond_carte_faible.png...fond_carte_tresforte.png, voir la
+	// convention de nommage du §5.1) - manquaient à l'écran d'administration,
+	// seulement présents dans la convention de nommage jusqu'ici. Une entrée
+	// PAR NIVEAU, jamais plus : contrairement aux "Visuels" (une illustration
+	// par bien, réassignable), un fond est structurellement lié à SON niveau
+	// (id = niveau), il n'y a donc rien à "assigner" ni à réassigner ici.
+	static List<LinkedHashMap<String, Object>> seedBackgrounds()
+	{
+		return List.of(
+				background("faible", "fond_carte_faible.png"), //$NON-NLS-1$ //$NON-NLS-2$
+				background("moyenne", "fond_carte_moyenne.png"), //$NON-NLS-1$ //$NON-NLS-2$
+				background("forte", "fond_carte_forte.png"), //$NON-NLS-1$ //$NON-NLS-2$
+				background("tresforte", "fond_carte_tresforte.png")); //$NON-NLS-1$ //$NON-NLS-2$
+	}
+
+	private static LinkedHashMap<String, Object> background(final String pNiveau, final String pFilename)
+	{
+		final LinkedHashMap<String, Object> m = new LinkedHashMap<>();
+		// L'id EST le niveau : une seule entrée possible par niveau, pas de
+		// numérotation indépendante comme pour les visuels/cartes/avatars.
+		m.put("id", pNiveau); //$NON-NLS-1$
+		m.put("niveau", pNiveau); //$NON-NLS-1$
+		m.put("filename", pFilename); //$NON-NLS-1$
+		return m;
+	}
+
 	// Reprend telles quelles les entrées de démonstration déjà présentes dans
 	// public/avatars/avatars-catalog.js (même id/filename/genre/ageCategory/
 	// skinTone/skinToneLabel) : une seule source de vérité pour le contenu de

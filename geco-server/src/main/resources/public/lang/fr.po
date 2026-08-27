@@ -1265,6 +1265,12 @@ msgstr "Visuels"
 msgid "settings.catalog_tab_avatars"
 msgstr "Avatars"
 
+msgid "settings.catalog_tab_backgrounds"
+msgstr "Fonds de carte"
+
+msgid "settings.catalog_background_readonly"
+msgstr "Le fichier d'image lui-même se remplace en déposant un nouveau fichier de même nom sur le disque - rien d'autre à modifier ici."
+
 msgid "settings.catalog_loading"
 msgstr "Chargement…"
 

@@ -1265,6 +1265,12 @@ msgstr "Visuals"
 msgid "settings.catalog_tab_avatars"
 msgstr "Avatars"
 
+msgid "settings.catalog_tab_backgrounds"
+msgstr "Card backgrounds"
+
+msgid "settings.catalog_background_readonly"
+msgstr "The image file itself is replaced by dropping a new file with the same name on disk - nothing else to edit here."
+
 msgid "settings.catalog_loading"
 msgstr "Loading…"
 

@@ -98,6 +98,8 @@ public class GecoServer
 			CatalogSeeds::seedCards);
 	private final CatalogService mVisualCatalogService = new CatalogService(Path.of("catalogs/visuels.json"), //$NON-NLS-1$
 			CatalogSeeds::seedVisuals);
+	private final CatalogService mBackgroundCatalogService = new CatalogService(Path.of("catalogs/fonds.json"), //$NON-NLS-1$
+			CatalogSeeds::seedBackgrounds);
 	private final CatalogService mAvatarCatalogService = new CatalogService(Path.of("catalogs/avatars.json"), //$NON-NLS-1$
 			CatalogSeeds::seedAvatars);
 
@@ -114,6 +116,7 @@ public class GecoServer
 		{
 			case "cartes" -> mCardCatalogService; //$NON-NLS-1$
 			case "visuels" -> mVisualCatalogService; //$NON-NLS-1$
+			case "fonds" -> mBackgroundCatalogService; //$NON-NLS-1$
 			case "avatars" -> mAvatarCatalogService; //$NON-NLS-1$
 			default -> throw new io.javalin.http.NotFoundResponse("Catalogue inconnu : " + pKind); //$NON-NLS-1$
 		};
