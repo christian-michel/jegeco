@@ -1814,6 +1814,22 @@ async function renderGameDetail(gameId) {
 	setMoneyTheme(game.moneySystem);
 	const t = window.GecoI18n.t;
 
+	// Étape 3 : le bouton "Inviter" (QR d'inscription joueur) n'a de sens
+	// qu'en mode smartphone - remonté par l'utilisateur ("il faudrait que ce
+	// QR code n'apparaisse que si on a cliqué la partie au smartphone dans le
+	// paramètre"). Relit les réglages à chaque affichage plutôt que de se
+	// fier à un état mis en cache : ce bouton doit refléter le réglage
+	// COURANT même si l'animateur ne s'est jamais rendu sur l'écran
+	// Paramètres depuis le démarrage de l'application.
+	Api.getSettings().then((settings) => {
+		const isSmartphoneMode = settings.gameMode === "smartphone";
+		el("btnInvitePlayers").classList.toggle("hidden", !isSmartphoneMode);
+		if (!isSmartphoneMode) {
+			el("inviteQrPanel").classList.add("hidden");
+			el("inviteQrPanel").innerHTML = "";
+		}
+	});
+
 	const isDebt = game.moneySystem === 1;
 	// Troc (voir Game.MONEY_TROC, plugins/troc/manifest.json) : ni banque, ni
 	// masse monétaire, ni crédits - plusieurs blocs du tableau de bord n'ont donc
