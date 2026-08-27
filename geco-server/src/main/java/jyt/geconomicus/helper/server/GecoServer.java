@@ -900,7 +900,7 @@ public class GecoServer
 			{
 				final Transaction transaction = mGameService.recordTransaction(id, req.sellerPlayerId(),
 						req.buyerPlayerId(), req.cardTypeId(), req.cardLevel(), req.weakCoins(), req.mediumCoins(),
-						req.strongCoins());
+						req.strongCoins(), req.nonce(), req.expiresAt());
 				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
 				ctx.status(201).json(Dtos.TransactionDto.from(transaction));
 			}

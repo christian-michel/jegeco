@@ -1484,3 +1484,82 @@ msgstr "{n} biens"
 
 msgid "playerView.current_credit"
 msgstr "Crédit en cours : {debt} (intérêts : {interest})"
+
+# ============ Étape 3 : hub d'échange (vendre / scanner un QR) ============
+msgid "trade.btn_sell"
+msgstr "Vendre une carte"
+
+msgid "trade.btn_scan"
+msgstr "Scanner un achat"
+
+msgid "trade.btn_back"
+msgstr "← Retour"
+
+msgid "trade.btn_back_to_hub"
+msgstr "Retour"
+
+msgid "trade.btn_cancel"
+msgstr "Annuler"
+
+msgid "trade.sell_pick_title"
+msgstr "Quelle carte vendez-vous ?"
+
+msgid "trade.sell_price_title"
+msgstr "Fixez le prix"
+
+msgid "trade.coin_weak"
+msgstr "Jetons faibles"
+
+msgid "trade.coin_medium"
+msgstr "Jetons moyens"
+
+msgid "trade.coin_strong"
+msgstr "Jetons forts"
+
+msgid "trade.btn_generate_qr"
+msgstr "Générer le QR code"
+
+msgid "trade.btn_regenerate_qr"
+msgstr "Générer un nouveau QR code"
+
+msgid "trade.qr_instructions"
+msgstr "Présentez ce QR code à l'acheteur pour qu'il le scanne."
+
+msgid "trade.qr_expired"
+msgstr "⏱️ Ce QR code a expiré."
+
+msgid "trade.scan_title"
+msgstr "Scannez le QR du vendeur"
+
+msgid "trade.scan_camera_error"
+msgstr "⚠️ Caméra indisponible. Vérifiez les autorisations de votre navigateur."
+
+msgid "trade.confirm_title"
+msgstr "Confirmer l'achat ?"
+
+msgid "trade.btn_confirm_buy"
+msgstr "Confirmer l'achat"
+
+msgid "trade.btn_confirming"
+msgstr "Achat en cours..."
+
+msgid "trade.sold_by"
+msgstr "vendu par {name}"
+
+msgid "trade.price_weak"
+msgstr "{n} jeton(s) faible(s)"
+
+msgid "trade.price_medium"
+msgstr "{n} jeton(s) moyen(s)"
+
+msgid "trade.price_strong"
+msgstr "{n} jeton(s) fort(s)"
+
+msgid "trade.price_free"
+msgstr "Gratuit"
+
+msgid "trade.result_success_title"
+msgstr "Achat réussi !"
+
+msgid "trade.result_success_body"
+msgstr "Vous avez acheté : {name}."

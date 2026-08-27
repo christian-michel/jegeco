@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.Date;
 import java.util.UUID;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -79,6 +80,18 @@ public class Transaction implements Serializable
 	// qu'est l'id auto-incrémenté de la base.
 	private String uuid;
 
+	// Protection anti-rejeu du QR code autonome (voir §5.1, flux achat/vente) :
+	// un code court, généré côté CLIENT par le vendeur au moment où il affiche
+	// son QR (pas d'appel serveur pour le créer - décision prise avec
+	// l'utilisateur le 27/08/2026 pour privilégier la rapidité), embarqué tel
+	// quel dans le QR. Le serveur refuse toute transaction dont le nonce a déjà
+	// servi (voir GameService.recordTransaction) : ça ne protège pas contre
+	// une capture d'écran réutilisée AVANT le premier scan légitime, mais ça
+	// empêche un même QR d'être validé deux fois - le compromis rapidité/
+	// robustesse choisi pour cette étape.
+	@Column(unique=true)
+	private String nonce;
+
 	@XmlIDREF
 	@ManyToOne
 	@JoinColumn(nullable=false)
@@ -132,10 +145,12 @@ public class Transaction implements Serializable
 	}
 
 	public Transaction(final Game pGame, final Player pSeller, final Player pBuyer, final String pCardTypeId,
-			final String pCardLevel, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins)
+			final String pCardLevel, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
+			final String pNonce)
 	{
 		super();
 		uuid = UUID.randomUUID().toString();
+		nonce = pNonce;
 		game = pGame;
 		seller = pSeller;
 		buyer = pBuyer;
@@ -146,6 +161,11 @@ public class Transaction implements Serializable
 		weakCoins = pWeakCoins;
 		mediumCoins = pMediumCoins;
 		strongCoins = pStrongCoins;
+	}
+
+	public String getNonce()
+	{
+		return nonce;
 	}
 
 	public Integer getId()

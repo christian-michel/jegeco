@@ -194,7 +194,8 @@ public class Dtos
 	// vérifié uniquement quand la protection par code est activée (voir
 	// AppSettings.protectionEnabled), exactement comme pour le PIN de partie.
 	public record RecordTransactionRequest(String buyerAccessToken, Integer sellerPlayerId, Integer buyerPlayerId,
-			String cardTypeId, String cardLevel, int weakCoins, int mediumCoins, int strongCoins)
+			String cardTypeId, String cardLevel, int weakCoins, int mediumCoins, int strongCoins, String nonce,
+			long expiresAt)
 	{
 	}
 

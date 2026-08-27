@@ -13,16 +13,11 @@
 		GecoServer route GET /api/games/{id}/players/by-token/{token}) - jamais le PIN
 		de l'animateur, un accès volontairement plus restreint.
 
-		Volontairement minimal : une vraie interface joueur (proposer un échange,
-		voir l'historique, etc.) est le sujet de l'étape 3 - cette page se contente
-		de montrer que le jeton fonctionne et donne un premier aperçu utile dès
-		maintenant, sans anticiper des écrans qui restent à concevoir.
-
-		i18n.js chargé comme sur join.html (voir plus bas) : le commentaire d'origine
-		("pas de dépendance à app.js/i18n.js") ne visait que app.js, qui suppose une
-		session animateur - i18n.js, lui, est autonome (aucune dépendance à une
-		session), donc réutilisable tel quel ici (remonté par un utilisateur le
-		27/08/2026 : "le jeu est totalement multilangue").
+		Étape 3 : cette page est devenue le "hub" du joueur - en plus de la
+		consultation, elle porte maintenant le flux d'achat/vente par QR code
+		(voir §5.1 du cahier des charges, décisions prises avec l'utilisateur le
+		27/08/2026 : QR autonome - tout dedans, pas d'aller-retour serveur pour le
+		générer - et scan par caméra). Toute la logique est dans player-view.js.
 	-->
 	<div class="join-shell">
 		<header class="join-header">
@@ -35,67 +30,112 @@
 			<p data-i18n="playerView.error_invalid_link">⚠️ Lien invalide ou expiré. Redemandez un lien à jour à l'animateur.</p>
 		</div>
 
+		<!-- Hub : infos joueur + les deux actions d'échange -->
 		<div id="viewContent" class="join-card hidden">
 			<h2 id="playerName">—</h2>
 			<p id="playerStatus" style="color:var(--text-dim);font-size:0.9rem;"></p>
 			<div id="playerDetails"></div>
+
+			<div class="trade-actions">
+				<button type="button" id="btnOpenSell" class="btn-primary btn-block" data-i18n="trade.btn_sell">Vendre une carte</button>
+				<button type="button" id="btnOpenScan" class="btn-secondary btn-block" data-i18n="trade.btn_scan">Scanner un achat</button>
+			</div>
+
 			<p style="font-size:0.78rem;color:var(--text-dim);margin-top:1.5rem;" data-i18n="playerView.footnote">
 				Cette page se rafraîchit automatiquement. Gardez ce lien pour toute la partie.
 			</p>
 		</div>
+
+		<!-- ===== Vente : étape 1, choisir la carte ===== -->
+		<section id="sellPicker" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="trade.sell_pick_title">Quelle carte vendez-vous ?</h2>
+			</div>
+			<div id="sellCatalogGroups"></div>
+		</section>
+
+		<!-- ===== Vente : étape 2, fixer le prix ===== -->
+		<section id="sellPrice" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="trade.sell_price_title">Fixez le prix</h2>
+			</div>
+			<div id="sellPriceCardInfo" class="trade-card-info"></div>
+			<div class="price-steppers">
+				<div class="price-stepper" data-coin="weak">
+					<span class="price-stepper-label" data-i18n="trade.coin_weak">Jetons faibles</span>
+					<div class="price-stepper-controls">
+						<button type="button" class="stepper-btn" data-delta="-1">−</button>
+						<span class="stepper-value" data-value="weak">0</span>
+						<button type="button" class="stepper-btn" data-delta="1">+</button>
+					</div>
+				</div>
+				<div class="price-stepper" data-coin="medium">
+					<span class="price-stepper-label" data-i18n="trade.coin_medium">Jetons moyens</span>
+					<div class="price-stepper-controls">
+						<button type="button" class="stepper-btn" data-delta="-1">−</button>
+						<span class="stepper-value" data-value="medium">0</span>
+						<button type="button" class="stepper-btn" data-delta="1">+</button>
+					</div>
+				</div>
+				<div class="price-stepper" data-coin="strong">
+					<span class="price-stepper-label" data-i18n="trade.coin_strong">Jetons forts</span>
+					<div class="price-stepper-controls">
+						<button type="button" class="stepper-btn" data-delta="-1">−</button>
+						<span class="stepper-value" data-value="strong">0</span>
+						<button type="button" class="stepper-btn" data-delta="1">+</button>
+					</div>
+				</div>
+			</div>
+			<button type="button" id="btnGenerateQr" class="btn-primary btn-block" data-i18n="trade.btn_generate_qr">Générer le QR code</button>
+		</section>
+
+		<!-- ===== Vente : étape 3, QR affiché + compte à rebours ===== -->
+		<section id="sellQr" class="join-card hidden" style="text-align:center;">
+			<div class="trade-header" style="text-align:left;">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+			</div>
+			<div id="sellQrCode" class="qr-box"></div>
+			<p class="qr-countdown"><span id="qrCountdownValue">1:30</span></p>
+			<p class="galilee-explainer" data-i18n="trade.qr_instructions">Présentez ce QR code à l'acheteur pour qu'il le scanne.</p>
+			<p id="qrExpiredMsg" class="field-error hidden" data-i18n="trade.qr_expired">⏱️ Ce QR code a expiré.</p>
+			<button type="button" id="btnRegenerateQr" class="btn-primary btn-block hidden" data-i18n="trade.btn_regenerate_qr">Générer un nouveau QR code</button>
+		</section>
+
+		<!-- ===== Achat : caméra ===== -->
+		<section id="scanCamera" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="trade.scan_title">Scannez le QR du vendeur</h2>
+			</div>
+			<div class="scan-viewport">
+				<video id="scanVideo" playsinline autoplay muted></video>
+			</div>
+			<p id="scanCameraError" class="field-error hidden" data-i18n="trade.scan_camera_error">⚠️ Caméra indisponible. Vérifiez les autorisations de votre navigateur.</p>
+		</section>
+
+		<!-- ===== Achat : confirmation avant paiement ===== -->
+		<section id="scanConfirm" class="join-card hidden">
+			<h2 data-i18n="trade.confirm_title">Confirmer l'achat ?</h2>
+			<div id="scanConfirmInfo" class="trade-card-info"></div>
+			<button type="button" id="btnConfirmBuy" class="btn-primary btn-block" data-i18n="trade.btn_confirm_buy">Confirmer l'achat</button>
+			<button type="button" id="btnCancelBuy" class="btn-secondary btn-block" data-i18n="trade.btn_cancel">Annuler</button>
+			<p id="scanConfirmError" class="field-error hidden"></p>
+		</section>
+
+		<!-- ===== Achat/Vente : résultat ===== -->
+		<section id="tradeResult" class="join-card hidden" style="text-align:center;">
+			<div id="tradeResultIcon" class="trade-result-icon"></div>
+			<h2 id="tradeResultTitle"></h2>
+			<p id="tradeResultBody"></p>
+			<button type="button" id="btnTradeResultBack" class="btn-primary btn-block" data-i18n="trade.btn_back_to_hub">Retour</button>
+		</section>
 	</div>
 
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
 	<script src="/js/i18n.js"></script>
-	<script>
-		// Alias court vers i18n.js (voir player.js pour le même principe et la
-		// justification du délai de démarrage retardé au premier onChange).
-		const t = (key, vars) => (window.GecoI18n ? window.GecoI18n.t(key, vars) : key);
-
-		const params = new URLSearchParams(window.location.search);
-		const gameId = params.get("gameId");
-		const token = params.get("token");
-
-		async function refresh() {
-			if (!gameId || !token) {
-				document.getElementById("viewError").classList.remove("hidden");
-				return;
-			}
-			try {
-				const res = await fetch(`/api/games/${gameId}/players/by-token/${token}`);
-				if (!res.ok) throw new Error("not found");
-				const player = await res.json();
-				document.getElementById("viewContent").classList.remove("hidden");
-				document.getElementById("playerName").textContent = player.name;
-				document.getElementById("playerStatus").textContent = player.active
-					? t("playerView.status_active") : t("playerView.status_inactive");
-				const details = document.getElementById("playerDetails");
-				// PlayerDto contient toujours les deux jeux de champs (dette/libre et
-				// troc) quel que soit le système - on affiche juste ceux qui sont
-				// significatifs, sans essayer de deviner le système de la partie.
-				let detailsHtml = "";
-				if (player.goodsCount > 0)
-					detailsHtml += `<p>${t("playerView.goods_count", { n: player.goodsCount })}</p>`;
-				if ((player.curDebt > 0) || (player.curInterest > 0))
-					detailsHtml += `<p>${t("playerView.current_credit", { debt: player.curDebt, interest: player.curInterest })}</p>`;
-				details.innerHTML = detailsHtml;
-			} catch (err) {
-				document.getElementById("viewError").classList.remove("hidden");
-				document.getElementById("viewContent").classList.add("hidden");
-			}
-		}
-
-		// Même précaution que sur join.html : attendre la première traduction
-		// effective avant le premier refresh(), pour ne jamais afficher une clé
-		// brute le temps que la langue se charge.
-		let started = false;
-		function startOnce() {
-			if (started) return;
-			started = true;
-			refresh();
-			setInterval(refresh, 5000);
-		}
-		if (window.GecoI18n) window.GecoI18n.onChange(startOnce);
-		setTimeout(startOnce, 1500);
-	</script>
+	<script src="/js/player-view.js"></script>
 </body>
 </html>

@@ -355,7 +355,7 @@ public class GameService
 	 */
 	public Transaction recordTransaction(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
 			final String pCardTypeId, final String pCardLevel, final int pWeakCoins, final int pMediumCoins,
-			final int pStrongCoins) throws PlayerNotFoundException
+			final int pStrongCoins, final String pNonce, final long pExpiresAtEpochMs) throws PlayerNotFoundException
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -374,9 +374,22 @@ public class GameService
 				throw new PlayerNotFoundException(String.valueOf(pBuyerPlayerId));
 			if (seller.equals(buyer))
 				throw new IllegalArgumentException("Le vendeur et l'acheteur ne peuvent pas être le même joueur."); //$NON-NLS-1$
+			// Protection anti-rejeu du QR autonome (voir Transaction.java) : le
+			// nonce est généré côté client par le vendeur, jamais par le serveur -
+			// on se contente donc ici de vérifier qu'il n'a encore jamais servi,
+			// et que le délai annoncé au vendeur (~90s, affiché en compte à
+			// rebours) n'est pas dépassé.
+			if ((pNonce == null) || pNonce.isBlank())
+				throw new IllegalArgumentException("Nonce manquant."); //$NON-NLS-1$
+			final long nonceCount = em.createQuery("SELECT COUNT(t) FROM Transaction t WHERE t.nonce = :nonce", //$NON-NLS-1$
+					Long.class).setParameter("nonce", pNonce).getSingleResult(); //$NON-NLS-1$
+			if (nonceCount > 0)
+				throw new IllegalArgumentException("Ce QR code a déjà été utilisé."); //$NON-NLS-1$
+			if (System.currentTimeMillis() > pExpiresAtEpochMs)
+				throw new IllegalArgumentException("Ce QR code a expiré, demandez-en un nouveau au vendeur."); //$NON-NLS-1$
 			em.getTransaction().begin();
 			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, pCardLevel, pWeakCoins,
-					pMediumCoins, pStrongCoins);
+					pMediumCoins, pStrongCoins, pNonce);
 			em.persist(transaction);
 			em.getTransaction().commit();
 			return transaction;

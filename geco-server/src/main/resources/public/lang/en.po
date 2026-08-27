@@ -1484,3 +1484,82 @@ msgstr "{n} goods"
 
 msgid "playerView.current_credit"
 msgstr "Current credit: {debt} (interest: {interest})"
+
+# ============ Step 3: trading hub (sell / scan a QR code) ============
+msgid "trade.btn_sell"
+msgstr "Sell a card"
+
+msgid "trade.btn_scan"
+msgstr "Scan a purchase"
+
+msgid "trade.btn_back"
+msgstr "← Back"
+
+msgid "trade.btn_back_to_hub"
+msgstr "Back"
+
+msgid "trade.btn_cancel"
+msgstr "Cancel"
+
+msgid "trade.sell_pick_title"
+msgstr "Which card are you selling?"
+
+msgid "trade.sell_price_title"
+msgstr "Set the price"
+
+msgid "trade.coin_weak"
+msgstr "Weak coins"
+
+msgid "trade.coin_medium"
+msgstr "Medium coins"
+
+msgid "trade.coin_strong"
+msgstr "Strong coins"
+
+msgid "trade.btn_generate_qr"
+msgstr "Generate QR code"
+
+msgid "trade.btn_regenerate_qr"
+msgstr "Generate a new QR code"
+
+msgid "trade.qr_instructions"
+msgstr "Show this QR code to the buyer so they can scan it."
+
+msgid "trade.qr_expired"
+msgstr "⏱️ This QR code has expired."
+
+msgid "trade.scan_title"
+msgstr "Scan the seller's QR code"
+
+msgid "trade.scan_camera_error"
+msgstr "⚠️ Camera unavailable. Check your browser's permissions."
+
+msgid "trade.confirm_title"
+msgstr "Confirm the purchase?"
+
+msgid "trade.btn_confirm_buy"
+msgstr "Confirm purchase"
+
+msgid "trade.btn_confirming"
+msgstr "Buying..."
+
+msgid "trade.sold_by"
+msgstr "sold by {name}"
+
+msgid "trade.price_weak"
+msgstr "{n} weak coin(s)"
+
+msgid "trade.price_medium"
+msgstr "{n} medium coin(s)"
+
+msgid "trade.price_strong"
+msgstr "{n} strong coin(s)"
+
+msgid "trade.price_free"
+msgstr "Free"
+
+msgid "trade.result_success_title"
+msgstr "Purchase successful!"
+
+msgid "trade.result_success_body"
+msgstr "You bought: {name}."

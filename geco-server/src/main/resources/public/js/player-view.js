@@ -1,0 +1,447 @@
+// player-view.js — "Mon espace joueur" (étape 3, mode smartphone). Remplace
+// l'ancien script inline de player-view.html : même principe d'accès (jeton
+// individuel dans l'URL, voir Player.accessToken), étendu avec le flux
+// d'achat/vente de cartes par QR code (voir §5.1 du cahier des charges,
+// décisions prises avec l'utilisateur le 27/08/2026) :
+//   - QR AUTONOME : toutes les données de l'offre (vendeur, carte, prix,
+//     expiration, code à usage unique) sont dans le QR lui-même - aucun
+//     appel serveur pour le générer, pour rester le plus rapide possible.
+//   - Scan par CAMÉRA (bibliothèque jsQR), pas de saisie manuelle de repli.
+//   - Anti-rejeu léger : un "nonce" généré ici, vérifié côté serveur pour
+//     n'être jamais réutilisé (voir Transaction.java/GameService.java) - pas
+//     une vraie protection cryptographique, un compromis rapidité/robustesse
+//     assumé pour cette étape (voir le commentaire sur Transaction.nonce).
+//
+// Portée volontairement limitée (comme le modèle de données Transaction) :
+// la carte vendue est choisie dans le catalogue "Cartes" (le TYPE de bien),
+// pas dans un inventaire personnel réel - ce logiciel ne sait pas encore
+// quels biens précis un joueur détient (voir Player.weakCards/mediumCards/
+// strongCards, qui ne comptent que par NIVEAU, pas par bien nommé). Tant
+// qu'un vrai inventaire par bien n'existe pas, le vendeur choisit simplement
+// "ce que je veux vendre maintenant" dans le catalogue complet.
+
+const t = (key, vars) => (window.GecoI18n ? window.GecoI18n.t(key, vars) : key);
+const el = (id) => document.getElementById(id);
+
+const params = new URLSearchParams(window.location.search);
+const state = {
+	gameId: params.get("gameId"),
+	token: params.get("token"),
+	player: null,
+	cardsCatalog: null,
+	visualsCatalog: null,
+	sellSelection: null, // { entry, visual } une fois une carte choisie
+	sellPrice: { weak: 0, medium: 0, strong: 0 },
+	sellExpandedGroups: new Set(),
+	qrCountdownInterval: null,
+	scanStream: null,
+	scanRAF: null,
+	pendingPurchase: null, // payload décodé du QR, en attente de confirmation
+};
+
+// ---------- Traduction des valeurs fixes du catalogue (même principe que côté animateur, voir app.js) ----------
+function catalogEnumLabel(prefix, code) {
+	if (!code) return "";
+	const key = `catalog.${prefix}.${code}`;
+	const translated = t(key);
+	return translated === key ? code : translated;
+}
+function catalogTextValue(value) {
+	if (!value || (typeof value !== "object")) return value || "";
+	const lang = window.GecoI18n ? window.GecoI18n.getActiveLang() : "fr";
+	if (value[lang]) return value[lang];
+	if (value.fr) return value.fr;
+	const first = Object.values(value).find((v) => v);
+	return first || "";
+}
+// Pareil, mais pour une table {langue: texte} reçue TELLE QUELLE dans un QR
+// scanné (voir buildQrPayload) - même logique, nom différent pour la clarté.
+function pickPreferredLang(map) {
+	return catalogTextValue(map);
+}
+
+const CARD_LEVELS = ["faible", "moyenne", "forte", "tresforte"];
+
+// ---------- Navigation entre écrans (un seul visible à la fois, sauf viewError) ----------
+const SCREENS = ["viewContent", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanConfirm", "tradeResult"];
+function showScreen(id) {
+	stopCamera(); // toujours couper la caméra en quittant scanCamera, quel que soit l'écran de destination
+	clearQrCountdown();
+	SCREENS.forEach((s) => el(s).classList.toggle("hidden", s !== id));
+}
+
+// ---------- Consultation (ex-refresh() de l'ancienne version de cette page) ----------
+async function refreshPlayer() {
+	if (!state.gameId || !state.token) {
+		el("viewError").classList.remove("hidden");
+		return;
+	}
+	try {
+		const res = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}`);
+		if (!res.ok) throw new Error("not found");
+		state.player = await res.json();
+		el("viewError").classList.add("hidden");
+		el("playerName").textContent = state.player.name;
+		el("playerStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
+		const details = el("playerDetails");
+		let detailsHtml = "";
+		if (state.player.goodsCount > 0) detailsHtml += `<p>${t("playerView.goods_count", { n: state.player.goodsCount })}</p>`;
+		if ((state.player.curDebt > 0) || (state.player.curInterest > 0))
+			detailsHtml += `<p>${t("playerView.current_credit", { debt: state.player.curDebt, interest: state.player.curInterest })}</p>`;
+		details.innerHTML = detailsHtml;
+	} catch (err) {
+		el("viewError").classList.remove("hidden");
+		return;
+	}
+	// Ne bascule sur le hub que si aucun autre écran d'échange n'est déjà affiché
+	// (le rafraîchissement périodique ne doit pas interrompre une vente/un achat en cours).
+	if (SCREENS.every((s) => el(s).classList.contains("hidden"))) showScreen("viewContent");
+}
+
+// ============================================================
+// VENTE : étape 1 - choisir la carte
+// ============================================================
+async function openSellPicker() {
+	showScreen("sellPicker");
+	const container = el("sellCatalogGroups");
+	container.textContent = t("settings.catalog_loading");
+	if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
+	if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
+
+	container.innerHTML = CARD_LEVELS.map((level) => {
+		const entries = state.cardsCatalog.filter((c) => c.niveau === level);
+		if (entries.length === 0) return "";
+		const isOpen = state.sellExpandedGroups.has(level);
+		return `
+		<div class="trade-group">
+			<button type="button" class="trade-group-header" data-group="${level}">
+				<span class="trade-group-chevron">${isOpen ? "▾" : "▸"}</span>
+				<span class="trade-group-title">${escapeHtmlLocal(catalogEnumLabel("level", level))}</span>
+				<span class="trade-group-count">${entries.length}</span>
+			</button>
+			<div class="trade-group-body ${isOpen ? "" : "hidden"}">
+				${entries.map((entry) => sellCardRowHtml(entry)).join("")}
+			</div>
+		</div>`;
+	}).join("");
+
+	container.querySelectorAll(".trade-group-header").forEach((header) => {
+		header.addEventListener("click", () => {
+			const key = header.dataset.group;
+			if (state.sellExpandedGroups.has(key)) state.sellExpandedGroups.delete(key); else state.sellExpandedGroups.add(key);
+			openSellPicker();
+		});
+	});
+	container.querySelectorAll(".trade-card-row").forEach((row) => {
+		row.addEventListener("click", () => {
+			const entry = state.cardsCatalog.find((c) => c.id === row.dataset.id);
+			const visual = state.visualsCatalog.find((v) => v.id === entry.visualId);
+			openSellPrice(entry, visual);
+		});
+	});
+}
+
+function sellCardRowHtml(entry) {
+	const visual = state.visualsCatalog.find((v) => v.id === entry.visualId);
+	const thumb = visual
+		? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" class="trade-card-thumb" onerror="this.outerHTML='<div class=&quot;trade-card-thumb-fallback&quot;>🖼️</div>'">`
+		: `<div class="trade-card-thumb-fallback">🖼️</div>`;
+	return `
+	<button type="button" class="trade-card-row" data-id="${escapeHtmlLocal(entry.id)}">
+		${thumb}
+		<span class="trade-card-name">${escapeHtmlLocal(catalogTextValue(entry.nom) || entry.id)}</span>
+	</button>`;
+}
+
+function escapeHtmlLocal(s) {
+	return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ============================================================
+// VENTE : étape 2 - fixer le prix
+// ============================================================
+function openSellPrice(entry, visual) {
+	state.sellSelection = { entry, visual };
+	state.sellPrice = { weak: 0, medium: 0, strong: 0 };
+	renderSellPriceCardInfo();
+	renderPriceSteppers();
+	showScreen("sellPrice");
+}
+
+function renderSellPriceCardInfo() {
+	const { entry, visual } = state.sellSelection;
+	const thumb = visual
+		? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" onerror="this.outerHTML='<div class=&quot;trade-card-thumb-fallback&quot;>🖼️</div>'">`
+		: `<div class="trade-card-thumb-fallback">🖼️</div>`;
+	el("sellPriceCardInfo").innerHTML = `
+		${thumb}
+		<div class="trade-card-info-main">
+			<span class="trade-card-info-name">${escapeHtmlLocal(catalogTextValue(entry.nom) || entry.id)}</span>
+			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", entry.niveau))}</span>
+		</div>`;
+}
+
+function renderPriceSteppers() {
+	document.querySelectorAll(".price-stepper").forEach((stepperEl) => {
+		const coin = stepperEl.dataset.coin;
+		stepperEl.querySelector(".stepper-value").textContent = state.sellPrice[coin];
+	});
+}
+
+function initPriceSteppers() {
+	document.querySelectorAll(".price-stepper .stepper-btn").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const coin = btn.closest(".price-stepper").dataset.coin;
+			const delta = parseInt(btn.dataset.delta, 10);
+			state.sellPrice[coin] = Math.max(0, state.sellPrice[coin] + delta);
+			renderPriceSteppers();
+		});
+	});
+}
+
+// ============================================================
+// VENTE : étape 3 - QR code + compte à rebours
+// ============================================================
+const QR_VALIDITY_SECONDS = 90;
+
+function buildQrPayload() {
+	const { entry } = state.sellSelection;
+	const nonce = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID().replace(/-/g, "").slice(0, 16)
+		: Math.random().toString(36).slice(2) + Date.now().toString(36);
+	return {
+		v: 1,
+		g: state.gameId,
+		s: state.player.id,
+		sn: state.player.name,
+		c: entry.id,
+		l: entry.niveau,
+		d: entry.nom, // table {langue: texte} - l'acheteur affiche dans SA propre langue, pas celle du vendeur
+		w: state.sellPrice.weak,
+		m: state.sellPrice.medium,
+		f: state.sellPrice.strong,
+		x: nonce,
+		e: Date.now() + (QR_VALIDITY_SECONDS * 1000),
+	};
+}
+
+function generateQr() {
+	const payload = buildQrPayload();
+	const box = el("sellQrCode");
+	box.innerHTML = "";
+	// eslint-disable-next-line no-undef
+	new QRCode(box, { text: JSON.stringify(payload), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+
+	el("qrExpiredMsg").classList.add("hidden");
+	el("btnRegenerateQr").classList.add("hidden");
+	el("qrCountdownValue").classList.remove("hidden");
+
+	clearQrCountdown();
+	let remaining = QR_VALIDITY_SECONDS;
+	const updateCountdown = () => {
+		const mm = Math.floor(remaining / 60);
+		const ss = String(remaining % 60).padStart(2, "0");
+		el("qrCountdownValue").textContent = `${mm}:${ss}`;
+	};
+	updateCountdown();
+	state.qrCountdownInterval = setInterval(() => {
+		remaining -= 1;
+		if (remaining <= 0) {
+			clearQrCountdown();
+			el("qrCountdownValue").classList.add("hidden");
+			el("qrExpiredMsg").classList.remove("hidden");
+			el("btnRegenerateQr").classList.remove("hidden");
+			return;
+		}
+		updateCountdown();
+	}, 1000);
+
+	showScreen("sellQr");
+}
+
+function clearQrCountdown() {
+	if (state.qrCountdownInterval) {
+		clearInterval(state.qrCountdownInterval);
+		state.qrCountdownInterval = null;
+	}
+}
+
+// ============================================================
+// ACHAT : caméra + décodage QR
+// ============================================================
+let scanCanvasCtx = null;
+
+async function openScan() {
+	showScreen("scanCamera");
+	el("scanCameraError").classList.add("hidden");
+	try {
+		state.scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+	} catch (err) {
+		el("scanCameraError").classList.remove("hidden");
+		return;
+	}
+	const video = el("scanVideo");
+	video.srcObject = state.scanStream;
+	await video.play();
+
+	const canvas = document.createElement("canvas");
+	scanCanvasCtx = canvas.getContext("2d", { willReadFrequently: true });
+	state.scanRAF = requestAnimationFrame(scanTick);
+}
+
+// Une frame de la boucle de scan - se rappelle elle-même tant qu'aucun QR
+// valide n'est détecté ou que l'écran caméra reste actif (state.scanStream).
+function scanTick() {
+	if (!state.scanStream) return; // écran quitté entre-temps (stopCamera() a coupé le flux)
+	const video = el("scanVideo");
+	if (video.readyState === video.HAVE_ENOUGH_DATA) {
+		const canvas = scanCanvasCtx.canvas;
+		canvas.width = video.videoWidth;
+		canvas.height = video.videoHeight;
+		scanCanvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+		const imageData = scanCanvasCtx.getImageData(0, 0, canvas.width, canvas.height);
+		// eslint-disable-next-line no-undef
+		const code = jsQR(imageData.data, imageData.width, imageData.height);
+		if (code && code.data) {
+			handleScannedPayload(code.data);
+			return; // pas de nouvelle frame tant que le résultat n'est pas traité
+		}
+	}
+	state.scanRAF = requestAnimationFrame(scanTick);
+}
+
+function stopCamera() {
+	if (state.scanRAF) {
+		cancelAnimationFrame(state.scanRAF);
+		state.scanRAF = null;
+	}
+	if (state.scanStream) {
+		state.scanStream.getTracks().forEach((track) => track.stop());
+		state.scanStream = null;
+	}
+}
+
+function handleScannedPayload(raw) {
+	let payload;
+	try {
+		payload = JSON.parse(raw);
+		if ((payload.v !== 1) || !payload.s || !payload.c || !payload.x) throw new Error("shape");
+	} catch (err) {
+		// QR reconnu mais pas au bon format (probablement un QR d'une autre
+		// application) : on ignore silencieusement et on continue de scanner,
+		// plutôt que d'interrompre l'utilisateur pour un scan involontaire.
+		state.scanRAF = requestAnimationFrame(scanTick);
+		return;
+	}
+	if (payload.s === state.player.id) {
+		// On ne peut pas s'acheter sa propre carte : on continue de scanner sans
+		// bloquer l'écran, l'utilisateur vise probablement le bon QR juste après.
+		state.scanRAF = requestAnimationFrame(scanTick);
+		return;
+	}
+	stopCamera();
+	state.pendingPurchase = payload;
+	renderScanConfirm(payload);
+	showScreen("scanConfirm");
+}
+
+function renderScanConfirm(payload) {
+	const name = pickPreferredLang(payload.d) || payload.c;
+	const priceParts = [];
+	if (payload.w > 0) priceParts.push(t("trade.price_weak", { n: payload.w }));
+	if (payload.m > 0) priceParts.push(t("trade.price_medium", { n: payload.m }));
+	if (payload.f > 0) priceParts.push(t("trade.price_strong", { n: payload.f }));
+	const priceText = priceParts.length > 0 ? priceParts.join(" + ") : t("trade.price_free");
+
+	el("scanConfirmInfo").innerHTML = `
+		<div class="trade-card-thumb-fallback">🖼️</div>
+		<div class="trade-card-info-main">
+			<span class="trade-card-info-name">${escapeHtmlLocal(name)}</span>
+			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", payload.l))} · ${escapeHtmlLocal(t("trade.sold_by", { name: payload.sn }))}</span>
+			<span class="trade-card-info-price">${escapeHtmlLocal(priceText)}</span>
+		</div>`;
+	el("scanConfirmError").classList.add("hidden");
+}
+
+async function confirmPurchase() {
+	const payload = state.pendingPurchase;
+	const btn = el("btnConfirmBuy");
+	btn.disabled = true;
+	btn.textContent = t("trade.btn_confirming");
+	try {
+		const res = await fetch(`/api/games/${state.gameId}/transactions`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				buyerAccessToken: state.token,
+				sellerPlayerId: payload.s,
+				buyerPlayerId: state.player.id,
+				cardTypeId: payload.c,
+				cardLevel: payload.l,
+				weakCoins: payload.w,
+				mediumCoins: payload.m,
+				strongCoins: payload.f,
+				nonce: payload.x,
+				expiresAt: payload.e,
+			}),
+		});
+		if (!res.ok) {
+			const body = await res.json().catch(() => ({}));
+			throw new Error(body.error || body.msg || t("join.generic_error", { status: res.status }));
+		}
+		showTradeResult(true, t("trade.result_success_title"),
+			t("trade.result_success_body", { name: pickPreferredLang(payload.d) || payload.c }));
+		refreshPlayer();
+	} catch (err) {
+		el("scanConfirmError").textContent = err.message;
+		el("scanConfirmError").classList.remove("hidden");
+	} finally {
+		btn.disabled = false;
+		btn.textContent = t("trade.btn_confirm_buy");
+	}
+}
+
+function showTradeResult(success, title, body) {
+	el("tradeResultIcon").textContent = success ? "✅" : "⚠️";
+	el("tradeResultTitle").textContent = title;
+	el("tradeResultBody").textContent = body;
+	showScreen("tradeResult");
+}
+
+// ---------- Câblage des boutons (une fois, au chargement) ----------
+function initTradeUI() {
+	el("btnOpenSell").addEventListener("click", openSellPicker);
+	el("btnOpenScan").addEventListener("click", openScan);
+
+	document.querySelectorAll(".btn-back").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const section = btn.closest("section").id;
+			if (section === "sellPicker") showScreen("viewContent");
+			else if (section === "sellPrice") showScreen("sellPicker");
+			else if (section === "sellQr") showScreen("sellPrice");
+			else if (section === "scanCamera") showScreen("viewContent");
+		});
+	});
+
+	initPriceSteppers();
+	el("btnGenerateQr").addEventListener("click", generateQr);
+	el("btnRegenerateQr").addEventListener("click", generateQr);
+
+	el("btnConfirmBuy").addEventListener("click", confirmPurchase);
+	el("btnCancelBuy").addEventListener("click", () => showScreen("viewContent"));
+	el("btnTradeResultBack").addEventListener("click", () => showScreen("viewContent"));
+}
+
+// ---------- Démarrage ----------
+// Même précaution que sur join.html : attendre la première traduction
+// effective avant le premier refresh(), pour ne jamais afficher une clé brute
+// le temps que la langue se charge (voir player.js pour la même logique).
+let started = false;
+function startOnce() {
+	if (started) return;
+	started = true;
+	initTradeUI();
+	refreshPlayer();
+	setInterval(refreshPlayer, 5000);
+}
+if (window.GecoI18n) window.GecoI18n.onChange(startOnce);
+setTimeout(startOnce, 1500);

@@ -112,3 +112,78 @@ body {
 .avatar-gallery-item.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,92,231,0.25); }
 .avatar-gallery-item img, .avatar-gallery-item svg { width: 100%; height: 100%; object-fit: cover; }
 .avatar-gallery-empty { grid-column: 1 / -1; text-align: center; color: var(--text-dim); font-size: 0.82rem; padding: 1.5rem 0.5rem; }
+
+/* ============ Étape 3 : hub d'échange (vendre / scanner) ============ */
+.btn-secondary {
+	background: #fff; color: var(--text); border: 1.5px solid var(--border); border-radius: 14px;
+	padding: 0.9rem; font-size: 1rem; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.btn-secondary:active { background: #f3f4f6; }
+.trade-actions { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1.5rem; }
+
+.trade-header { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+.trade-header h2 { margin: 0; }
+.btn-back {
+	border: none; background: none; color: var(--accent); font-weight: 700; font-size: 0.85rem;
+	cursor: pointer; font-family: inherit; padding: 0.2rem 0;
+}
+
+/* Groupes de cartes repliables (même principe que l'écran Paramètres, en plus simple) */
+.trade-group-header {
+	display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
+	background: #f7f8fb; border: 1px solid var(--border); border-radius: 12px;
+	padding: 0.65rem 0.85rem; cursor: pointer; font-size: 0.92rem; font-family: inherit; margin-bottom: 0.5rem;
+}
+.trade-group-chevron { color: var(--text-dim); font-size: 0.75rem; width: 1em; }
+.trade-group-title { font-weight: 700; flex: 1; }
+.trade-group-count { background: var(--border); color: var(--text-dim); border-radius: 999px; font-size: 0.75rem; padding: 0.1rem 0.55rem; }
+.trade-group-body { padding: 0 0 0.4rem 0.3rem; }
+.trade-card-row {
+	display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0.6rem; border: 1.5px solid var(--border);
+	border-radius: 12px; margin-bottom: 0.45rem; cursor: pointer; width: 100%; background: #fff; font-family: inherit;
+}
+.trade-card-row:active { border-color: var(--accent); }
+.trade-card-thumb { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; background: #f3f4f6; border: 1px solid var(--border); flex-shrink: 0; }
+.trade-card-thumb-fallback {
+	width: 42px; height: 42px; border-radius: 8px; background: #f3f4f6; border: 1px solid var(--border);
+	display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;
+}
+.trade-card-name { font-weight: 600; text-align: left; }
+
+/* Récapitulatif carte choisie (étape prix) / carte scannée (confirmation achat) */
+.trade-card-info {
+	display: flex; align-items: center; gap: 0.8rem; background: #f7f8fb; border-radius: 14px;
+	padding: 0.9rem; margin-bottom: 1rem;
+}
+.trade-card-info img, .trade-card-info .trade-card-thumb-fallback { width: 56px; height: 56px; border-radius: 10px; }
+.trade-card-info-main { display: flex; flex-direction: column; gap: 0.15rem; }
+.trade-card-info-name { font-weight: 700; font-size: 1.05rem; }
+.trade-card-info-meta { font-size: 0.82rem; color: var(--text-dim); }
+.trade-card-info-price { font-weight: 700; color: var(--accent); }
+
+/* Steppers de prix (jetons faibles/moyens/forts) */
+.price-steppers { display: flex; flex-direction: column; gap: 0.7rem; margin: 1rem 0 1.5rem; }
+.price-stepper { display: flex; align-items: center; justify-content: space-between; }
+.price-stepper-label { font-size: 0.9rem; font-weight: 600; }
+.price-stepper-controls { display: flex; align-items: center; gap: 0.8rem; }
+.stepper-btn {
+	width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid var(--border); background: #fff;
+	font-size: 1.2rem; font-weight: 700; cursor: pointer; color: var(--accent); font-family: inherit;
+}
+.stepper-btn:active { background: #f3f4f6; }
+.stepper-value { min-width: 1.6em; text-align: center; font-weight: 700; font-size: 1.05rem; }
+
+/* QR affiché (vente) */
+.qr-box { display: flex; justify-content: center; margin: 0.5rem 0 1rem; }
+.qr-box img, .qr-box canvas { border-radius: 12px; }
+.qr-countdown { font-size: 1.4rem; font-weight: 800; color: var(--accent); margin: 0 0 0.8rem; }
+
+/* Caméra (achat) */
+.scan-viewport {
+	border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 1; max-width: 320px; margin: 0 auto;
+}
+.scan-viewport video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Résultat (succès/échec) */
+.trade-result-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+#tradeResult h2 { margin: 0 0 0.5rem; }
