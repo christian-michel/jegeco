@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ğeconomicus Helper</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="/js/vendor/chart.umd.js"></script>
+<!-- Chart.js hébergé localement (js/vendor/) plutôt que via CDN : remonté par un
+     utilisateur, le CDN cdnjs.cloudflare.com n'était pas joignable depuis son
+     réseau, empêchant tout affichage de graphique. Fonctionne désormais même sans
+     connexion internet, comme le reste de l'application. -->
+<script src="/js/vendor/qrcode.js"></script>
+</head>
+<body>
+	<div class="app-shell">
+		<!-- Sidebar sombre, persistante, façon maquette -->
+		<aside class="sidebar">
+			<div class="sidebar-logo">
+				<span class="logo-mark">Ğ</span>
+				<span class="logo-text">GECONOMICUS<br><strong>HELPER</strong></span>
+			</div>
+
+			<!-- Navigation "hors partie" (écran de démarrage) -->
+			<nav id="navHome" class="sidebar-nav">
+				<button id="navNewGame" class="nav-item active">
+					<span class="nav-icon" data-icon="plus-circle"></span> <span data-i18n="nav.new_game">Nouvelle partie</span>
+				</button>
+				<button id="navRecent" class="nav-item">
+					<span class="nav-icon" data-icon="folder"></span> <span data-i18n="nav.recent_games">Parties récentes</span>
+				</button>
+				<button id="navConnect" class="nav-item">
+					<span class="nav-icon" data-icon="wifi"></span> <span data-i18n="nav.connect_players">Connexion joueurs</span>
+				</button>
+				<button id="navDocsHome" class="nav-item">
+					<span class="nav-icon" data-icon="book"></span> <span data-i18n="nav.documentation">Documentation</span>
+				</button>
+				<button id="navCompare" class="nav-item">
+					<span class="nav-icon" data-icon="bar-chart"></span> <span data-i18n="nav.statistics">Statistiques</span>
+				</button>
+				<button id="navSettings" class="nav-item">
+					<span class="nav-icon" data-icon="settings"></span> <span data-i18n="nav.settings">Paramètres</span>
+				</button>
+			</nav>
+
+			<!-- Navigation "en partie" -->
+			<nav id="navGame" class="sidebar-nav hidden">
+				<button class="nav-item" data-view="games">
+					<span class="nav-icon" data-icon="arrow-left"></span> <span data-i18n="nav.games">Parties</span>
+				</button>
+				<div class="nav-sep"></div>
+				<button class="nav-item active" data-tab="overview">
+					<span class="nav-icon" data-icon="activity"></span> <span data-i18n="nav.current_game">Partie en cours</span>
+				</button>
+				<button id="navTabPlayers" class="nav-item" data-tab="players">
+					<span class="nav-icon" data-icon="users"></span> <span data-i18n="nav.players">Joueurs</span>
+				</button>
+				<button id="navTabEvents" class="nav-item" data-tab="events">
+					<span class="nav-icon" data-icon="calendar"></span> <span data-i18n="nav.events">Événements</span>
+				</button>
+				<button class="nav-item nav-disabled" title="Bientôt disponible (Phase B)">
+					<span class="nav-icon" data-icon="bank"></span> <span data-i18n="nav.bank">Banque</span>
+				</button>
+				<button id="navStats" class="nav-item">
+					<span class="nav-icon" data-icon="bar-chart"></span> <span data-i18n="nav.statistics">Statistiques</span>
+				</button>
+				<button id="navDocsGame" class="nav-item">
+					<span class="nav-icon" data-icon="book"></span> <span data-i18n="nav.documentation">Documentation</span>
+				</button>
+			</nav>
+
+			<div id="connStatus" class="conn-status conn-offline">connexion...</div>
+			<div class="sidebar-footer">v2.0.0 · Phase 2 (web)</div>
+		</aside>
+
+		<!-- Zone de contenu claire -->
+		<main class="content">
+
+			<!-- Vue liste / création des parties -->
+			<section id="view-games" class="view">
+				<div class="new-game-layout">
+					<div class="panel-card new-game-card">
+						<h2 data-i18n="newgame.title">Nouvelle partie</h2>
+
+						<label class="field-label" data-i18n="newgame.money_type_label">Type de monnaie</label>
+						<div id="moneyTypeChoice" class="money-type-choice"></div>
+
+						<label class="field-label" data-i18n="newgame.desc_label">Nom de la partie</label>
+						<input id="fDesc" type="text" class="field-input" placeholder="Ma partie Ğeconomicus"
+							data-i18n-placeholder="newgame.desc_placeholder">
+
+						<label class="field-label" data-i18n="newgame.location_label">Lieu</label>
+						<input id="fLoc" type="text" class="field-input" placeholder="ex: Roanne"
+							data-i18n-placeholder="newgame.location_placeholder">
+
+						<div class="field-row">
+							<div>
+								<label class="field-label" data-i18n="newgame.animator_label">Nom de l'animateur</label>
+								<input id="fAnimatorName" type="text" class="field-input" placeholder="ex: Julie"
+									data-i18n-placeholder="newgame.animator_placeholder">
+							</div>
+							<div>
+								<label class="field-label" data-i18n="newgame.turn_duration_label">Durée d'un tour</label>
+								<select id="fTurnDuration" class="field-input">
+									<option value="3" data-i18n="newgame.duration_3">3 minutes</option>
+									<option value="5" selected data-i18n="newgame.duration_5">5 minutes</option>
+									<option value="10" data-i18n="newgame.duration_10">10 minutes</option>
+								</select>
+							</div>
+						</div>
+
+						<label class="field-label" data-i18n="newgame.turns_label">Nombre de tours</label>
+						<select id="fTurns" class="field-input">
+							<option value="8" data-i18n="newgame.turns_8">8 tours (~64 ans)</option>
+							<option value="10" selected data-i18n="newgame.turns_10">10 tours (~80 ans)</option>
+							<option value="12" data-i18n="newgame.turns_12">12 tours (~96 ans)</option>
+						</select>
+
+						<div class="field-row" id="fMoneyValueRow">
+							<div>
+								<label class="field-label" data-i18n="newgame.factor_label"
+									data-i18n-title="newgame.factor_title"
+									title="Nombre d'unités monétaires équivalent à une carte valeur">Facteur carte/monnaie</label>
+								<input id="fMoneyCardsFactor" type="number" class="field-input" value="1" min="1">
+							</div>
+							<div>
+								<label class="field-label" data-i18n="newgame.weak_coin_label"
+									data-i18n-title="newgame.weak_coin_title"
+									title="Valeur d'une seule pièce/jeton faible">Valeur d'une pièce faible</label>
+								<input id="fWeakCoinValue" type="number" class="field-input" value="1" min="0.1" step="0.1">
+							</div>
+						</div>
+
+						<div id="fLibreOptions" class="hidden">
+							<label class="checkbox-label" data-i18n-title="newgame.token_penalty_title"
+								title="Règles officielles : geconomicus.glibre.org/libre_money.html - un jeton est retiré au joueur lors de la rotation de la monnaie. Facultatif.">
+								<input id="fTokenPenalty" type="checkbox">
+								<span data-i18n="newgame.token_penalty_label">Appliquer la pénalité d'un jeton (jeton faible, lors de la rotation)</span>
+							</label>
+							<!-- Remonté par un utilisateur : mode "strict TRM" - la masse monétaire
+							     ne diminue jamais à la mort d'un joueur (ce qu'il possédait reste
+							     compté, juste inaccessible aux vivants), et sa renaissance crée de
+							     la monnaie fraîche à hauteur du DU du moment plutôt qu'un bonus
+							     fixe. Réglable uniquement ici, à la création - jamais modifiable en
+							     cours de partie. Verrouille le facteur carte/monnaie à 1 (voir
+							     selectMoneyChoice() dans app.js) pour un terrain de jeu simplifié. -->
+							<label class="checkbox-label" data-i18n-title="newgame.strict_trm_title"
+								title="La masse monétaire ne diminue jamais à la mort d'un joueur - sa renaissance crée de la monnaie fraîche à hauteur du DU, plutôt qu'un bonus fixe. Verrouille le facteur carte/monnaie à 1. Réglable uniquement à la création de la partie.">
+								<input id="fStrictTrm" type="checkbox">
+								<span data-i18n="newgame.strict_trm_label">Mode strict TRM (masse monétaire toujours croissante)</span>
+							</label>
+						</div>
+
+						<label class="field-label" data-i18n="newgame.players_label">Joueurs</label>
+						<div class="field-row" style="margin-bottom:0.6rem;">
+							<label class="checkbox-label" style="margin:0;">
+								<input type="radio" name="playerSource" id="fPlayerSourceNew" value="new" checked>
+								<span data-i18n="newgame.players_new">Nouveaux joueurs</span>
+							</label>
+							<label class="checkbox-label" style="margin:0;">
+								<input type="radio" name="playerSource" id="fPlayerSourceReuse" value="reuse">
+								<span data-i18n="newgame.players_reuse">Reprendre d'une partie existante</span>
+							</label>
+						</div>
+						<div id="fReusePlayersBlock" class="hidden">
+							<label class="field-label" data-i18n="newgame.reuse_source_label">Partie source</label>
+							<select id="fReuseGameSelect" class="field-input"></select>
+							<label class="field-label" style="margin-top:0.6rem;" data-i18n="newgame.reuse_players_label">Joueurs à reprendre</label>
+							<ul id="fReusePlayersList" class="wizard-checklist"></ul>
+						</div>
+
+						<button id="btnNewGame" class="btn btn-primary btn-block" data-i18n="newgame.submit_btn">Créer la partie →</button>
+					</div>
+
+					<div class="panel-card new-game-summary">
+						<h3 data-i18n="newgame.summary_title">Résumé</h3>
+						<dl class="summary-list">
+							<dt data-i18n="newgame.summary_turns_label">Tours</dt><dd id="sumTurns">10 tours</dd>
+							<dt data-i18n="newgame.summary_duration_label">Minutes par tour</dt><dd id="sumDuration">5 minutes par tour</dd>
+							<dt data-i18n="newgame.summary_years_label">Années de vie simulées</dt><dd id="sumYears">80 années de vie</dd>
+							<dt data-i18n="newgame.summary_death_label">Décès / Renaissance</dt><dd data-i18n="newgame.summary_death_value">À chaque tour</dd>
+						</dl>
+					</div>
+				</div>
+
+				<div class="section-title-row">
+					<h2 class="section-title" data-i18n="nav.recent_games">Parties récentes</h2>
+					<button id="btnSeeAllGames" class="btn btn-ghost btn-small" data-i18n="newgame.see_all_btn">Voir + →</button>
+				</div>
+				<div id="gamesList" class="card-grid"></div>
+			</section>
+
+			<!-- Vue "Parties récentes" complète (avec suppression) -->
+			<section id="view-all-games" class="view hidden">
+				<div class="view-header">
+					<h2 data-i18n="games.all_title">Toutes les parties</h2>
+				</div>
+				<div id="allGamesList" class="card-grid"></div>
+			</section>
+
+			<!-- Vue "Comparer des parties" : équivalent web de ChooseGamesDialog +
+			     StatsFrame(List<Game>) côté Swing - compare N parties (typiquement une
+			     en monnaie dette et une en monnaie libre jouées avec le même groupe de
+			     joueurs) joueur par joueur, sur un histogramme groupé. -->
+			<section id="view-compare" class="view hidden">
+				<div class="view-header">
+					<h2 data-i18n="compare.title">Comparer des parties</h2>
+				</div>
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="compare.step1_title">1. Choisissez les parties à comparer</h3>
+					<p class="galilee-explainer" data-i18n-html="compare.step1_intro">Les joueurs sont recoupés d'une partie à l'autre par leur
+						<strong>nom exact</strong> : utilisez les mêmes prénoms dans vos différentes parties
+						pour que la comparaison ait un sens (typiquement une partie en monnaie dette et une en
+						monnaie libre, jouées avec le même groupe).</p>
+					<div id="compareGamesList" class="compare-games-list"></div>
+					<button id="btnRunComparison" class="btn btn-primary" disabled data-i18n="compare.run_btn">Comparer</button>
+				</div>
+				<div id="compareResults" class="hidden">
+					<div class="panel-card">
+						<div class="panel-header">
+							<h3 class="chart-title" data-i18n="compare.step2_title">2. Richesse par joueur, partie par partie</h3>
+							<div class="panel-actions">
+								<button id="btnCompareStandard" class="btn btn-small btn-accent" data-i18n="compare.standard_btn">Aggrégés standards</button>
+								<button id="btnCompareCorrected" class="btn btn-small" data-i18n="compare.corrected_btn">Aggrégés corrigés</button>
+							</div>
+						</div>
+						<p id="compareExplainer" class="galilee-explainer"></p>
+						<div class="chart-container" style="height:440px;"><canvas id="chartCompare"></canvas></div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Vue "Paramètres" : active/désactive les systèmes d'échange (plugins)
+			     proposés sur l'écran "Nouvelle partie" - voir docs/11-plugin-api-contrat.md.
+			     Un plugin peut être chargé (visible ici) sans être encore réellement
+			     jouable (voir le badge "pas encore jouable" et le garde-fou côté
+			     écran "Nouvelle partie"). -->
+			<section id="view-settings" class="view hidden">
+				<div class="view-header">
+					<h2 data-i18n="settings.title">Paramètres</h2>
+				</div>
+
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="settings.language_title">Langue</h3>
+					<p class="galilee-explainer" data-i18n="settings.language_intro">Choisissez la langue par défaut de l'application, ou ajoutez/téléchargez un fichier
+						de langue (.po) pour le modifier ou vous en servir de modèle pour en créer une nouvelle.</p>
+
+					<label class="field-label" data-i18n="settings.default_language_label">Langue par défaut</label>
+					<select id="settingsDefaultLanguage" class="field-input"></select>
+					<button type="button" class="btn btn-primary btn-small" id="btnValidateDefaultLanguage" style="margin-top:0.5rem;" data-i18n="settings.default_language_validate_btn">Valider</button>
+
+					<div class="field-row" style="margin-top:1rem;">
+						<div>
+							<label class="field-label" data-i18n="settings.export_language_label">Télécharger un fichier de langue (modèle ou à modifier)</label>
+							<select id="settingsExportLanguage" class="field-input"></select>
+							<button type="button" class="btn btn-small" id="btnExportLanguage" style="margin-top:0.5rem;" data-i18n="settings.export_btn">Télécharger</button>
+						</div>
+						<div>
+							<label class="field-label" data-i18n="settings.import_language_label">Ajouter un fichier de langue (.po)</label>
+							<input id="settingsImportLanguageCode" type="text" class="field-input" placeholder="ex: es" data-i18n-placeholder="settings.import_code_placeholder">
+							<input id="settingsImportLanguageFile" type="file" accept=".po" class="field-input" style="margin-top:0.5rem;">
+							<button type="button" class="btn btn-small btn-primary" id="btnImportLanguage" style="margin-top:0.5rem;" data-i18n="settings.import_btn">Importer</button>
+							<p id="settingsImportLanguageMessage" style="font-size:0.8rem;margin-top:0.4rem;display:none;"></p>
+						</div>
+					</div>
+
+					<!-- Remonté par un utilisateur : la langue tout juste importée
+					     apparaissait bien dans le sélecteur de drapeaux (haut à droite)
+					     mais pas dans "Langue par défaut" (bug de rafraîchissement corrigé,
+					     voir app.js) - et il manquait un moyen de supprimer une langue
+					     personnalisée. Cette liste couvre les deux : elle montre toutes les
+					     langues installées, avec un bouton de suppression uniquement pour
+					     celles qui ne sont pas fournies par défaut avec l'application. -->
+					<label class="field-label" style="margin-top:1rem;" data-i18n="settings.installed_languages_label">Langues installées</label>
+					<div id="settingsLanguagesList" class="compare-games-list"></div>
+				</div>
+
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="settings.sound_title">Son</h3>
+					<label class="checkbox-label">
+						<input id="settingsSoundMuted" type="checkbox">
+						<span data-i18n="settings.sound_mute_label">Couper le son (sifflet de début/fin de tour)</span>
+					</label>
+					<label class="field-label" style="margin-top:0.8rem;" data-i18n="settings.sound_volume_label">Volume</label>
+					<div style="display:flex;align-items:center;gap:0.8rem;">
+						<input id="settingsSoundVolume" type="range" min="0" max="100" value="100" style="flex:1;">
+						<span id="settingsSoundVolumeValue" style="font-size:0.85rem;color:var(--text-dim);min-width:3rem;">100%</span>
+						<button type="button" class="btn btn-small" id="btnTestSound" data-i18n="settings.sound_test_btn">Tester</button>
+					</div>
+				</div>
+
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="settings.plugins_title">Systèmes d'échange disponibles</h3>
+					<p class="galilee-explainer" data-i18n="settings.plugins_intro">Choisissez les systèmes à proposer sur l'écran "Nouvelle partie". Un système
+						chargé mais pas encore jouable peut être activé pour test, mais ne permettra pas encore de créer une partie.</p>
+					<div id="settingsPluginsList" class="compare-games-list"></div>
+				</div>
+
+				<!-- Remonté par un utilisateur : l'application vérifie qu'une mise à jour
+				     existe (lecture seule d'un fichier JSON à une URL fournie par
+				     l'animateur), l'en informe, et lui propose le lien de téléchargement -
+				     jamais de téléchargement ni d'installation automatique, toujours à
+				     l'animateur de gérer la mise à jour manuellement. -->
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="settings.update_title">Mises à jour</h3>
+					<p class="galilee-explainer" data-i18n="settings.update_intro">L'application ne se met jamais à jour toute seule : elle peut seulement vérifier si une nouvelle version
+						existe (à partir d'une adresse que vous configurez ci-dessous) et vous proposer de la télécharger - le reste reste entre vos mains.</p>
+					<p style="font-size:0.85rem;color:var(--text-dim);">
+						<span data-i18n="settings.update_current_version_label">Version actuelle :</span>
+						<strong id="settingsCurrentVersion">—</strong>
+					</p>
+					<label class="field-label" data-i18n="settings.update_url_label">Adresse de vérification (URL)</label>
+					<input id="settingsUpdateCheckUrl" type="text" class="field-input" placeholder="https://…">
+					<div style="display:flex;gap:0.6rem;margin-top:0.5rem;">
+						<button type="button" class="btn btn-small" id="btnSaveUpdateUrl" data-i18n="settings.update_save_btn">Enregistrer</button>
+						<button type="button" class="btn btn-small btn-accent" id="btnCheckUpdate" data-i18n="settings.update_check_btn">Vérifier les mises à jour</button>
+					</div>
+					<div id="settingsUpdateResult" class="hidden" style="margin-top:0.8rem;"></div>
+				</div>
+
+				<!-- Remonté par un utilisateur, pour finaliser l'étape 2 : une sauvegarde
+				     complète de la base de données, toutes les parties et tous les systèmes
+				     confondus, dans un seul fichier .zip téléchargeable. -->
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="settings.backup_title">Sauvegarde</h3>
+					<p class="galilee-explainer" data-i18n="settings.backup_intro">Téléchargez une copie complète de toutes les parties enregistrées (tous systèmes d'échange confondus), dans un seul fichier - à conserver en lieu sûr, ou pour transférer l'historique vers une autre installation.</p>
+					<button type="button" class="btn btn-small btn-accent" id="btnDownloadBackup" data-i18n="settings.backup_btn">Télécharger une sauvegarde complète</button>
+				</div>
+
+				<!-- Remonté par un utilisateur : protection par code PIN (par partie) +
+				     jeton individuel (par joueur) - désactivée par défaut, n'affecte
+				     aucune installation existante tant que l'animateur ne l'active pas
+				     explicitement ici. Une fois activée, chaque NOUVELLE partie créée
+				     reçoit un PIN à 6 chiffres (les parties déjà en cours restent
+				     accessibles sans PIN, jamais bloquées après coup). -->
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="settings.protection_title">Protection par code</h3>
+					<p class="galilee-explainer" data-i18n="settings.protection_intro">Une fois activée, chaque nouvelle partie reçoit un code PIN à 6 chiffres, à saisir pour y accéder - et chaque joueur reçoit un lien individuel donnant accès uniquement à ses propres informations. Les parties déjà créées avant l'activation restent accessibles sans code.</p>
+					<label class="checkbox-label">
+						<input id="settingsProtectionEnabled" type="checkbox">
+						<span data-i18n="settings.protection_label">Activer la protection par code</span>
+					</label>
+				</div>
+			</section>
+
+			<!-- Vue "Connexion joueurs" (étape 3, Phase A - fondations réseau) -->
+			<section id="view-connect" class="view hidden">
+				<div class="view-header">
+					<h2 data-i18n="connect.title">Connecter les joueurs</h2>
+				</div>
+				<div class="panel-card connect-intro">
+					<p data-i18n-html="connect.intro1">Pour que les smartphones des joueurs puissent rejoindre l'application,
+					ils doivent être sur le <strong>même réseau</strong> que cet ordinateur
+					(partage de connexion recommandé — voir le guide complet dans la page
+					<a href="#" id="connectDocsLink">Documentation</a>).</p>
+					<p data-i18n="connect.intro2">Choisissez ci-dessous l'adresse correspondant à votre réseau, puis faites
+					scanner le QR code par les joueurs avec l'appareil photo natif de leur
+					téléphone (aucune application à installer).</p>
+				</div>
+				<div id="connectAddresses" class="connect-grid"></div>
+			</section>
+
+			<!-- Vue détail d'une partie -->
+			<section id="view-game" class="view hidden">
+				<div class="game-header">
+					<div class="game-header-left">
+						<span id="gameMoneyIcon" class="money-choice-icon money-debt-color" data-icon="bank"></span>
+						<h1 id="gameTitle">Partie</h1>
+						<!-- Remonté par un utilisateur : protection par code - visible
+						     uniquement si cette partie a un PIN (voir Game.pin). Cliquer
+						     copie le code, pour le communiquer facilement (co-animateur,
+						     etc.) sans avoir à le retaper de mémoire. -->
+						<button id="gamePinBadge" class="badge-pill hidden" type="button" data-i18n-title="game.pin_badge_title"
+							title="Cliquer pour copier le code PIN de cette partie">🔒 —</button>
+					</div>
+					<div class="game-header-right">
+						<span id="turnBadge" class="badge-pill">Tour 1 / 10</span>
+						<button id="btnStartGame" class="btn btn-primary-outline" data-i18n="game.start_btn">▶ Démarrer la partie</button>
+						<div class="turn-timer hidden" id="turnTimer">
+							<svg class="timer-ring" viewBox="0 0 120 120">
+								<circle class="timer-ring-bg" cx="60" cy="60" r="52"></circle>
+								<circle class="timer-ring-progress" id="timerRingProgress" cx="60" cy="60" r="52"></circle>
+							</svg>
+							<div class="timer-text" id="timerText">--:--</div>
+						</div>
+						<button id="btnTimerPause" class="btn btn-small hidden" data-i18n-title="game.pause_btn_title"
+							title="Met en pause le chrono pour tous les écrans connectés (tableau de bord et assistant de fin de tour)" data-i18n="game.pause_btn">Pause</button>
+						<button id="btnTimerExtend" class="btn btn-small hidden" data-i18n="game.extend_btn">+30s</button>
+						<button id="btnEndTurn" class="btn btn-small hidden" data-i18n="game.end_turn_btn">Fin de tour</button>
+						<button id="btnStartNewTurn" class="btn btn-new-turn hidden" data-i18n-title="game.new_turn_btn_title"
+							title="Enregistre le nouveau tour et relance le chrono, sans autre étape" data-i18n="game.new_turn_btn">▶ Nouveau tour</button>
+					</div>
+				</div>
+
+				<!-- Actions générales de la partie (pas liées à un joueur en particulier) -
+				     remonté par un utilisateur : distinctes des actions par joueur, disponibles
+				     directement sur la page plutôt que dans une boîte de dialogue générique. -->
+				<div class="general-actions">
+					<button id="btnMoneyMassChange" class="btn btn-small">💰 <span data-i18n="game.action_money_mass">Masse monétaire</span></button>
+					<button id="btnTechBreakthrough" class="btn btn-small">⚡ <span data-i18n="game.action_tech">Rupture technologique</span></button>
+					<button id="btnBankInvestment" class="btn btn-small">🏦 <span data-i18n="game.action_bank_investment">Investissement banque</span></button>
+					<button id="btnBankAssessment" class="btn btn-small">📊 <span data-i18n="game.action_bank_assessment">Bilan final banque</span></button>
+					<button id="btnTrocTrade" class="btn btn-small">🔄 <span data-i18n="game.action_troc_trade">Échange entre joueurs</span></button>
+					<button id="btnPlayerQuit" class="btn btn-small">🚪 <span data-i18n="game.action_player_quit">Un joueur quitte</span></button>
+					<button id="btnEndGame" class="btn btn-small">🏁 <span data-i18n="game.action_end_game">Fin de partie</span></button>
+				</div>
+
+				<!-- Cartes statistiques -->
+				<div class="stat-cards">
+					<div class="stat-card">
+						<span class="stat-icon" data-icon="users"></span>
+						<div><span id="statPlayers" class="stat-value">0</span><span class="stat-label" data-i18n="game.stat_players">Joueurs</span></div>
+					</div>
+					<div class="stat-card" id="statAgeCard" data-i18n-title="game.stat_age_title"
+						title="Âge en années de vie simulées (1 tour = 8 ans, convention du jeu), pas en nombre de tours.">
+						<span class="stat-icon" data-icon="clock"></span>
+						<div><span id="statAge" class="stat-value">0</span><span class="stat-label" data-i18n="game.stat_age">Âge moyen (années)</span></div>
+					</div>
+					<div class="stat-card" id="statMassCard">
+						<span class="stat-icon" data-icon="bank"></span>
+						<div><span id="statMass" class="stat-value">0</span><span class="stat-label" data-i18n="game.stat_mass">Masse monétaire</span></div>
+					</div>
+					<!-- Remonté par un utilisateur : "Reste à changer" (monnaie libre uniquement)
+					     placé juste après "Masse monétaire", tout à droite - les deux indicateurs
+					     de masse monétaire restent ainsi groupés ensemble. -->
+					<div class="stat-card hidden" id="statChangeCard" data-i18n-title="game.stat_change_title"
+						title="Écart entre la masse monétaire actuelle et la cible théorique (moyenne vers laquelle elle converge) - calcul global, pas encore par joueur individuellement.">
+						<span class="stat-icon" data-icon="leaf"></span>
+						<div><span id="statChange" class="stat-value">0</span><span class="stat-label" data-i18n="game.stat_change">Reste à changer</span></div>
+					</div>
+					<div class="stat-card" id="statCreditsCard">
+						<span class="stat-icon" data-icon="credit"></span>
+						<div><span id="statCredits" class="stat-value">0</span><span class="stat-label" data-i18n="game.stat_credits">Montant global des crédits + intérêts</span></div>
+					</div>
+					<div class="stat-card" id="statAvgMoneyCard">
+						<span class="stat-icon" data-icon="bank"></span>
+						<div><span id="statAvgMoney" class="stat-value">0</span><span class="stat-label" data-i18n="game.stat_avg_money">Monnaie/joueur (moyenne)</span></div>
+					</div>
+					<div class="stat-card hidden" id="statGoodsCard">
+						<span class="stat-icon" data-icon="credit"></span>
+						<div><span id="statGoods" class="stat-value">0</span><span class="stat-label" data-i18n="game.stat_goods">Biens en circulation</span></div>
+					</div>
+				</div>
+
+				<!-- Graphiques (Phase B) : masse monétaire dans le temps + répartition des
+				     richesses, calculés côté serveur à partir de l'historique réel des
+				     événements (voir StatsService.java) - pas de données inventées. -->
+				<div class="charts-row">
+					<div class="panel-card" id="chartMoneyMassPanel">
+						<h3 class="chart-title" data-i18n="game.chart_money_mass_title">Masse monétaire</h3>
+						<div class="chart-container"><canvas id="chartMoneyMass"></canvas></div>
+					</div>
+					<div class="panel-card">
+						<h3 class="chart-title">
+							<span id="chartWealthTitle">Répartition des richesses</span>
+							<span id="chartWealthInfo" class="info-icon"
+								title="Les joueurs sont classés du plus pauvre au plus riche, puis répartis en 3 groupes de taille égale (20% des joueurs les plus riches, les 60% du milieu, 20% des joueurs les plus pauvres). Chaque tranche montre la part de la richesse totale de la partie qu'elle détient - dans une répartition parfaitement égalitaire, chaque tranche de 20% détiendrait 20% de la richesse.">ⓘ</span>
+						</h3>
+						<div class="donut-layout">
+							<div class="chart-container chart-container-small"><canvas id="chartWealth"></canvas></div>
+							<ul id="wealthLegend" class="wealth-legend"></ul>
+						</div>
+					</div>
+				</div>
+
+				<div class="game-layout">
+					<div class="panel-card">
+						<div class="panel-header">
+							<h3 data-i18n="game.players_title">Joueurs</h3>
+							<div class="panel-actions">
+								<button id="btnAddPlayer" class="btn btn-small" data-i18n="game.add_player_btn">+ Joueur</button>
+							</div>
+						</div>
+						<ul id="playersList" class="players-list"></ul>
+					</div>
+
+					<div class="panel-card">
+						<div class="panel-header">
+							<h3 data-i18n="game.events_title">Événements</h3>
+							<div class="panel-actions">
+								<button id="btnUndo" class="btn btn-small" data-i18n-title="game.undo_btn_title"
+									title="Annule la dernière action enregistrée" data-i18n="game.undo_btn">↩ Annuler</button>
+							</div>
+						</div>
+						<ul id="eventsList" class="events-list"></ul>
+					</div>
+				</div>
+				<div id="turnEndToast" class="turn-end-toast hidden" data-i18n="game.toast_end_turn">Fin de tour</div>
+			</section>
+
+			<!-- Vue rapport de fin de partie (Phase D) -->
+			<section id="view-report" class="view hidden">
+				<div class="game-header">
+					<div class="game-header-left">
+						<span id="reportMoneyIcon" class="money-choice-icon money-debt-color" data-icon="bank"></span>
+						<h1 id="reportTitle">Partie terminée !</h1>
+					</div>
+					<button id="btnExportReport" class="btn btn-primary" data-i18n="report.export_btn">Exporter le rapport (JSON)</button>
+					<!-- Remonté par un utilisateur, pour finaliser l'étape 2 : distinct du
+					     bouton ci-dessus (qui exporte les statistiques calculées) - celui-ci
+					     exporte les données BRUTES de la partie (joueurs, historique complet
+					     des événements, réglages), utile pour une archive complète ou une
+					     future ré-importation. -->
+					<button id="btnExportGameData" class="btn" data-i18n="report.export_raw_btn">Exporter la partie complète (JSON)</button>
+				</div>
+
+				<div id="reportWarning" class="report-warning hidden"></div>
+
+				<div class="stat-cards" id="reportStatCards"></div>
+
+				<div id="reportBankToggle" class="report-bank-toggle hidden"></div>
+
+				<div class="charts-row">
+					<div class="panel-card">
+						<h3 class="chart-title" data-i18n="report.chart_histogram_title">Richesse finale par joueur</h3>
+						<div class="chart-container"><canvas id="chartHistogram"></canvas></div>
+					</div>
+					<div class="panel-card">
+						<h3 class="chart-title" data-i18n="report.chart_money_mass_title">Évolution de la masse monétaire</h3>
+						<div class="chart-container"><canvas id="chartReportMoneyMass"></canvas></div>
+					</div>
+				</div>
+
+				<!-- Remonté par un utilisateur : histogramme dédié UNIQUEMENT à la banque
+				     (monnaie dette) - part de ses bénéfices (intérêts perçus + valeurs
+				     saisies) dans sa richesse totale, distincte de la richesse des joueurs
+				     ci-dessus. Masqué par défaut : seule une partie en monnaie dette avec
+				     "Avec banque" activé en a un (voir StatsService.computeBankProfitBreakdown,
+				     null pour les deux autres systèmes). -->
+				<div class="panel-card hidden" id="chartBankProfitPanel">
+					<h3 class="chart-title" data-i18n="report.chart_bank_profit_title">Bénéfices de la banque</h3>
+					<div class="chart-container"><canvas id="chartBankProfit"></canvas></div>
+				</div>
+
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="report.metrics_title">Indicateurs statistiques (production de valeurs par joueur)</h3>
+					<div class="report-metrics" id="reportMetrics"></div>
+				</div>
+
+				<!-- Remonté par un utilisateur : en monnaie libre, aucun événement ne
+				     retrace les échanges individuels entre joueurs (contrairement à la
+				     dette - crédits - et au troc - échanges) - cette section n'aurait donc
+				     jamais rien de significatif à montrer pour ce système, elle est
+				     entièrement masquée plutôt que d'afficher un tableau vide. -->
+				<div class="panel-card" id="activitySection">
+					<div class="panel-header">
+						<h3 class="chart-title" data-i18n="report.activity_title">Activité par joueur</h3>
+						<span id="activityGlobalVolume" class="event-meta"></span>
+					</div>
+					<table class="activity-table">
+						<thead>
+							<tr>
+								<th data-i18n="report.activity_col_player">Joueur</th>
+								<th data-i18n="report.activity_col_transactions">Transactions</th>
+								<th id="activityBorrowedCol" data-i18n="report.activity_col_borrowed">Emprunté (total)</th>
+								<th data-i18n="report.activity_col_volume">Volume brassé</th>
+							</tr>
+						</thead>
+						<tbody id="activityTableBody"></tbody>
+					</table>
+				</div>
+
+				<div class="panel-card">
+					<div class="panel-header">
+						<h3 class="chart-title" data-i18n="report.galilee_title">Richesse des joueurs dans le temps
+							<span class="docs-online-badge" data-i18n-title="report.galilee_badge_title"
+								title="Convergence des comptes vers la moyenne, principe du module Galilée de la TRM" data-i18n="report.galilee_badge">module Galilée</span>
+						</h3>
+						<div class="panel-actions">
+							<button id="btnGalileeAbsolute" class="btn btn-small" data-i18n="report.galilee_absolute_btn">Valeur absolue</button>
+							<button id="btnGalileeRelative" class="btn btn-small btn-accent" data-i18n="report.galilee_relative_btn">Valeur relative (moyenne = 1)</button>
+						</div>
+					</div>
+					<p class="galilee-explainer" data-i18n="report.galilee_explainer">En valeur relative, chaque compte tend vers 1 (la moyenne) au fil des
+						tours — cliquez sur un nom dans la légende pour isoler/masquer sa courbe et comparer.</p>
+					<div class="chart-container"><canvas id="chartGalilee"></canvas></div>
+				</div>
+			</section>
+
+			<!-- Vue Documentation : référence pour l'animateur, à tout moment de la partie -->
+			<section id="view-docs" class="view hidden">
+				<div class="view-header">
+					<h2>Documentation</h2>
+				</div>
+
+				<!-- Remonté par un utilisateur : chaque système d'échange fournit son
+				     propre fragment de règles (voir plugins/*/docs/regles.*.html,
+				     manifeste "documentation") - affiché ici uniquement quand une partie
+				     est ouverte, à la place de rappeler indifféremment tous les systèmes. -->
+				<div class="panel-card docs-section hidden" id="docsCurrentSystemCard">
+					<h3 id="docsCurrentSystemTitle"></h3>
+					<div id="docsCurrentSystemContent"></div>
+				</div>
+
+				<div class="panel-card docs-section">
+					<h3>Le concept en une phrase</h3>
+					<p>Ğeconomicus est un jeu de société pédagogique qui fait vivre à ses joueurs,
+					en quelques dizaines de minutes, l'équivalent d'une vie économique entière
+					(environ 80 ans), une fois avec un système de <strong>monnaie dette</strong>
+					(comme la monnaie qui domine aujourd'hui la plupart des économies), une fois
+					avec un système de <strong>monnaie libre</strong> (fondé sur la Théorie
+					Relative de la Monnaie), afin de pouvoir comparer concrètement les effets de
+					chacun sur les échanges et les inégalités entre joueurs.</p>
+				</div>
+
+				<div class="docs-grid">
+					<div class="panel-card docs-section money-debt-color-border">
+						<h3>🏦 Monnaie dette</h3>
+						<p>C'est <strong>la banque</strong> qui crée la monnaie, en l'octroyant sous
+						forme de <strong>crédits</strong> que les emprunteurs doivent ensuite
+						rembourser <strong>avec intérêts</strong>. C'est le fonctionnement dominant
+						des systèmes monétaires actuels dans la plupart des économies
+						contemporaines.</p>
+					</div>
+					<div class="panel-card docs-section money-libre-color-border">
+						<h3>🌱 Monnaie libre</h3>
+						<p>La monnaie est créée symétriquement par chaque participant selon les
+						règles de la <strong>Théorie Relative de la Monnaie (TRM)</strong> de
+						Stéphane Laborde : chaque joueur reçoit un <strong>Dividende
+						Universel</strong> régulier, sans dette ni intérêt à rembourser. C'est le
+						principe derrière la monnaie <strong>June (Ğ1)</strong>.</p>
+					</div>
+				</div>
+
+				<div class="panel-card docs-section">
+					<h3>Déroulement d'une partie</h3>
+					<ol class="docs-list">
+						<li>Des <strong>cartes valeurs</strong> représentent des biens/services, que
+						les joueurs échangent entre eux contre des <strong>jetons</strong>
+						représentant l'unité monétaire de la partie.</li>
+						<li>La partie se déroule en <strong>tours</strong> de quelques minutes
+						chacun. Un tour représente une tranche de la vie économique d'un joueur.</li>
+						<li>À chaque tour, un ou plusieurs joueurs <strong>meurent</strong>
+						aléatoirement, puis <strong>renaissent</strong> au tour suivant en repartant
+						à zéro.</li>
+						<li>Tous les échanges et événements sont enregistrés en temps réel par
+						l'animateur, pour pouvoir ensuite comparer objectivement ce qui s'est
+						passé.</li>
+						<li>En fin de partie, on compare la partie "monnaie dette" et la partie
+						"monnaie libre" — idéalement jouées avec les mêmes joueurs — via courbes et
+						histogrammes de répartition des richesses.</li>
+					</ol>
+				</div>
+
+				<div class="panel-card docs-section">
+					<h3>Page complète (consultable hors connexion)</h3>
+					<ul class="docs-links">
+						<li><a href="#" id="fullRulesLink" target="_blank" rel="noopener">📄 Ouvrir la page complète "Règles du jeu" (nouvel onglet)</a></li>
+						<li><a href="#" id="statsDocLink" target="_blank" rel="noopener">📄 Comprendre les statistiques de fin de partie (seuil de pauvreté, indice de Gini...)</a></li>
+					</ul>
+				</div>
+
+				<div class="panel-card docs-section">
+					<h3>Pour aller plus loin <span class="docs-online-badge">connexion internet requise</span></h3>
+					<ul class="docs-links">
+						<li><a href="https://geconomicus.glibre.org/rules.html" target="_blank" rel="noopener">📖 Règles officielles complètes du jeu Ğeconomicus</a></li>
+						<li><a href="https://trm.creationmonetaire.info/" target="_blank" rel="noopener">📖 Théorie Relative de la Monnaie (TRM) — Stéphane Laborde</a></li>
+						<li><a href="https://rml.creationmonetaire.info/modules/" target="_blank" rel="noopener">📖 Modules d'approfondissement de la TRM (Galilée et autres)</a></li>
+						<li><a href="https://gitlab.com/jytou/geconomicus_helper" target="_blank" rel="noopener">💻 Projet original de l'outil d'animation (jytou)</a></li>
+						<li><a href="https://ec.europa.eu/eurostat/fr/web/income-and-living-conditions/database" target="_blank" rel="noopener">📖 Eurostat — base de données revenus et conditions de vie</a></li>
+						<li><a href="https://www.inegalites.fr/La-pauvrete-en-Europe" target="_blank" rel="noopener">📖 La pauvreté en Europe — Observatoire des inégalités</a></li>
+						<li><a href="https://fr.wikipedia.org/wiki/Coefficient_de_Gini" target="_blank" rel="noopener">📖 Coefficient de Gini — Wikipédia</a></li>
+						<li><a href="https://www.insee.fr/fr/metadonnees/definition/c1551" target="_blank" rel="noopener">📖 Indice de Gini — définition INSEE</a></li>
+						<li><a href="https://www.insee.fr/fr/statistiques/2491918" target="_blank" rel="noopener">📖 Indice de Gini — données et statistiques INSEE</a></li>
+					</ul>
+				</div>
+
+				<div class="panel-card docs-section">
+					<h3>Archive locale (consultable hors connexion)</h3>
+					<p id="docsOfflineStatus">Vérification de la présence du PDF local...</p>
+					<ul class="docs-links">
+						<li><a href="/docs-offline/DREES_2025_pauvres_et_modestes_en_Europe.pdf" target="_blank" rel="noopener">📄 DREES (2025) — Personnes pauvres et modestes en Europe : qui sont-elles ? (source des seuils de pauvreté/condition modeste utilisés dans l'application)</a></li>
+					</ul>
+				</div>
+			</section>
+		</main>
+	</div>
+
+	<!-- Boite de dialogue generique -->
+	<dialog id="dlg">
+		<form id="dlgForm" method="dialog">
+			<h3 id="dlgTitle"></h3>
+			<div id="dlgBody"></div>
+			<div class="dlg-actions">
+				<button type="button" id="dlgCancel" class="btn btn-ghost">Annuler</button>
+				<button type="submit" id="dlgOk" class="btn btn-primary">Valider</button>
+			</div>
+		</form>
+	</dialog>
+
+	<!-- Zoom plein écran sur un graphique (Statistiques) : remonté par un utilisateur,
+	     un bouton sur chaque graphique ouvre cette vue agrandie avec une animation de
+	     zoom, une bordure qui encadre, et une croix pour fermer. Un seul élément
+	     partagé par tous les graphiques (voir openChartZoom() dans app.js), plutôt
+	     qu'une copie par graphique. -->
+	<div id="chartZoomOverlay" class="chart-zoom-overlay hidden">
+		<div class="chart-zoom-frame">
+			<div class="chart-zoom-header">
+				<h3 id="chartZoomTitle"></h3>
+				<button type="button" id="chartZoomClose" class="chart-zoom-close" title="Fermer" aria-label="Fermer">✕</button>
+			</div>
+			<div class="chart-zoom-canvas-wrap"><canvas id="chartZoomCanvas"></canvas></div>
+		</div>
+	</div>
+
+	<script src="/js/icons.js"></script>
+	<script src="/js/i18n.js"></script>
+	<script src="/js/app.js"></script>
+	<!-- Assistant tutoriel (infobulles guidées) : module 100% autonome et détachable.
+	     Pour le retirer complètement, supprimez uniquement cette ligne - voir la note
+	     en tête de js/tutorial.js pour le détail. -->
+	<script src="/js/tutorial.js"></script>
+</body>
+</html>

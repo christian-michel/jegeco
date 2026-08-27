@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connexion des joueurs — Ğeconomicus Helper</title>
+<style>
+	:root { --accent: #2563eb; --text: #111827; --text-dim: #6b7280; --border: #e5e7eb; --bg: #f4f6fb; }
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+		background: var(--bg); color: var(--text); line-height: 1.65;
+	}
+	.doc-wrap { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+	.doc-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 2rem; color: var(--text-dim); font-size: 0.85rem; }
+	.doc-logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff;
+		display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+	h1 { font-size: 1.6rem; margin: 0 0 1.25rem; }
+	h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+	h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+	p, li { font-size: 0.95rem; }
+	a { color: var(--accent); }
+	code { background: #eef1f7; padding: 0.15rem 0.4rem; border-radius: 5px; font-size: 0.85em; }
+	ul, ol { padding-left: 1.3rem; }
+</style>
+</head>
+<body>
+	<div class="doc-wrap">
+		<div class="doc-header"><span class="doc-logo">Ğ</span> Ğeconomicus Helper — Documentation</div>
+		<h1>Connecter les joueurs (smartphones)</h1>
+<p>Ce guide explique comment permettre aux smartphones des joueurs de rejoindre
+une partie via le QR code affiché par l'écran "Connexion joueurs".</p>
+<h2>Le principe</h2>
+<p>Les smartphones des joueurs doivent être sur le <strong>même réseau local</strong> que
+l'ordinateur qui fait tourner le logiciel. Une fois connectés au même réseau,
+il suffit aux joueurs de scanner le QR code affiché à l'écran avec l'appareil
+photo natif de leur téléphone (aucune application à installer) pour rejoindre
+la partie.</p>
+<h2>Deux façons de mettre les téléphones sur le même réseau</h2>
+<h3>Option recommandée : partage de connexion depuis l'ordinateur</h3>
+<p>L'ordinateur crée son propre point d'accès Wifi, auquel les téléphones se
+connectent. C'est l'option la plus fiable : elle ne dépend d'aucune
+infrastructure réseau existante sur le lieu de la partie.</p>
+<ul>
+<li><strong>Windows</strong> : Paramètres → Réseau et Internet → Point d'accès mobile.</li>
+<li><strong>macOS</strong> : Réglages Système → Partage → Partage internet.</li>
+<li><strong>Linux</strong> : dépend de l'environnement de bureau ; cherchez "Point d'accès
+  Wifi" ou "Hotspot" dans les paramètres réseau.</li>
+</ul>
+<p>Donnez un nom de réseau et un mot de passe, activez le partage, puis faites
+rejoindre ce réseau aux téléphones avant de scanner le QR code.</p>
+<h3>Option alternative : Wifi local du lieu</h3>
+<p>Si le lieu dispose déjà d'un réseau Wifi, les téléphones peuvent s'y connecter
+directement — à condition que ce réseau n'ait pas d'<strong>isolation client</strong>
+(un réglage de sécurité fréquent sur les réseaux publics/invités, qui empêche
+les appareils connectés de communiquer entre eux). Si les téléphones n'arrivent
+pas à joindre l'application malgré une connexion au même Wifi, c'est la cause
+la plus probable : utilisez alors l'option du partage de connexion à la place.</p>
+<h2>Pourquoi pas le Bluetooth ?</h2>
+<p>Le Bluetooth est pensé pour une connexion entre deux appareils, avec un
+appairage individuel fastidieux à plusieurs joueurs, et un débit plus faible
+que le Wifi. Il n'est pas adapté pour connecter plusieurs smartphones en même
+temps à l'application.</p>
+<h2>Choisir la bonne adresse réseau</h2>
+<p>L'écran "Connexion joueurs" peut afficher plusieurs adresses réseau si
+l'ordinateur est connecté à plusieurs réseaux à la fois (Wifi et Ethernet, par
+exemple). Celle marquée <strong>"Probable"</strong> correspond généralement au bon réseau à
+utiliser. En cas de doute, essayez la première adresse proposée.</p>
+	</div>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+	Configuration de persistance dédiée aux TESTS UNITAIRES uniquement.
+
+	Pourquoi ce fichier existe : sans lui, les tests (CreateGameTestCase) utilisaient
+	l'unité de persistance "geco" définie dans src/main/resources/META-INF/persistence.xml,
+	c'est-à-dire LA MÊME base de données que le jeu réel (~/geco.h2) :
+	  1. Si l'application (geco-app ou geco-server) tourne déjà, le fichier H2 est
+	     verrouillé (H2 en mode fichier n'autorise qu'une connexion à la fois) et les
+	     tests échouent avec "Database may be already in use".
+	  2. Même sans conflit, les tests ÉCRIVENT une vraie partie ("toto") dans cette
+	     base à chaque exécution, polluant les données réelles de l'utilisateur.
+
+	Ce fichier définit une unité au nom DIFFÉRENT ("geco-test", plutôt que "geco") :
+	comme JPA charge tous les fichiers persistence.xml trouvés sur le classpath (celui
+	de production ET celui-ci pendant les tests), réutiliser le même nom d'unité dans
+	les deux aurait été ambigu. Avec un nom distinct, aucune ambiguïté possible.
+	Cette unité de test pointe vers une base H2 en mémoire (jdbc:h2:mem:...), créée et
+	détruite à chaque exécution des tests, sans aucun lien avec ~/geco.h2.
+
+	Point de vigilance qui a causé une erreur au premier essai : Event.evt utilise
+	@Convert(converter = EventTypeConverter.class). Dans la configuration de
+	production, ce convertisseur est enregistré via META-INF/orm.xml
+	(<converter class="...EventTypeConverter"/>) - mais ce fichier orm.xml "implicite"
+	n'est recherché par EclipseLink qu'à côté du persistence.xml qui l'a chargé : pour
+	l'unité "geco-test" (chargée depuis src/test/resources/META-INF/), ce n'est PAS le
+	même orm.xml que celui de production (src/main/resources/META-INF/), donc le
+	convertisseur n'était pas reconnu ("converter class ... was not found"). Plutôt
+	que de dupliquer orm.xml côté test, on liste ici directement la classe du
+	convertisseur : comme elle porte déjà l'annotation @Converter, l'ajouter à la
+	liste des classes gérées par cette unité suffit à la faire reconnaître.
+-->
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd"
+             version="3.0">
+	<persistence-unit name="geco-test" transaction-type="RESOURCE_LOCAL">
+		<class>jyt.geconomicus.helper.Game</class>
+		<class>jyt.geconomicus.helper.Player</class>
+		<class>jyt.geconomicus.helper.Event</class>
+		<class>jyt.geconomicus.helper.EventTypeConverter</class>
+		<properties>
+			<property name="jakarta.persistence.jdbc.driver" value="org.h2.Driver" />
+			<!-- Base en mémoire, isolée, jetable : DB_CLOSE_DELAY=-1 la garde en vie le
+			     temps du test (sinon H2 la détruirait dès la première connexion fermée). -->
+			<property name="jakarta.persistence.jdbc.url" value="jdbc:h2:mem:geco_test;DB_CLOSE_DELAY=-1" />
+			<property name="jakarta.persistence.jdbc.user" value="sa" />
+			<property name="jakarta.persistence.jdbc.password" value="" />
+			<property name="eclipselink.ddl-generation" value="create-or-extend-tables" />
+			<property name="eclipselink.ddl-generation.output-mode" value="database" />
+			<property name="eclipselink.logging.file" value="gecoJPA-test.log" />
+			<property name="eclipselink.allow-zero-id" value="true" />
+		</properties>
+	</persistence-unit>
+</persistence>

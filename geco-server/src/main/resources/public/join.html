@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Rejoindre la partie — Ğeconomicus</title>
+<link rel="stylesheet" href="/css/player.css">
+</head>
+<body>
+	<div class="join-shell">
+		<header class="join-header">
+			<div class="join-logo">Ğ</div>
+			<h1>GÉCONOMICUS</h1>
+			<p id="joinSubtitle">Bienvenue dans la partie !</p>
+		</header>
+
+		<!-- Écran "partie introuvable" (lien invalide ou expiré) -->
+		<div id="joinError" class="join-card hidden">
+			<p>⚠️ Impossible de trouver cette partie. Vérifiez le lien ou redemandez un
+			nouveau QR code à l'animateur.</p>
+		</div>
+
+		<!-- Étape 1 : créer votre joueur -->
+		<section id="step1" class="join-card hidden">
+			<h2>1. Créez votre joueur</h2>
+
+			<label class="field-label" for="fPrenom">Votre prénom</label>
+			<input id="fPrenom" class="field-input" type="text" maxlength="24" placeholder="Alice" autocomplete="given-name">
+			<p id="nameError" class="field-error hidden"></p>
+
+			<label class="field-label" for="fAge">Votre âge</label>
+			<select id="fAge" class="field-input">
+				<!-- options générées en JS -->
+			</select>
+
+			<label class="field-label">Votre couleur</label>
+			<div id="colorPicker" class="swatch-row"></div>
+
+			<button id="btnStep1Next" class="btn-primary btn-block">Continuer</button>
+		</section>
+
+		<!-- Étape 2 : créer votre avatar -->
+		<section id="step2" class="join-card hidden">
+			<h2>2. Créez votre avatar</h2>
+
+			<div class="avatar-preview-wrap">
+				<div id="avatarPreview" class="avatar-preview"></div>
+			</div>
+
+			<div class="avatar-mode-tabs">
+				<button type="button" id="modeGalleryBtn" class="avatar-mode-tab active">Galerie</button>
+				<button type="button" id="modeCustomBtn" class="avatar-mode-tab">Personnalisé</button>
+			</div>
+
+			<!-- Mode Galerie : avatars prêts à l'emploi, filtrables -->
+			<div id="galleryMode">
+				<div class="avatar-filters">
+					<select id="filterGenre" class="filter-select">
+						<option value="">Genre : tous</option>
+						<option value="femme">Femme</option>
+						<option value="homme">Homme</option>
+						<option value="neutre">Neutre</option>
+					</select>
+					<select id="filterAge" class="filter-select">
+						<option value="">Âge : tous</option>
+						<option value="enfant">Enfant</option>
+						<option value="adulte">Adulte</option>
+						<option value="senior">Senior</option>
+					</select>
+					<select id="filterSkin" class="filter-select">
+						<option value="">Teint : tous</option>
+					</select>
+				</div>
+				<div id="avatarGallery" class="avatar-gallery"></div>
+			</div>
+
+			<!-- Mode Personnalisé : générateur SVG (repli, toujours disponible) -->
+			<div id="customMode" class="hidden">
+				<div class="avatar-tabs">
+					<button type="button" class="avatar-tab active" data-tab="peau">Peau</button>
+					<button type="button" class="avatar-tab" data-tab="cheveux">Cheveux</button>
+					<button type="button" class="avatar-tab" data-tab="accessoire">Accessoire</button>
+				</div>
+				<div id="avatarOptions" class="avatar-options"></div>
+			</div>
+
+			<button id="btnJoin" class="btn-primary btn-block">Rejoindre la partie !</button>
+			<p class="join-footnote">En rejoignant la partie, vous acceptez les règles du jeu.</p>
+		</section>
+
+		<!-- Confirmation -->
+		<section id="stepDone" class="join-card hidden">
+			<div class="avatar-preview-wrap">
+				<div id="avatarPreviewDone" class="avatar-preview"></div>
+			</div>
+			<h2 id="doneTitle">C'est bon !</h2>
+			<p>Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur son écran.</p>
+		</section>
+	</div>
+
+	<script src="/avatars/avatars-catalog.js"></script>
+	<script src="/js/player.js"></script>
+</body>
+</html>

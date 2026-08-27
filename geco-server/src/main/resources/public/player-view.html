@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Ma partie — Ğeconomicus</title>
+<link rel="stylesheet" href="/css/player.css">
+</head>
+<body>
+	<!--
+		Remonté par un utilisateur : consultation en lecture seule des informations
+		d'UN joueur précis, via son jeton d'accès individuel (voir Player.accessToken,
+		GecoServer route GET /api/games/{id}/players/by-token/{token}) - jamais le PIN
+		de l'animateur, un accès volontairement plus restreint.
+
+		Volontairement minimal : une vraie interface joueur (proposer un échange,
+		voir l'historique, etc.) est le sujet de l'étape 3 - cette page se contente
+		de montrer que le jeton fonctionne et donne un premier aperçu utile dès
+		maintenant, sans anticiper des écrans qui restent à concevoir.
+	-->
+	<div class="join-shell">
+		<header class="join-header">
+			<div class="join-logo">Ğ</div>
+			<h1>GÉCONOMICUS</h1>
+			<p id="subtitle">Votre partie</p>
+		</header>
+
+		<div id="viewError" class="join-card hidden">
+			<p>⚠️ Lien invalide ou expiré. Redemandez un lien à jour à l'animateur.</p>
+		</div>
+
+		<div id="viewContent" class="join-card hidden">
+			<h2 id="playerName">—</h2>
+			<p id="playerStatus" style="color:var(--text-dim);font-size:0.9rem;"></p>
+			<div id="playerDetails"></div>
+			<p style="font-size:0.78rem;color:var(--text-dim);margin-top:1.5rem;">
+				Cette page se rafraîchit automatiquement. Gardez ce lien pour toute la partie.
+			</p>
+		</div>
+	</div>
+
+	<script>
+		// Remonté par un utilisateur : page volontairement autonome (pas de
+		// dépendance à app.js/i18n.js, qui supposent une session animateur) - un
+		// simple fetch, pas besoin de plus pour cette consultation minimale.
+		const params = new URLSearchParams(window.location.search);
+		const gameId = params.get("gameId");
+		const token = params.get("token");
+
+		async function refresh() {
+			if (!gameId || !token) {
+				document.getElementById("viewError").classList.remove("hidden");
+				return;
+			}
+			try {
+				const res = await fetch(`/api/games/${gameId}/players/by-token/${token}`);
+				if (!res.ok) throw new Error("not found");
+				const player = await res.json();
+				document.getElementById("viewContent").classList.remove("hidden");
+				document.getElementById("playerName").textContent = player.name;
+				document.getElementById("playerStatus").textContent = player.active
+					? "En jeu" : "En attente / hors jeu";
+				const details = document.getElementById("playerDetails");
+				// PlayerDto contient toujours les deux jeux de champs (dette/libre et
+				// troc) quel que soit le système - on affiche juste ceux qui sont
+				// significatifs, sans essayer de deviner le système de la partie.
+				let detailsHtml = "";
+				if (player.goodsCount > 0) detailsHtml += `<p><strong>${player.goodsCount}</strong> biens</p>`;
+				if ((player.curDebt > 0) || (player.curInterest > 0))
+					detailsHtml += `<p>Crédit en cours : <strong>${player.curDebt}</strong> (intérêts : ${player.curInterest})</p>`;
+				details.innerHTML = detailsHtml;
+			} catch (err) {
+				document.getElementById("viewError").classList.remove("hidden");
+				document.getElementById("viewContent").classList.add("hidden");
+			}
+		}
+		refresh();
+		setInterval(refresh, 5000);
+	</script>
+</body>
+</html>

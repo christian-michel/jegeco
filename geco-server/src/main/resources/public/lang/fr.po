@@ -1,0 +1,1237 @@
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+# ============ Navigation (barre latérale) ============
+msgid "nav.new_game"
+msgstr "Nouvelle partie"
+
+msgid "nav.recent_games"
+msgstr "Parties récentes"
+
+msgid "nav.connect_players"
+msgstr "Connexion joueurs"
+
+msgid "nav.documentation"
+msgstr "Documentation"
+
+msgid "docs.current_system_title"
+msgstr "Règles de « {name} »"
+
+msgid "nav.statistics"
+msgstr "Statistiques"
+
+msgid "nav.settings"
+msgstr "Paramètres"
+
+msgid "nav.games"
+msgstr "Parties"
+
+msgid "nav.current_game"
+msgstr "Partie en cours"
+
+msgid "nav.players"
+msgstr "Joueurs"
+
+msgid "nav.events"
+msgstr "Événements"
+
+msgid "nav.bank"
+msgstr "Banque"
+
+# ============ Écran "Connexion joueurs" ============
+msgid "connect.title"
+msgstr "Connecter les joueurs"
+
+msgid "connect.intro1"
+msgstr "Pour que les smartphones des joueurs puissent rejoindre l'application, ils doivent être sur le <strong>même réseau</strong> que cet ordinateur (partage de connexion recommandé — voir le guide complet dans la page <a href=\"#\" id=\"connectDocsLink\">Documentation</a>)."
+
+msgid "connect.intro2"
+msgstr "Choisissez ci-dessous l'adresse correspondant à votre réseau, puis faites scanner le QR code par les joueurs avec l'appareil photo natif de leur téléphone (aucune application à installer)."
+
+# ============ Statut de connexion (pied de la barre latérale) ============
+msgid "conn.online"
+msgstr "en ligne"
+
+msgid "conn.offline"
+msgstr "hors ligne"
+
+# ============ Libellés courts des systèmes monétaires (réutilisés partout : cartes de parties, badges...) ============
+msgid "money.debt"
+msgstr "Monnaie dette"
+
+msgid "money.libre"
+msgstr "Monnaie libre"
+
+msgid "money.troc"
+msgstr "Troc"
+
+# ============ Écran "Nouvelle partie" ============
+msgid "newgame.title"
+msgstr "Nouvelle partie"
+
+msgid "newgame.money_type_label"
+msgstr "Type de monnaie"
+
+msgid "newgame.debt_name"
+msgstr "Monnaie dette"
+
+msgid "newgame.debt_desc"
+msgstr "Le crédit crée la monnaie, avec intérêts"
+
+msgid "newgame.libre_name"
+msgstr "Monnaie libre (June)"
+
+msgid "newgame.libre_desc"
+msgstr "Monnaie libre selon la TRM de Stéphane Laborde"
+
+msgid "newgame.desc_label"
+msgstr "Nom de la partie"
+
+msgid "newgame.desc_placeholder"
+msgstr "Ma partie Ğeconomicus"
+
+msgid "newgame.location_label"
+msgstr "Lieu"
+
+msgid "newgame.location_placeholder"
+msgstr "ex: Roanne"
+
+msgid "newgame.animator_label"
+msgstr "Nom de l'animateur"
+
+msgid "newgame.animator_placeholder"
+msgstr "ex: Julie"
+
+msgid "newgame.turn_duration_label"
+msgstr "Durée d'un tour"
+
+msgid "newgame.duration_3"
+msgstr "3 minutes"
+
+msgid "newgame.duration_5"
+msgstr "5 minutes"
+
+msgid "newgame.duration_10"
+msgstr "10 minutes"
+
+msgid "newgame.turns_label"
+msgstr "Nombre de tours"
+
+msgid "newgame.turns_8"
+msgstr "8 tours (~64 ans)"
+
+msgid "newgame.turns_10"
+msgstr "10 tours (~80 ans)"
+
+msgid "newgame.turns_12"
+msgstr "12 tours (~96 ans)"
+
+msgid "newgame.factor_label"
+msgstr "Facteur carte/monnaie"
+
+msgid "newgame.factor_title"
+msgstr "Nombre d'unités monétaires équivalent à une carte valeur"
+
+msgid "newgame.weak_coin_label"
+msgstr "Valeur d'une pièce faible"
+
+msgid "newgame.weak_coin_title"
+msgstr "Valeur d'une seule pièce/jeton faible"
+
+msgid "newgame.token_penalty_label"
+msgstr "Appliquer la pénalité d'un jeton (jeton faible, lors de la rotation)"
+
+msgid "newgame.strict_trm_label"
+msgstr "Mode strict TRM (masse monétaire toujours croissante)"
+
+msgid "newgame.strict_trm_title"
+msgstr "La masse monétaire ne diminue jamais à la mort d'un joueur - sa renaissance crée de la monnaie fraîche à hauteur du DU, plutôt qu'un bonus fixe. Verrouille le facteur carte/monnaie à 1. Réglable uniquement à la création de la partie."
+
+msgid "newgame.token_penalty_title"
+msgstr "Règles officielles : geconomicus.glibre.org/libre_money.html - un jeton est retiré au joueur lors de la rotation de la monnaie. Facultatif."
+
+msgid "newgame.players_label"
+msgstr "Joueurs"
+
+msgid "newgame.players_new"
+msgstr "Nouveaux joueurs"
+
+msgid "newgame.players_reuse"
+msgstr "Reprendre d'une partie existante"
+
+msgid "newgame.reuse_source_label"
+msgstr "Partie source"
+
+msgid "newgame.reuse_players_label"
+msgstr "Joueurs à reprendre"
+
+msgid "newgame.submit_btn"
+msgstr "Créer la partie →"
+
+msgid "newgame.summary_title"
+msgstr "Résumé"
+
+msgid "newgame.summary_turns_label"
+msgstr "Tours"
+
+msgid "newgame.summary_turns_value"
+msgstr "{n} tours"
+
+msgid "newgame.summary_duration_label"
+msgstr "Minutes par tour"
+
+msgid "newgame.summary_duration_value"
+msgstr "{n} minutes par tour"
+
+msgid "newgame.summary_years_label"
+msgstr "Années de vie simulées"
+
+msgid "newgame.summary_years_value"
+msgstr "{n} années de vie"
+
+msgid "newgame.summary_death_label"
+msgstr "Décès / Renaissance"
+
+msgid "newgame.summary_death_value"
+msgstr "À chaque tour"
+
+msgid "newgame.see_all_btn"
+msgstr "Voir + →"
+
+# ============ Cartes de parties (écran "Nouvelle partie" et "Parties récentes") ============
+msgid "games.delete_btn_title"
+msgstr "Supprimer cette partie"
+
+msgid "games.untitled"
+msgstr "Partie #{id}"
+
+msgid "games.turn_meta"
+msgstr "tour {turn}/{total}"
+
+msgid "games.delete_confirm_title"
+msgstr "Supprimer cette partie ?"
+
+msgid "games.delete_confirm_body"
+msgstr "Cette action est <strong>définitive</strong> : la partie \"{name}\", ses joueurs et tout son historique d'événements seront supprimés. Voulez-vous continuer ?"
+
+msgid "games.delete_confirm_btn"
+msgstr "Supprimer"
+
+# ============ Types d'événements (utilisé par le journal d'événements et les formulaires - traduit côté client, le libellé du serveur (EventDto.typeLabel) reste toujours en français, voir eventTypeLabel() dans app.js) ============
+msgid "event.type.JOIN"
+msgstr "Nouveau joueur"
+
+msgid "event.type.TURN"
+msgstr "Nouveau tour"
+
+msgid "event.type.NEW_CREDIT"
+msgstr "Nouveau crédit"
+
+msgid "event.type.INTEREST_ONLY"
+msgstr "Remboursement (intérêt seul)"
+
+msgid "event.type.REIMB_CREDIT"
+msgstr "Remboursement crédit"
+
+msgid "event.type.CANNOT_PAY"
+msgstr "Ne peut pas payer"
+
+msgid "event.type.BANKRUPT"
+msgstr "Banqueroute"
+
+msgid "event.type.PRISON"
+msgstr "Prison"
+
+msgid "event.type.QUIT"
+msgstr "Un joueur quitte la partie"
+
+msgid "event.type.MM_CHANGE"
+msgstr "Changement masse monétaire"
+
+msgid "event.type.END"
+msgstr "Fin de partie"
+
+msgid "event.type.DEATH"
+msgstr "Mort / Renaissance"
+
+msgid "event.type.XTECHNOLOGICAL_BREAKTHROUGH"
+msgstr "Rupture technologique"
+
+msgid "event.type.SIDE_INVESTMENT"
+msgstr "Investissement banque"
+
+msgid "event.type.ASSESSMENT_FINAL"
+msgstr "Bilan final banque"
+
+# ============ Classification automatique "Ne peut pas payer" (Saisie/Banqueroute/Prison) ============
+msgid "event.outcome.seizure_simple_label"
+msgstr "Saisie"
+
+msgid "event.outcome.seizure_simple_reason"
+msgstr "le joueur quitte la partie de toute façon"
+
+msgid "event.outcome.prison_label"
+msgstr "PRISON"
+
+msgid "event.outcome.prison_reason"
+msgstr "la saisie ne couvre pas la dette totale"
+
+msgid "event.outcome.bankrupt_label"
+msgstr "BANQUEROUTE"
+
+msgid "event.outcome.bankrupt_reason"
+msgstr "il reste moins de 4 cartes au joueur"
+
+msgid "event.outcome.seizure_normal_label"
+msgstr "SAISIE simple"
+
+msgid "event.outcome.seizure_normal_reason"
+msgstr "le joueur continue de jouer normalement"
+
+# ============ Tableau de bord "Partie en cours" ============
+msgid "game.start_btn"
+msgstr "▶ Démarrer la partie"
+
+msgid "game.pause_btn"
+msgstr "Pause"
+
+msgid "game.pause_btn_title"
+msgstr "Met en pause le chrono pour tous les écrans connectés (tableau de bord et assistant de fin de tour)"
+
+msgid "game.extend_btn"
+msgstr "+30s"
+
+msgid "game.end_turn_btn"
+msgstr "Fin de tour"
+
+msgid "game.new_turn_btn"
+msgstr "▶ Nouveau tour"
+
+msgid "game.new_turn_btn_title"
+msgstr "Enregistre le nouveau tour et relance le chrono, sans autre étape"
+
+msgid "game.action_money_mass"
+msgstr "Masse monétaire"
+
+msgid "game.action_tech"
+msgstr "Rupture technologique"
+
+msgid "game.action_bank_investment"
+msgstr "Investissement banque"
+
+msgid "game.action_bank_assessment"
+msgstr "Bilan final banque"
+
+msgid "game.action_player_quit"
+msgstr "Un joueur quitte"
+
+msgid "game.action_end_game"
+msgstr "Fin de partie"
+
+msgid "game.stat_players"
+msgstr "Joueurs"
+
+msgid "game.stat_change"
+msgstr "Reste à changer"
+
+msgid "game.stat_change_title"
+msgstr "Écart entre la masse monétaire actuelle et la cible théorique (moyenne vers laquelle elle converge) - calcul global, pas encore par joueur individuellement."
+
+msgid "game.stat_age"
+msgstr "Âge moyen (années)"
+
+msgid "game.stat_age_title"
+msgstr "Âge en années de vie simulées (1 tour = 8 ans, convention du jeu), pas en nombre de tours."
+
+msgid "game.stat_mass"
+msgstr "Masse monétaire"
+
+msgid "game.stat_credits"
+msgstr "Montant global des crédits + intérêts"
+
+msgid "game.stat_avg_money"
+msgstr "Monnaie/joueur (moyenne)"
+
+msgid "game.chart_money_mass_title"
+msgstr "Masse monétaire"
+
+msgid "game.players_title"
+msgstr "Joueurs"
+
+msgid "game.add_player_btn"
+msgstr "+ Joueur"
+
+msgid "game.events_title"
+msgstr "Événements"
+
+msgid "game.undo_btn"
+msgstr "↩ Annuler"
+
+msgid "game.undo_btn_title"
+msgstr "Annule la dernière action enregistrée"
+
+msgid "game.toast_end_turn"
+msgstr "Fin de tour"
+
+msgid "game.toast_end_last_turn"
+msgstr "Fin du dernier tour"
+
+msgid "game.toast_new_turn"
+msgstr "Nouveau tour"
+
+msgid "game.ended_banner"
+msgstr "Partie terminée"
+
+msgid "game.turn_badge"
+msgstr "Tour {turn} / {total}"
+
+msgid "game.status_dead"
+msgstr "Mort — renaît au prochain tour"
+
+msgid "game.status_prison"
+msgstr "Prison — passe ce tour"
+
+msgid "game.status_bankrupt"
+msgstr "Banqueroute — passe ce tour"
+
+msgid "game.status_must_visit_bank"
+msgstr "Doit passer à la banque"
+
+msgid "game.status_has_credit"
+msgstr "Crédit en cours"
+
+msgid "game.player_meta"
+msgstr "âge {age} · dette {debt} · intérêts {interest}"
+
+msgid "game.player_meta_libre"
+msgstr "âge {age}"
+
+msgid "game.player_rename_title"
+msgstr "Renommer ce joueur"
+
+msgid "game.player_copy_link_title"
+msgstr "Copier le lien individuel de ce joueur"
+
+msgid "game.pin_badge_title"
+msgstr "Cliquer pour copier le code PIN de cette partie"
+
+msgid "game.pin_copied"
+msgstr "Copié !"
+
+msgid "game.pin_prompt"
+msgstr "Cette partie est protégée. Entrez le code PIN :"
+
+msgid "game.pin_incorrect"
+msgstr "Code PIN incorrect."
+
+msgid "game.pin_created_alert"
+msgstr "Cette partie est protégée.\n\nCode PIN : {pin}\n\nNotez-le : il sera nécessaire pour retrouver cette partie depuis un autre appareil ou après avoir vidé les données du navigateur."
+
+msgid "game.player_delete_title"
+msgstr "Supprimer ce joueur"
+
+msgid "game.player_add_event_title"
+msgstr "Ajouter un événement pour ce joueur"
+
+msgid "game.event_edit_title"
+msgstr "Modifier cet événement"
+
+msgid "game.event_delete_title"
+msgstr "Supprimer cet événement"
+
+msgid "game.player_dialog_title"
+msgstr "Nouvel événement — {name}"
+
+msgid "game.field_event_type"
+msgstr "Type d'événement"
+
+msgid "game.field_principal"
+msgstr "Montant principal"
+
+msgid "game.field_interest"
+msgstr "Intérêt"
+
+msgid "game.cannotpay_intro"
+msgstr "La banque saisit le joueur."
+
+msgid "game.field_player_money"
+msgstr "Monnaie restante chez le joueur"
+
+msgid "game.field_player_weak"
+msgstr "Cartes faibles chez le joueur"
+
+msgid "game.field_player_medium"
+msgstr "Cartes moyennes chez le joueur"
+
+msgid "game.field_player_strong"
+msgstr "Cartes fortes chez le joueur"
+
+msgid "game.field_seizure_target"
+msgstr "Valeur que la banque décide de saisir"
+
+msgid "game.cannotpay_inventory_title"
+msgstr "Inventaire du patrimoine du joueur"
+
+msgid "game.validation_error_prefix"
+msgstr "Impossible de valider : "
+
+msgid "game.validation_principal_exceeds"
+msgstr "le principal ({principal}) dépasse la dette du joueur ({debt})"
+
+msgid "game.validation_interest_exceeds"
+msgstr "l'intérêt ({interest}) dépasse l'intérêt dû par le joueur ({due})"
+
+msgid "game.validation_total_exceeds"
+msgstr "le total ({total}) dépasse la masse monétaire en circulation ({mass})"
+
+msgid "game.seizure_detail"
+msgstr "Saisi automatiquement : {coins} jeton(s), {strong} carte(s) forte(s), {medium} carte(s) moyenne(s), {weak} carte(s) faible(s) — valeur récupérée : {recovered}. Il reste {remaining} carte(s) au joueur."
+
+msgid "game.seizure_overshoot"
+msgstr " La saisie dépasse le montant visé de {overshoot} : la banque rend cette différence au joueur."
+
+msgid "game.outcome_line"
+msgstr "→ {label} ({reason})"
+
+msgid "game.rename_player_title"
+msgstr "Renommer {name}"
+
+msgid "game.rename_player_label"
+msgstr "Nouveau nom"
+
+msgid "game.rename_player_error"
+msgstr "Ce nom est déjà pris par un autre joueur de la partie."
+
+msgid "game.delete_player_title"
+msgstr "Supprimer {name} ?"
+
+msgid "game.delete_player_body"
+msgstr "Cette action est <strong>définitive</strong> : {name} et tous ses événements associés (crédits, remboursements...) seront supprimés, et la partie recalculée. Voulez-vous continuer ?"
+
+msgid "game.edit_event_title"
+msgstr "Modifier : {type}"
+
+msgid "game.edit_event_datetime_label"
+msgstr "Date et heure"
+
+msgid "game.edit_event_warning"
+msgstr "Cette modification recalcule l'ensemble de la partie (dettes, masse monétaire...) à partir des événements restants - à utiliser pour corriger une erreur de saisie, pas en cours de jeu normal."
+
+msgid "game.delete_event_title"
+msgstr "Supprimer cet événement ?"
+
+msgid "game.delete_event_body"
+msgstr "Cette action est <strong>définitive</strong> et recalcule l'ensemble de la partie (dettes, masse monétaire...) à partir des événements restants. Voulez-vous continuer ?"
+
+msgid "game.field_player_concerned"
+msgstr "Joueur concerné"
+
+msgid "game.field_weak_cards"
+msgstr "Cartes faibles"
+
+msgid "game.field_medium_cards"
+msgstr "Cartes moyennes"
+
+msgid "game.field_strong_cards"
+msgstr "Cartes fortes"
+
+msgid "game.dialog_money_mass_title"
+msgstr "Changement de la masse monétaire"
+
+msgid "game.bank_form_invested_amount"
+msgstr "Montant investi"
+
+msgid "game.bank_form_final_amount"
+msgstr "Montant du bilan"
+
+msgid "game.quit_player_label"
+msgstr "Joueur"
+
+msgid "game.quit_debt_title"
+msgstr "{name} quitte — remboursement à la banque"
+
+msgid "game.quit_debt_body"
+msgstr "{name} a un crédit en cours : dette {debt}, intérêts {interest}. La banque doit être remboursée avant l'inventaire de départ."
+
+msgid "game.quit_repay_btn"
+msgstr "Rembourse intégralement"
+
+msgid "game.quit_inventory_title"
+msgstr "{name} quitte — inventaire de départ"
+
+msgid "game.quit_inventory_body"
+msgstr "Inventaire du patrimoine restant, avant que {name} ne quitte la partie."
+
+msgid "game.field_remaining_money"
+msgstr "Monnaie restante"
+
+msgid "game.add_player_title"
+msgstr "Ajouter un joueur"
+
+msgid "game.add_player_name_label"
+msgstr "Nom"
+
+msgid "game.chart_unavailable"
+msgstr "Graphiques indisponibles : la bibliothèque graphique n'a pas pu être chargée (fichier js/vendor/chart.umd.js introuvable ou bloqué)."
+
+msgid "game.chart_turn_label"
+msgstr "Tour {n}"
+
+msgid "game.chart_wealth_title_debt"
+msgstr "Crédits en cours par joueur"
+
+msgid "game.chart_wealth_info_debt"
+msgstr "Part de chaque joueur actif dans le total des crédits actuellement en cours, mise à jour en direct - le diagramme s'ajuste de façon animée au fur et à mesure que les crédits sont remboursés."
+
+msgid "game.chart_wealth_title_libre"
+msgstr "Richesse par joueur"
+
+msgid "game.chart_wealth_info_libre"
+msgstr "Part personnelle de chaque joueur dans la richesse totale évaluée à ce stade de la partie. Donnée basée sur les évaluations faites à la mort/renaissance ou à la sortie de partie de chaque joueur - un joueur encore actif et jamais évalué apparaît à 0% pour l'instant."
+
+msgid "game.legend_no_active_players"
+msgstr "Aucun joueur actif."
+
+msgid "game.legend_no_credit"
+msgstr "Aucun crédit en cours pour l'instant."
+
+msgid "game.legend_no_evaluated_players"
+msgstr "Aucun joueur évalué pour l'instant."
+
+msgid "games.empty_new"
+msgstr "Aucune partie pour le moment. Créez-en une ci-dessus !"
+
+msgid "games.empty_all"
+msgstr "Aucune partie pour le moment."
+
+msgid "game.undo_nothing_alert"
+msgstr "Rien à annuler pour cette partie."
+
+# ============ Écran "Paramètres" (systèmes d'échange / plugins) ============
+msgid "settings.title"
+msgstr "Paramètres"
+
+msgid "settings.language_title"
+msgstr "Langue"
+
+msgid "settings.language_intro"
+msgstr "Choisissez la langue par défaut de l'application, ou ajoutez/téléchargez un fichier de langue (.po) pour le modifier ou vous en servir de modèle pour en créer une nouvelle."
+
+msgid "settings.default_language_label"
+msgstr "Langue par défaut"
+
+msgid "settings.default_language_validate_btn"
+msgstr "Valider"
+
+msgid "settings.export_language_label"
+msgstr "Télécharger un fichier de langue (modèle ou à modifier)"
+
+msgid "settings.export_btn"
+msgstr "Télécharger"
+
+msgid "settings.export_error"
+msgstr "Impossible de télécharger ce fichier de langue."
+
+msgid "settings.import_language_label"
+msgstr "Ajouter un fichier de langue (.po)"
+
+msgid "settings.import_code_placeholder"
+msgstr "ex: es"
+
+msgid "settings.import_btn"
+msgstr "Importer"
+
+msgid "settings.import_invalid_code"
+msgstr "Le code de langue doit faire 2 à 10 caractères (minuscules, chiffres, tirets) - par exemple \"es\" ou \"pt-br\"."
+
+msgid "settings.import_empty_code"
+msgstr "Indiquez d'abord un code de langue (ex: \"es\" pour l'espagnol) - il est pré-rempli automatiquement si vous choisissez le fichier en premier."
+
+msgid "settings.import_no_file"
+msgstr "Choisissez un fichier .po à importer."
+
+msgid "settings.import_success"
+msgstr "Langue \"{code}\" importée avec succès - disponible immédiatement dans le sélecteur de langue."
+
+msgid "settings.installed_languages_label"
+msgstr "Langues installées"
+
+msgid "settings.language_builtin"
+msgstr "fournie avec l'application"
+
+msgid "settings.language_edit_title"
+msgstr "Modifier le drapeau/nom"
+
+msgid "settings.language_edit_dialog_title"
+msgstr "Drapeau et nom pour \"{code}\""
+
+msgid "settings.language_edit_flag_label"
+msgstr "Drapeau (emoji)"
+
+msgid "settings.language_edit_name_label"
+msgstr "Nom affiché"
+
+msgid "settings.language_edit_reset_hint"
+msgstr "Videz les deux champs et validez pour revenir à la détection automatique."
+
+msgid "settings.language_delete_title"
+msgstr "Supprimer cette langue"
+
+msgid "settings.language_delete_confirm"
+msgstr "Supprimer définitivement la langue \"{code}\" ? Cette action retire son fichier du disque et ne peut pas être annulée."
+
+msgid "settings.language_delete_error"
+msgstr "Impossible de supprimer cette langue : {error}"
+
+msgid "settings.import_error"
+msgstr "Échec de l'import : {error}"
+
+msgid "settings.sound_title"
+msgstr "Son"
+
+msgid "settings.sound_mute_label"
+msgstr "Couper le son (sifflet de début/fin de tour)"
+
+msgid "settings.sound_volume_label"
+msgstr "Volume"
+
+msgid "settings.sound_test_btn"
+msgstr "Tester"
+
+msgid "settings.plugins_title"
+msgstr "Systèmes d'échange disponibles"
+
+msgid "settings.plugins_intro"
+msgstr "Choisissez les systèmes à proposer sur l'écran \"Nouvelle partie\". Un système chargé mais pas encore jouable peut être activé pour test, mais ne permettra pas encore de créer une partie."
+
+msgid "settings.update_title"
+msgstr "Mises à jour"
+
+msgid "settings.backup_title"
+msgstr "Sauvegarde"
+
+msgid "settings.backup_intro"
+msgstr "Téléchargez une copie complète de toutes les parties enregistrées (tous systèmes d'échange confondus), dans un seul fichier - à conserver en lieu sûr, ou pour transférer l'historique vers une autre installation."
+
+msgid "settings.backup_btn"
+msgstr "Télécharger une sauvegarde complète"
+
+msgid "settings.protection_title"
+msgstr "Protection par code"
+
+msgid "settings.protection_intro"
+msgstr "Une fois activée, chaque nouvelle partie reçoit un code PIN à 6 chiffres, à saisir pour y accéder - et chaque joueur reçoit un lien individuel donnant accès uniquement à ses propres informations. Les parties déjà créées avant l'activation restent accessibles sans code."
+
+msgid "settings.protection_label"
+msgstr "Activer la protection par code"
+
+msgid "settings.update_intro"
+msgstr "L'application ne se met jamais à jour toute seule : elle peut seulement vérifier si une nouvelle version existe (à partir d'une adresse que vous configurez ci-dessous) et vous proposer de la télécharger - le reste reste entre vos mains."
+
+msgid "settings.update_current_version_label"
+msgstr "Version actuelle :"
+
+msgid "settings.update_url_label"
+msgstr "Adresse de vérification (URL)"
+
+msgid "settings.update_save_btn"
+msgstr "Enregistrer"
+
+msgid "settings.update_check_btn"
+msgstr "Vérifier les mises à jour"
+
+msgid "settings.update_checking"
+msgstr "Vérification en cours…"
+
+msgid "settings.update_not_configured"
+msgstr "Aucune adresse de vérification renseignée pour l'instant."
+
+msgid "settings.update_check_error"
+msgstr "Vérification impossible : {error}"
+
+msgid "settings.update_available"
+msgstr "Une nouvelle version est disponible : {version}"
+
+msgid "settings.update_up_to_date"
+msgstr "Vous utilisez déjà la dernière version ({version})."
+
+msgid "settings.update_download_btn"
+msgstr "Télécharger"
+
+msgid "settings.not_playable_yet"
+msgstr "pas encore jouable"
+
+msgid "settings.plugin_download_title"
+msgstr "Télécharger ce plugin (.zip)"
+
+msgid "settings.plugin_delete_title"
+msgstr "Supprimer ce plugin"
+
+msgid "settings.plugin_delete_confirm"
+msgstr "Supprimer définitivement le plugin \"{id}\" ? Cette action retire son dossier du disque et ne peut pas être annulée."
+
+msgid "settings.plugin_delete_error"
+msgstr "Impossible de supprimer ce plugin : {error}"
+
+msgid "newgame.not_playable_yet"
+msgstr "Pas encore jouable"
+
+msgid "newgame.not_playable_yet_title"
+msgstr "Ce système est chargé mais le moteur ne sait pas encore le faire fonctionner - la création de partie reste désactivée pour l'instant."
+
+# ============ Troc (voir plugins/troc/manifest.json, docs/10-etape-plugins-troc.md) ============
+msgid "event.type.GOODS_TRADE"
+msgstr "Échange bien contre bien"
+
+msgid "game.action_troc_trade"
+msgstr "Échange entre joueurs"
+
+msgid "game.chart_wealth_title_troc"
+msgstr "Biens en circulation par joueur"
+
+msgid "game.chart_wealth_info_troc"
+msgstr "Part de chaque joueur actif dans le total des biens actuellement en circulation, mise à jour en direct à chaque échange."
+
+msgid "game.legend_no_goods"
+msgstr "Aucun bien en circulation pour l'instant."
+
+msgid "game.stat_goods"
+msgstr "Biens en circulation"
+
+msgid "game.troc_trade_need_two_players"
+msgstr "Il faut au moins deux joueurs actifs pour enregistrer un échange."
+
+msgid "game.troc_initiator_label"
+msgstr "Premier joueur"
+
+msgid "game.troc_counterparty_label"
+msgstr "Second joueur"
+
+msgid "game.troc_goods_from_initiator_label"
+msgstr "Biens donnés par le premier joueur"
+
+msgid "game.troc_goods_from_counterparty_label"
+msgstr "Biens donnés par le second joueur"
+
+msgid "game.troc_same_player_error"
+msgstr "Les deux joueurs de l'échange doivent être différents."
+
+msgid "game.troc_one_sided_error"
+msgstr "Un échange doit toujours se faire dans les deux sens - jamais de don sans contrepartie."
+
+msgid "wiz.death_troc_title"
+msgstr "Inventaire des morts et renaissance"
+
+msgid "wiz.death_troc_intro"
+msgstr "Pour chaque joueur qui meurt ce tour, comptez ses biens avant qu'il ne renaisse avec la dotation de départ : {n} biens et autant de jetons de temps de vie."
+
+msgid "game.player_meta_troc"
+msgstr "biens {goods}"
+
+msgid "newgame.service_trade_label"
+msgstr "Autoriser les échanges de service (bien-contre-service)"
+
+msgid "newgame.starting_time_tokens_label"
+msgstr "Jetons de temps par tour"
+
+# ============ Libellés génériques réutilisés partout (boîtes de dialogue) ============
+msgid "common.validate"
+msgstr "Valider"
+
+msgid "common.cancel"
+msgstr "Annuler"
+
+# ============ Assistant de fin de tour ============
+msgid "wiz.continue_btn"
+msgstr "Continuer"
+
+msgid "wiz.death_du_title"
+msgstr "Inventaire des morts et renaissance (DU)"
+
+msgid "wiz.death_du_tokens_subtitle"
+msgstr "Jetons"
+
+msgid "wiz.death_du_cards_subtitle"
+msgstr "Cartes valeurs"
+
+msgid "wiz.death_du_intro"
+msgstr "Pour chaque joueur qui meurt ce tour, dressez son inventaire (jetons restants) avant qu'il ne renaisse avec le DU seul de ce tour : <strong>{du}</strong> (pas ses anciennes pièces + DU)."
+
+msgid "wiz.dying_this_turn"
+msgstr "{name} — meurt ce tour"
+
+msgid "wiz.field_weak_tokens"
+msgstr "Jetons faibles"
+
+msgid "wiz.field_medium_tokens"
+msgstr "Jetons moyens"
+
+msgid "wiz.field_strong_tokens"
+msgstr "Jetons forts"
+
+msgid "wiz.validate_rebirth_btn"
+msgstr "Valider et faire renaître"
+
+msgid "wiz.death_du_result"
+msgstr "Inventaire avant mort : {currentValue} jetons. Renaît avec le DU seul : {du} jetons."
+
+msgid "wiz.death_du_breakdown"
+msgstr "À lui redonner : {weak} jeton(s) faible(s), {medium} moyen(s), {strong} fort(s)."
+
+msgid "wiz.other_du_title"
+msgstr "Distribution du DU"
+
+msgid "wiz.du_formula"
+msgstr "Dividende Universel de ce tour : <strong>{du}</strong> (masse monétaire {mass} ÷ (7 × {count} joueurs actifs × facteur {factor}), tronqué - indépendant du facteur carte/monnaie choisi."
+
+msgid "wiz.target_formula"
+msgstr "Pour information, la base théorique de la masse monétaire est : 7 × {count} joueurs actifs = {base}, puis × facteur carte/monnaie ({factor}) = <strong>{target}</strong>."
+
+msgid "wiz.du_value_intro"
+msgstr "Dividende Universel (DU) de ce tour : <strong>{du} jetons</strong>."
+
+msgid "wiz.other_du_intro"
+msgstr "Pour chaque joueur, comptez ses jetons actuels puis donnez-lui le nouveau total calculé."
+
+msgid "wiz.no_other_active_player"
+msgstr "Aucun autre joueur actif."
+
+msgid "wiz.collection_check_result"
+msgstr "Écart : {remaining} (sur une masse monétaire de {mass} — total noté jusqu'ici : {collected}) - devrait tomber à 0 une fois tous les joueurs saisis"
+
+msgid "wiz.du_result"
+msgstr "Valeur actuelle : {currentValue} + DU {du} = {total} à lui redonner en jetons."
+
+msgid "wiz.step0_title"
+msgstr "Bilan des joueurs endettés"
+
+msgid "wiz.mandatory_dying_badge"
+msgstr "Obligatoire - meurt ce tour"
+
+msgid "wiz.debt_interest_meta"
+msgstr "dette {debt} · intérêts {interest}"
+
+msgid "wiz.repay_interest_btn"
+msgstr "Rembourse l'intérêt"
+
+msgid "wiz.repay_credit_btn"
+msgstr "Rembourse le crédit"
+
+msgid "wiz.dying_indebted_intro"
+msgstr "Joueurs qui meurent ce tour et ont un crédit en cours : remboursement obligatoire avant l'inventaire de leur mort."
+
+msgid "wiz.other_indebted_intro"
+msgstr "Pour chaque AUTRE joueur endetté (facultatif - la banque peut tout à fait attendre) : est-il capable de rembourser ses intérêts, son crédit, ou ne peut-il pas payer ?"
+
+msgid "wiz.no_other_indebted"
+msgstr "Aucun autre joueur endetté ce tour-ci."
+
+msgid "wiz.dying_indebted_alert"
+msgstr "Les joueurs qui meurent ce tour doivent d'abord régler leur crédit avec la banque."
+
+msgid "wiz.end_inventory_title"
+msgstr "Sortie de tous les joueurs"
+
+msgid "wiz.end_inventory_intro"
+msgstr "C'est le dernier tour : chaque joueur quitte la partie. Indiquez ce qu'il lui reste avant de le retirer de la partie."
+
+msgid "wiz.validate_continue_btn"
+msgstr "Valider et continuer"
+
+msgid "wiz.remaining_to_collect"
+msgstr "Reste à collecter : {remaining} (sur une masse monétaire de {mass} — déjà saisi : {collected})"
+
+msgid "wiz.remaining_coins_collected"
+msgstr "Nombre de pièces/jetons saisis jusqu'ici (toutes valeurs confondues) : {count}"
+
+msgid "wiz.end_game_title"
+msgstr "Partie terminée !"
+
+msgid "wiz.end_game_thanks"
+msgstr "Tous les joueurs ont quitté la partie. Bravo à tous les joueurs et à vous, animateur·rice, pour cette partie en monnaie {system} !"
+
+msgid "wiz.money_system_debt"
+msgstr "dette"
+
+msgid "wiz.money_system_libre"
+msgstr "libre"
+
+msgid "wiz.go_to_stats_label"
+msgstr "Afficher les statistiques de la partie"
+
+msgid "wiz.finish_btn"
+msgstr "Terminer"
+
+msgid "wiz.bank_summary_title"
+msgstr "Bilan de la banque"
+
+msgid "wiz.bank_net_balance"
+msgstr "Solde net de la banque : <strong>{amount}</strong>"
+
+msgid "wiz.step2_title"
+msgstr "Décès"
+
+msgid "wiz.all_players_money_title"
+msgstr "Inventaire en jetons de tous les joueurs"
+
+msgid "wiz.all_players_money_intro"
+msgstr "Avant toute chose, notez combien de jetons faibles, moyens et forts possède chaque joueur actif en ce moment - mourants et survivants confondus. Ce contrôle sert à vérifier que le total correspond bien à la masse monétaire globale, avant que la mort ne vienne la modifier."
+
+msgid "wiz.step2_intro"
+msgstr "Sélectionnez le(s) joueur(s) qui meurent ce tour. Ils ne pourront plus échanger et renaîtront au tour suivant avec 0 unité."
+
+msgid "wiz.suggestion_computing"
+msgstr "Calcul de la suggestion..."
+
+msgid "wiz.age_meta"
+msgstr "âge {age}"
+
+msgid "wiz.suggestion_found"
+msgstr "Suggestion : {names} (pré-coché ci-dessous, modifiable librement)."
+
+msgid "wiz.suggestion_none"
+msgstr "Aucune suggestion pour ce tour."
+
+msgid "wiz.death_inventory_title"
+msgstr "Inventaire des joueurs qui meurent"
+
+msgid "wiz.death_inventory_intro"
+msgstr "Pour chaque joueur, indiquez ce qu'il possède encore avant sa renaissance - son capital est remis en jeu dans la masse monétaire/les cartes en circulation."
+
+msgid "wiz.validate_inventory_btn"
+msgstr "Valider l'inventaire et continuer"
+
+msgid "wiz.step3_title"
+msgstr "Nouveaux-nés"
+
+msgid "wiz.step3_intro_with_deaths"
+msgstr "Les joueurs suivants sont décédés et ne peuvent plus échanger ce tour. Ils renaissent au tour prochain et recommencent avec 0 unité :"
+
+msgid "wiz.step3_intro_no_deaths"
+msgstr "Aucun décès sélectionné pour ce tour."
+
+msgid "wiz.step_credits_title"
+msgstr "Nouveaux crédits"
+
+msgid "wiz.step_credits_intro"
+msgstr "D'autres joueurs souhaitent-ils un nouveau crédit avant de démarrer le tour suivant ?"
+
+msgid "wiz.current_money_mass_label"
+msgstr "Masse monétaire actuelle :"
+
+msgid "wiz.grant_credit_btn"
+msgstr "+ Accorder"
+
+msgid "wiz.credit_granted_line"
+msgstr "{name} : +{principal} (intérêt {interest})"
+
+msgid "wiz.remove_credit_title"
+msgstr "Retirer ce crédit"
+
+msgid "wiz.step4_title"
+msgstr "Fin du tour {n} terminée"
+
+msgid "wiz.step4_intro"
+msgstr "Le bilan de fin de tour est terminé."
+
+msgid "wiz.summary_deaths_label"
+msgstr "Morts / renaissances"
+
+msgid "wiz.summary_credits_granted_label"
+msgstr "Crédits accordés"
+
+msgid "wiz.summary_repayments_label"
+msgstr "Remboursements"
+
+msgid "wiz.summary_interest_collected_label"
+msgstr "Intérêts prélevés"
+
+msgid "wiz.summary_du_distributed_label"
+msgstr "DU distribué"
+
+msgid "wiz.autostart_label"
+msgstr "Démarrer automatiquement le tour {n} en validant"
+
+# ============ Rapport de fin de partie ============
+msgid "report.title"
+msgstr "Partie terminée !"
+
+msgid "report.export_btn"
+msgstr "Exporter le rapport (JSON)"
+
+msgid "report.export_raw_btn"
+msgstr "Exporter la partie complète (JSON)"
+
+msgid "report.toggle_no_bank"
+msgstr "Sans la banque"
+
+msgid "report.toggle_with_bank"
+msgstr "Avec la banque"
+
+msgid "report.not_finalized_warning"
+msgstr "{count} joueur(s) encore actif(s) n'ont pas été comptabilisé(s) (leur richesse n'est prise en compte qu'après leur événement \"Mort / Renaissance\" ou \"Fin de partie\"). Le rapport ci-dessous est donc partiel tant qu'ils ne sont pas clôturés."
+
+msgid "report.stat_years"
+msgstr "Années de vie"
+
+msgid "report.stat_turns"
+msgstr "Tours"
+
+msgid "report.stat_final_mass"
+msgstr "Masse finale"
+
+msgid "report.stat_total_production"
+msgstr "Production totale"
+
+msgid "report.metric_average"
+msgstr "Moyenne"
+
+msgid "report.metric_median"
+msgstr "Médiane"
+
+msgid "report.metric_stddev"
+msgstr "Écart type"
+
+msgid "report.metric_gini"
+msgstr "Indice de Gini (×100)"
+
+msgid "report.metric_poverty"
+msgstr "Seuil de pauvreté"
+
+msgid "report.metric_poverty_info"
+msgstr "60% du niveau de vie médian - définition officielle Eurostat/INSEE. Voir docs/aide pour le détail et les sources."
+
+msgid "report.metric_poor_players"
+msgstr "Joueurs pauvres"
+
+msgid "report.metric_modest"
+msgstr "Seuil de condition modeste"
+
+msgid "report.metric_modest_info"
+msgstr "75% du niveau de vie médian - entre les deux seuils, on parle de personnes 'modestes' plutôt que 'pauvres' (Eurostat/INSEE)."
+
+msgid "report.metric_modest_players"
+msgstr "Joueurs modestes"
+
+msgid "report.activity_global"
+msgstr "{count} transaction(s) · volume global {volume}"
+
+msgid "report.activity_unavailable"
+msgstr "Statistiques d'activité indisponibles."
+
+msgid "report.legend_wealth"
+msgstr "Richesse"
+
+msgid "report.legend_average"
+msgstr "Moyenne"
+
+msgid "report.legend_stddev"
+msgstr "Écart-type"
+
+msgid "report.legend_poverty_threshold"
+msgstr "Seuil de pauvreté"
+
+msgid "report.galilee_no_data"
+msgstr "Pas de données disponibles pour cette partie."
+
+msgid "report.galilee_average_reference"
+msgstr "Moyenne (référence)"
+
+msgid "report.chart_histogram_title"
+msgstr "Richesse finale par joueur"
+
+msgid "report.chart_money_mass_title"
+msgstr "Évolution de la masse monétaire"
+
+msgid "report.chart_bank_profit_title"
+msgstr "Bénéfices de la banque"
+
+msgid "report.bank_profit_label"
+msgstr "Bénéfices (intérêts + saisies)"
+
+msgid "report.bank_reinvested_label"
+msgstr "Capital réinvesti"
+
+msgid "report.metrics_title"
+msgstr "Indicateurs statistiques (production de valeurs par joueur)"
+
+msgid "report.activity_title"
+msgstr "Activité par joueur"
+
+msgid "report.activity_col_player"
+msgstr "Joueur"
+
+msgid "report.activity_col_transactions"
+msgstr "Transactions"
+
+msgid "report.activity_col_borrowed"
+msgstr "Emprunté (total)"
+
+msgid "report.activity_col_volume"
+msgstr "Volume brassé"
+
+msgid "report.galilee_title"
+msgstr "Richesse des joueurs dans le temps"
+
+msgid "report.galilee_badge"
+msgstr "module Galilée"
+
+msgid "report.galilee_badge_title"
+msgstr "Convergence des comptes vers la moyenne, principe du module Galilée de la TRM"
+
+msgid "report.galilee_absolute_btn"
+msgstr "Valeur absolue"
+
+msgid "report.galilee_relative_btn"
+msgstr "Valeur relative (moyenne = 1)"
+
+msgid "report.galilee_explainer"
+msgstr "En valeur relative, chaque compte tend vers 1 (la moyenne) au fil des tours — cliquez sur un nom dans la légende pour isoler/masquer sa courbe et comparer."
+
+# ============ "Toutes les parties" et "Comparer des parties" ============
+msgid "games.all_title"
+msgstr "Toutes les parties"
+
+msgid "compare.title"
+msgstr "Comparer des parties"
+
+msgid "compare.step1_title"
+msgstr "1. Choisissez les parties à comparer"
+
+msgid "compare.step1_intro"
+msgstr "Les joueurs sont recoupés d'une partie à l'autre par leur <strong>nom exact</strong> : utilisez les mêmes prénoms dans vos différentes parties pour que la comparaison ait un sens (typiquement une partie en monnaie dette et une en monnaie libre, jouées avec le même groupe)."
+
+msgid "compare.run_btn"
+msgstr "Comparer"
+
+msgid "compare.step2_title"
+msgstr "2. Richesse par joueur, partie par partie"
+
+msgid "compare.standard_btn"
+msgstr "Aggrégés standards"
+
+msgid "compare.corrected_btn"
+msgstr "Aggrégés corrigés"
+
+msgid "compare.badge_debt"
+msgstr "Dette"
+
+msgid "compare.badge_libre"
+msgstr "Libre"
+
+msgid "compare.badge_troc"
+msgstr "Troc"
+
+msgid "compare.unnamed_game"
+msgstr "(sans nom)"
+
+msgid "compare.running"
+msgstr "Comparaison en cours…"
+
+msgid "compare.explainer_standard"
+msgstr "Richesse finale brute de chaque joueur, partie par partie."
+
+msgid "compare.explainer_corrected"
+msgstr "Même comparaison, mais en retranchant ce que chaque joueur a reçu \"gratuitement\" (dotation initiale, et en monnaie libre le DU moyen reçu à la naissance et à l'évaluation finale) - pour ne comparer que la richesse réellement produite pendant la partie."

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statistiques de fin de partie — Ğeconomicus Helper</title>
+<style>
+	:root { --accent: #2563eb; --text: #111827; --text-dim: #6b7280; --border: #e5e7eb; --bg: #f4f6fb; }
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+		background: var(--bg); color: var(--text); line-height: 1.65;
+	}
+	.doc-wrap { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+	.doc-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 2rem; color: var(--text-dim); font-size: 0.85rem; }
+	.doc-logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff;
+		display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+	h1 { font-size: 1.6rem; margin: 0 0 1.25rem; }
+	h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+	h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+	p, li { font-size: 0.95rem; }
+	a { color: var(--accent); }
+	code { background: #eef1f7; padding: 0.15rem 0.4rem; border-radius: 5px; font-size: 0.85em; }
+	ul, ol { padding-left: 1.3rem; }
+</style>
+</head>
+<body>
+	<div class="doc-wrap">
+		<div class="doc-header"><span class="doc-logo">Ğ</span> Ğeconomicus Helper — Documentation</div>
+		<h1>Comprendre les statistiques de fin de partie</h1>
+<p>Cette page explique les indicateurs affichés sur le rapport de fin de partie
+(moyenne, médiane, écart type, indice de Gini, seuils de pauvreté et de
+condition modeste), avec leurs définitions officielles et des sources pour
+aller plus loin.</p>
+<h2>Seuil de pauvreté et seuil de condition modeste</h2>
+<p>Ğeconomicus utilise les <strong>définitions officielles d'Eurostat et de l'INSEE</strong>,
+utilisées dans toutes les comparaisons de pauvreté en Europe :</p>
+<ul>
+<li><strong>Seuil de pauvreté</strong> = 60 % du niveau de vie <strong>médian</strong> (pas la moyenne).
+  Un joueur est considéré "pauvre" si sa richesse en fin de partie est
+  inférieure à ce seuil.</li>
+<li><strong>Seuil de condition modeste</strong> = 75 % du niveau de vie médian. Entre les
+  deux seuils (60 % et 75 % de la médiane), on parle de personnes "modestes"
+  plutôt que "pauvres" : leurs conditions de vie sont proches de celles des
+  personnes pauvres, sans être comptées dans le taux de pauvreté au sens
+  strict.</li>
+</ul>
+<p>Pourquoi la <strong>médiane</strong> plutôt que la moyenne ? La médiane est la valeur qui
+sépare la population en deux moitiés égales (autant de joueurs au-dessus qu'en
+dessous). Elle est moins sensible qu'une moyenne aux valeurs extrêmes : un
+seul joueur extrêmement riche ferait fortement remonter une moyenne, sans
+refléter la situation du joueur "typique" - la médiane, elle, ne bouge pas
+pour autant.</p>
+<p><strong>Pour aller plus loin :</strong>
+- <a href="https://ec.europa.eu/eurostat/fr/web/income-and-living-conditions/database">Base de données Eurostat sur les revenus et conditions de
+  vie</a>
+- <a href="https://www.inegalites.fr/La-pauvrete-en-Europe">La pauvreté en Europe — Observatoire des inégalités</a>
+- Étude DREES, <em>Personnes pauvres et modestes en Europe : qui sont-elles ?</em>,
+  Études et Résultats n°1349, septembre 2025 (Théodore Bérut) - la source qui a
+  servi à préciser ces définitions dans l'application. Disponible auprès de la
+  DREES (drees.solidarites-sante.gouv.fr).</p>
+<h2>Indice de Gini</h2>
+<p>L'indice de Gini mesure les <strong>inégalités de richesse</strong> au sein d'un groupe, sur
+une échelle de 0 à 1 (affiché ici multiplié par 100, donc de 0 à 100) :</p>
+<ul>
+<li><strong>0</strong> = égalité parfaite (tous les joueurs ont exactement la même richesse).</li>
+<li><strong>100</strong> (proche de 1) = inégalité extrême (un seul joueur possède toute la
+  richesse, tous les autres n'ont rien).</li>
+</ul>
+<p>Concrètement, l'indice compare la répartition réelle des richesses entre
+joueurs à une répartition parfaitement égalitaire : plus l'écart entre les
+deux est grand, plus l'indice est élevé. C'est l'indicateur le plus utilisé au
+monde pour comparer les inégalités entre pays, régions, ou - ici - entre deux
+systèmes monétaires au sein d'une même partie de Ğeconomicus.</p>
+<p><strong>Pour aller plus loin :</strong>
+- <a href="https://fr.wikipedia.org/wiki/Coefficient_de_Gini">Coefficient de Gini — Wikipédia</a>
+- <a href="https://www.insee.fr/fr/metadonnees/definition/c1551">Définition de l'indice de Gini — INSEE</a>
+- <a href="https://www.insee.fr/fr/statistiques/2491918">Indice de Gini, données et statistiques — INSEE</a></p>
+	</div>
+</body>
+</html>
