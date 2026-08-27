@@ -205,4 +205,35 @@ public class Dtos
 	public record EditEventRequest(int principal, int interest, String tstamp)
 	{
 	}
+
+	// Corps de requête pour POST /api/games/{id}/trade-offers/{code}/redeem
+	// (étape 3, achat de carte). buyerAccessToken : jeton individuel de
+	// l'acheteur, mêmes règles que RecordTransactionRequest ci-dessus.
+	public record RedeemTradeOfferRequest(Integer buyerPlayerId, String buyerAccessToken)
+	{
+	}
+
+	// Corps de requête pour POST /api/games/{id}/trade-offers (étape 3, vente
+	// de carte). sellerAccessToken : mêmes règles que buyerAccessToken plus
+	// haut, côté vendeur cette fois. cardName : la table {code langue -> texte}
+	// du catalogue "Cartes" (voir CatalogService), embarquée telle quelle pour
+	// que l'acheteur affiche le nom dans SA PROPRE langue (voir player-view.js).
+	public record CreateTradeOfferRequest(Integer sellerPlayerId, String sellerAccessToken, String cardTypeId,
+			String cardLevel, java.util.Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins)
+	{
+	}
+
+	// Réponse de POST /api/games/{id}/trade-offers et de
+	// GET /api/games/{id}/trade-offers/{code} (avant confirmation d'achat).
+	public record TradeOfferDto(String code, Integer sellerPlayerId, String sellerPlayerName, String cardTypeId,
+			String cardLevel, java.util.Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins,
+			long expiresAt)
+	{
+		static TradeOfferDto from(final String pCode, final TradeOfferService.Offer pOffer)
+		{
+			return new TradeOfferDto(pCode, pOffer.sellerPlayerId(), pOffer.sellerPlayerName(), pOffer.cardTypeId(),
+					pOffer.cardLevel(), pOffer.cardName(), pOffer.weakCoins(), pOffer.mediumCoins(),
+					pOffer.strongCoins(), pOffer.expiresAtEpochMs());
+		}
+	}
 }

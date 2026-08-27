@@ -2,15 +2,17 @@
 // l'ancien script inline de player-view.html : même principe d'accès (jeton
 // individuel dans l'URL, voir Player.accessToken), étendu avec le flux
 // d'achat/vente de cartes par QR code (voir §5.1 du cahier des charges,
-// décisions prises avec l'utilisateur le 27/08/2026) :
-//   - QR AUTONOME : toutes les données de l'offre (vendeur, carte, prix,
-//     expiration, code à usage unique) sont dans le QR lui-même - aucun
-//     appel serveur pour le générer, pour rester le plus rapide possible.
-//   - Scan par CAMÉRA (bibliothèque jsQR), pas de saisie manuelle de repli.
-//   - Anti-rejeu léger : un "nonce" généré ici, vérifié côté serveur pour
-//     n'être jamais réutilisé (voir Transaction.java/GameService.java) - pas
-//     une vraie protection cryptographique, un compromis rapidité/robustesse
-//     assumé pour cette étape (voir le commentaire sur Transaction.nonce).
+// décisions prises avec l'utilisateur le 27/08/2026, puis ajustées le même
+// jour après relecture de docs/05-etape3-connectivite.md) :
+//   - Offre créée côté SERVEUR (voir TradeOfferService), identifiée par un
+//     code COURT (6 caractères, alphabet non ambigu) - le QR n'encode que ce
+//     code (scan plus rapide/fiable qu'un gros JSON), et le même code peut
+//     être tapé à la main par l'acheteur : un seul mécanisme pour les deux
+//     usages, plutôt que deux systèmes parallèles.
+//   - Scan par CAMÉRA (bibliothèque jsQR) ET saisie manuelle en repli (voir
+//     docs/05-etape3-connectivite.md, qui prévoyait déjà ce repli).
+//   - Anti-rejeu : le code est retiré du serveur de façon atomique dès sa
+//     consommation (usage unique réel, pas juste un nonce côté client).
 //
 // Portée volontairement limitée (comme le modèle de données Transaction) :
 // la carte vendue est choisie dans le catalogue "Cartes" (le TYPE de bien),
@@ -36,7 +38,7 @@ const state = {
 	qrCountdownInterval: null,
 	scanStream: null,
 	scanRAF: null,
-	pendingPurchase: null, // payload décodé du QR, en attente de confirmation
+	pendingOffer: null, // TradeOfferDto résolu (scan ou saisie), en attente de confirmation
 };
 
 // ---------- Traduction des valeurs fixes du catalogue (même principe que côté animateur, voir app.js) ----------
@@ -54,16 +56,11 @@ function catalogTextValue(value) {
 	const first = Object.values(value).find((v) => v);
 	return first || "";
 }
-// Pareil, mais pour une table {langue: texte} reçue TELLE QUELLE dans un QR
-// scanné (voir buildQrPayload) - même logique, nom différent pour la clarté.
-function pickPreferredLang(map) {
-	return catalogTextValue(map);
-}
 
 const CARD_LEVELS = ["faible", "moyenne", "forte", "tresforte"];
 
 // ---------- Navigation entre écrans (un seul visible à la fois, sauf viewError) ----------
-const SCREENS = ["viewContent", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanConfirm", "tradeResult"];
+const SCREENS = ["viewContent", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanManual", "scanConfirm", "tradeResult"];
 function showScreen(id) {
 	stopCamera(); // toujours couper la caméra en quittant scanCamera, quel que soit l'écran de destination
 	clearQrCountdown();
@@ -200,60 +197,72 @@ function initPriceSteppers() {
 }
 
 // ============================================================
-// VENTE : étape 3 - QR code + compte à rebours
+// VENTE : étape 3 - créer l'offre côté serveur, puis QR + compte à rebours
 // ============================================================
-const QR_VALIDITY_SECONDS = 90;
-
-function buildQrPayload() {
+// Remonté par l'utilisateur le 27/08/2026 ("il faut prévoir les deux [scan
+// ET saisie manuelle]") : l'offre est désormais créée côté SERVEUR (voir
+// TradeOfferService), identifiée par un code court - le QR n'encode plus
+// qu'un texte de 6 caractères (scan plus rapide et plus fiable qu'un gros
+// JSON), et ce même code peut être tapé à la main par l'acheteur (voir
+// openScanManualEntry ci-dessous) : un seul mécanisme pour les deux usages.
+async function createOfferAndShowQr() {
 	const { entry } = state.sellSelection;
-	const nonce = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID().replace(/-/g, "").slice(0, 16)
-		: Math.random().toString(36).slice(2) + Date.now().toString(36);
-	return {
-		v: 1,
-		g: state.gameId,
-		s: state.player.id,
-		sn: state.player.name,
-		c: entry.id,
-		l: entry.niveau,
-		d: entry.nom, // table {langue: texte} - l'acheteur affiche dans SA propre langue, pas celle du vendeur
-		w: state.sellPrice.weak,
-		m: state.sellPrice.medium,
-		f: state.sellPrice.strong,
-		x: nonce,
-		e: Date.now() + (QR_VALIDITY_SECONDS * 1000),
-	};
+	const btn = el("btnGenerateQr");
+	btn.disabled = true;
+	try {
+		const res = await fetch(`/api/games/${state.gameId}/trade-offers`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				sellerPlayerId: state.player.id,
+				sellerAccessToken: state.token,
+				cardTypeId: entry.id,
+				cardLevel: entry.niveau,
+				cardName: entry.nom, // table {langue: texte} - l'acheteur affichera dans SA propre langue
+				weakCoins: state.sellPrice.weak,
+				mediumCoins: state.sellPrice.medium,
+				strongCoins: state.sellPrice.strong,
+			}),
+		});
+		if (!res.ok) throw new Error(t("join.generic_error", { status: res.status }));
+		const offer = await res.json();
+		renderQrAndCountdown(offer.code, offer.expiresAt);
+	} catch (err) {
+		showTradeResult(false, t("trade.result_error_title"), err.message);
+	} finally {
+		btn.disabled = false;
+	}
 }
 
-function generateQr() {
-	const payload = buildQrPayload();
+function renderQrAndCountdown(code, expiresAt) {
 	const box = el("sellQrCode");
 	box.innerHTML = "";
 	// eslint-disable-next-line no-undef
-	new QRCode(box, { text: JSON.stringify(payload), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+	new QRCode(box, { text: code, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+	el("sellQrCodeText").textContent = code;
 
 	el("qrExpiredMsg").classList.add("hidden");
 	el("btnRegenerateQr").classList.add("hidden");
 	el("qrCountdownValue").classList.remove("hidden");
 
 	clearQrCountdown();
-	let remaining = QR_VALIDITY_SECONDS;
 	const updateCountdown = () => {
+		const remaining = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
 		const mm = Math.floor(remaining / 60);
 		const ss = String(remaining % 60).padStart(2, "0");
 		el("qrCountdownValue").textContent = `${mm}:${ss}`;
-	};
-	updateCountdown();
-	state.qrCountdownInterval = setInterval(() => {
-		remaining -= 1;
 		if (remaining <= 0) {
 			clearQrCountdown();
 			el("qrCountdownValue").classList.add("hidden");
 			el("qrExpiredMsg").classList.remove("hidden");
 			el("btnRegenerateQr").classList.remove("hidden");
-			return;
 		}
-		updateCountdown();
-	}, 1000);
+	};
+	updateCountdown();
+	// Basé sur l'horodatage serveur (expiresAt), pas un décompte local reparti
+	// de zéro : reste juste même si l'onglet a été mis en veille quelques
+	// secondes (contrairement à un setInterval qui ne fait que décrémenter).
+	state.qrCountdownInterval = setInterval(updateCountdown, 1000);
 
 	showScreen("sellQr");
 }
@@ -266,8 +275,16 @@ function clearQrCountdown() {
 }
 
 // ============================================================
-// ACHAT : caméra + décodage QR
+// ACHAT : caméra + décodage, OU saisie manuelle - les deux résolvent le
+// même code court auprès du serveur (voir TradeOfferService), un seul
+// chemin de données pour les deux (voir resolveCode ci-dessous).
 // ============================================================
+// Format d'un code valide : exactement l'alphabet non ambigu utilisé par
+// TradeOfferService côté serveur (voir CODE_ALPHABET) - permet d'ignorer
+// silencieusement un QR d'une autre application pendant le scan, et de
+// valider la saisie manuelle avant même d'appeler le serveur.
+const OFFER_CODE_PATTERN = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/;
+
 let scanCanvasCtx = null;
 
 async function openScan() {
@@ -288,7 +305,7 @@ async function openScan() {
 	state.scanRAF = requestAnimationFrame(scanTick);
 }
 
-// Une frame de la boucle de scan - se rappelle elle-même tant qu'aucun QR
+// Une frame de la boucle de scan - se rappelle elle-même tant qu'aucun code
 // valide n'est détecté ou que l'écran caméra reste actif (state.scanStream).
 function scanTick() {
 	if (!state.scanStream) return; // écran quitté entre-temps (stopCamera() a coupé le flux)
@@ -301,8 +318,9 @@ function scanTick() {
 		const imageData = scanCanvasCtx.getImageData(0, 0, canvas.width, canvas.height);
 		// eslint-disable-next-line no-undef
 		const code = jsQR(imageData.data, imageData.width, imageData.height);
-		if (code && code.data) {
-			handleScannedPayload(code.data);
+		if (code && code.data && OFFER_CODE_PATTERN.test(code.data.trim().toUpperCase())) {
+			stopCamera();
+			resolveCode(code.data.trim().toUpperCase());
 			return; // pas de nouvelle frame tant que le résultat n'est pas traité
 		}
 	}
@@ -320,76 +338,96 @@ function stopCamera() {
 	}
 }
 
-function handleScannedPayload(raw) {
-	let payload;
-	try {
-		payload = JSON.parse(raw);
-		if ((payload.v !== 1) || !payload.s || !payload.c || !payload.x) throw new Error("shape");
-	} catch (err) {
-		// QR reconnu mais pas au bon format (probablement un QR d'une autre
-		// application) : on ignore silencieusement et on continue de scanner,
-		// plutôt que d'interrompre l'utilisateur pour un scan involontaire.
-		state.scanRAF = requestAnimationFrame(scanTick);
-		return;
-	}
-	if (payload.s === state.player.id) {
-		// On ne peut pas s'acheter sa propre carte : on continue de scanner sans
-		// bloquer l'écran, l'utilisateur vise probablement le bon QR juste après.
-		state.scanRAF = requestAnimationFrame(scanTick);
-		return;
-	}
-	stopCamera();
-	state.pendingPurchase = payload;
-	renderScanConfirm(payload);
-	showScreen("scanConfirm");
+// ---------- Saisie manuelle (repli, voir §5.1 du cahier des charges) ----------
+function openManualEntry() {
+	showScreen("scanManual");
+	el("manualCodeInput").value = "";
+	el("manualCodeError").classList.add("hidden");
+	el("manualCodeInput").focus();
 }
 
-function renderScanConfirm(payload) {
-	const name = pickPreferredLang(payload.d) || payload.c;
+async function submitManualCode() {
+	const raw = el("manualCodeInput").value.trim().toUpperCase();
+	if (!OFFER_CODE_PATTERN.test(raw)) {
+		el("manualCodeError").textContent = t("trade.manual_code_invalid_format");
+		el("manualCodeError").classList.remove("hidden");
+		return;
+	}
+	el("manualCodeError").classList.add("hidden");
+	await resolveCode(raw);
+}
+
+// ---------- Résolution du code (commune scan/saisie manuelle) ----------
+async function resolveCode(code) {
+	try {
+		const res = await fetch(`/api/games/${state.gameId}/trade-offers/${code}`);
+		if (!res.ok) {
+			if (el("scanManual").classList.contains("hidden")) {
+				// Venait du scan caméra : on ignore et on continue de scanner
+				// plutôt que d'interrompre l'utilisateur pour un QR expiré capté
+				// par erreur (ex. reflet, ancien QR encore affiché ailleurs).
+				state.scanRAF = requestAnimationFrame(scanTick);
+			} else {
+				el("manualCodeError").textContent = t("trade.manual_code_not_found");
+				el("manualCodeError").classList.remove("hidden");
+			}
+			return;
+		}
+		const offer = await res.json();
+		if (offer.sellerPlayerId === state.player.id) {
+			// On ne peut pas s'acheter sa propre carte.
+			if (el("scanManual").classList.contains("hidden")) {
+				state.scanRAF = requestAnimationFrame(scanTick);
+			} else {
+				el("manualCodeError").textContent = t("trade.manual_code_own_card");
+				el("manualCodeError").classList.remove("hidden");
+			}
+			return;
+		}
+		state.pendingOffer = offer;
+		renderScanConfirm(offer);
+		showScreen("scanConfirm");
+	} catch (err) {
+		showTradeResult(false, t("trade.result_error_title"), err.message);
+	}
+}
+
+
+function renderScanConfirm(offer) {
+	const name = catalogTextValue(offer.cardName) || offer.cardTypeId;
 	const priceParts = [];
-	if (payload.w > 0) priceParts.push(t("trade.price_weak", { n: payload.w }));
-	if (payload.m > 0) priceParts.push(t("trade.price_medium", { n: payload.m }));
-	if (payload.f > 0) priceParts.push(t("trade.price_strong", { n: payload.f }));
+	if (offer.weakCoins > 0) priceParts.push(t("trade.price_weak", { n: offer.weakCoins }));
+	if (offer.mediumCoins > 0) priceParts.push(t("trade.price_medium", { n: offer.mediumCoins }));
+	if (offer.strongCoins > 0) priceParts.push(t("trade.price_strong", { n: offer.strongCoins }));
 	const priceText = priceParts.length > 0 ? priceParts.join(" + ") : t("trade.price_free");
 
 	el("scanConfirmInfo").innerHTML = `
 		<div class="trade-card-thumb-fallback">🖼️</div>
 		<div class="trade-card-info-main">
 			<span class="trade-card-info-name">${escapeHtmlLocal(name)}</span>
-			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", payload.l))} · ${escapeHtmlLocal(t("trade.sold_by", { name: payload.sn }))}</span>
+			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>
 			<span class="trade-card-info-price">${escapeHtmlLocal(priceText)}</span>
 		</div>`;
 	el("scanConfirmError").classList.add("hidden");
 }
 
 async function confirmPurchase() {
-	const payload = state.pendingPurchase;
+	const offer = state.pendingOffer;
 	const btn = el("btnConfirmBuy");
 	btn.disabled = true;
 	btn.textContent = t("trade.btn_confirming");
 	try {
-		const res = await fetch(`/api/games/${state.gameId}/transactions`, {
+		const res = await fetch(`/api/games/${state.gameId}/trade-offers/${offer.code}/redeem`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				buyerAccessToken: state.token,
-				sellerPlayerId: payload.s,
-				buyerPlayerId: state.player.id,
-				cardTypeId: payload.c,
-				cardLevel: payload.l,
-				weakCoins: payload.w,
-				mediumCoins: payload.m,
-				strongCoins: payload.f,
-				nonce: payload.x,
-				expiresAt: payload.e,
-			}),
+			body: JSON.stringify({ buyerPlayerId: state.player.id, buyerAccessToken: state.token }),
 		});
 		if (!res.ok) {
 			const body = await res.json().catch(() => ({}));
 			throw new Error(body.error || body.msg || t("join.generic_error", { status: res.status }));
 		}
 		showTradeResult(true, t("trade.result_success_title"),
-			t("trade.result_success_body", { name: pickPreferredLang(payload.d) || payload.c }));
+			t("trade.result_success_body", { name: catalogTextValue(offer.cardName) || offer.cardTypeId }));
 		refreshPlayer();
 	} catch (err) {
 		el("scanConfirmError").textContent = err.message;
@@ -411,6 +449,8 @@ function showTradeResult(success, title, body) {
 function initTradeUI() {
 	el("btnOpenSell").addEventListener("click", openSellPicker);
 	el("btnOpenScan").addEventListener("click", openScan);
+	el("btnOpenManualEntry").addEventListener("click", openManualEntry);
+	el("btnSwitchToManual").addEventListener("click", openManualEntry);
 
 	document.querySelectorAll(".btn-back").forEach((btn) => {
 		btn.addEventListener("click", () => {
@@ -419,12 +459,16 @@ function initTradeUI() {
 			else if (section === "sellPrice") showScreen("sellPicker");
 			else if (section === "sellQr") showScreen("sellPrice");
 			else if (section === "scanCamera") showScreen("viewContent");
+			else if (section === "scanManual") showScreen("viewContent");
 		});
 	});
 
 	initPriceSteppers();
-	el("btnGenerateQr").addEventListener("click", generateQr);
-	el("btnRegenerateQr").addEventListener("click", generateQr);
+	el("btnGenerateQr").addEventListener("click", createOfferAndShowQr);
+	el("btnRegenerateQr").addEventListener("click", createOfferAndShowQr);
+
+	el("btnSubmitManualCode").addEventListener("click", submitManualCode);
+	el("manualCodeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") submitManualCode(); });
 
 	el("btnConfirmBuy").addEventListener("click", confirmPurchase);
 	el("btnCancelBuy").addEventListener("click", () => showScreen("viewContent"));

@@ -47,6 +47,22 @@
 			<groupId>io.javalin</groupId>
 			<artifactId>javalin</artifactId>
 		</dependency>
+		<!-- HTTPS auto-signé (étape 3, achat de cartes par QR/caméra - nécessite un
+		     contexte sécurisé). Plugin officiel Javalin, même version que javalin
+		     lui-même (voir ${javalin.version} dans le pom parent). -->
+		<dependency>
+			<groupId>io.javalin.community.ssl</groupId>
+			<artifactId>ssl-plugin</artifactId>
+			<version>${javalin.version}</version>
+		</dependency>
+		<!-- Génération du certificat auto-signé lui-même (voir SelfSignedCertService) -
+		     Bouncy Castle plutôt que d'exiger openssl installé sur la machine de
+		     l'animateur (Windows/macOS/Linux) : une seule dépendance Java portable. -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>1.78.1</version>
+		</dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>

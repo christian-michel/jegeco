@@ -1563,3 +1563,31 @@ msgstr "Achat réussi !"
 
 msgid "trade.result_success_body"
 msgstr "Vous avez acheté : {name}."
+
+# ============ Achat par code (saisie manuelle, repli du scan) ============
+msgid "trade.btn_manual_entry"
+msgstr "Saisir un code"
+
+msgid "trade.btn_switch_to_manual"
+msgstr "Saisir le code à la place"
+
+msgid "trade.manual_entry_title"
+msgstr "Entrez le code du vendeur"
+
+msgid "trade.manual_entry_label"
+msgstr "Code à 6 caractères"
+
+msgid "trade.btn_validate_code"
+msgstr "Valider"
+
+msgid "trade.manual_code_invalid_format"
+msgstr "Ce code doit comporter 6 caractères (lettres et chiffres)."
+
+msgid "trade.manual_code_not_found"
+msgstr "Ce code est invalide, déjà utilisé, ou a expiré."
+
+msgid "trade.manual_code_own_card"
+msgstr "Vous ne pouvez pas acheter votre propre carte."
+
+msgid "trade.result_error_title"
+msgstr "Une erreur est survenue"

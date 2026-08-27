@@ -1,0 +1,34 @@
+# Données d'exécution d'une installation locale (générées au lancement,
+# jamais des fichiers source) - voir AppSettings.java, CatalogService.java,
+# LanguageService.java, PluginPreferences.java, SelfSignedCertService.java.
+# Aucune de ces données n'a sa place dans le dépôt : elles sont propres à
+# CHAQUE installation (paramètres, catalogues édités, langues ajoutées,
+# certificat HTTPS...), pas au code du projet.
+
+# Réglages de l'application (écran Paramètres)
+/app-settings.json
+/plugins-config.json
+
+# Catalogues Cartes/Visuels/Fonds/Avatars une fois édités depuis l'écran
+# Paramètres (le contenu de départ, lui, reste embarqué dans le jar - voir
+# src/main/resources/catalog-seeds/, qui N'EST PAS concerné par cette règle).
+/catalogs/
+
+# Langues personnalisées ajoutées après coup (écran Paramètres)
+/lang-custom/
+
+# Certificat HTTPS auto-signé (SelfSignedCertService) - la clé privée en
+# particulier NE DOIT JAMAIS être commitée.
+/tls/
+
+# Sauvegardes temporaires de la base (écran Paramètres, export/import)
+/backups-tmp/
+
+# Base de données H2 elle-même (fichiers .mv.db/.trace.db) si générée à la
+# racine du projet plutôt que dans un chemin explicite.
+*.mv.db
+*.trace.db
+
+# Artefacts de build Maven standards.
+target/
+*.class

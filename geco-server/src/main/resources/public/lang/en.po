@@ -1563,3 +1563,31 @@ msgstr "Purchase successful!"
 
 msgid "trade.result_success_body"
 msgstr "You bought: {name}."
+
+# ============ Purchase by code (manual entry, scan fallback) ============
+msgid "trade.btn_manual_entry"
+msgstr "Enter a code"
+
+msgid "trade.btn_switch_to_manual"
+msgstr "Enter the code instead"
+
+msgid "trade.manual_entry_title"
+msgstr "Enter the seller's code"
+
+msgid "trade.manual_entry_label"
+msgstr "6-character code"
+
+msgid "trade.btn_validate_code"
+msgstr "Validate"
+
+msgid "trade.manual_code_invalid_format"
+msgstr "This code must be 6 characters (letters and digits)."
+
+msgid "trade.manual_code_not_found"
+msgstr "This code is invalid, already used, or has expired."
+
+msgid "trade.manual_code_own_card"
+msgstr "You cannot buy your own card."
+
+msgid "trade.result_error_title"
+msgstr "Something went wrong"

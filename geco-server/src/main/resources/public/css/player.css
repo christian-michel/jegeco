@@ -174,9 +174,17 @@ body {
 .stepper-value { min-width: 1.6em; text-align: center; font-weight: 700; font-size: 1.05rem; }
 
 /* QR affiché (vente) */
-.qr-box { display: flex; justify-content: center; margin: 0.5rem 0 1rem; }
+.qr-box { display: flex; justify-content: center; margin: 0.5rem 0 0.6rem; }
 .qr-box img, .qr-box canvas { border-radius: 12px; }
+.qr-code-text {
+	text-align: center; font-family: "SF Mono", "Courier New", monospace; font-size: 1.3rem; font-weight: 800;
+	letter-spacing: 0.15em; color: var(--text); margin: 0 0 0.6rem;
+}
 .qr-countdown { font-size: 1.4rem; font-weight: 800; color: var(--accent); margin: 0 0 0.8rem; }
+.qr-code-input {
+	text-align: center; font-family: "SF Mono", "Courier New", monospace; font-size: 1.6rem; font-weight: 800;
+	letter-spacing: 0.2em; text-transform: uppercase;
+}
 
 /* Caméra (achat) */
 .scan-viewport {

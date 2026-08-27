@@ -39,6 +39,7 @@
 			<div class="trade-actions">
 				<button type="button" id="btnOpenSell" class="btn-primary btn-block" data-i18n="trade.btn_sell">Vendre une carte</button>
 				<button type="button" id="btnOpenScan" class="btn-secondary btn-block" data-i18n="trade.btn_scan">Scanner un achat</button>
+				<button type="button" id="btnOpenManualEntry" class="btn-secondary btn-block" data-i18n="trade.btn_manual_entry">Saisir un code</button>
 			</div>
 
 			<p style="font-size:0.78rem;color:var(--text-dim);margin-top:1.5rem;" data-i18n="playerView.footnote">
@@ -97,6 +98,7 @@
 				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
 			</div>
 			<div id="sellQrCode" class="qr-box"></div>
+			<p class="qr-code-text" id="sellQrCodeText"></p>
 			<p class="qr-countdown"><span id="qrCountdownValue">1:30</span></p>
 			<p class="galilee-explainer" data-i18n="trade.qr_instructions">Présentez ce QR code à l'acheteur pour qu'il le scanne.</p>
 			<p id="qrExpiredMsg" class="field-error hidden" data-i18n="trade.qr_expired">⏱️ Ce QR code a expiré.</p>
@@ -113,6 +115,19 @@
 				<video id="scanVideo" playsinline autoplay muted></video>
 			</div>
 			<p id="scanCameraError" class="field-error hidden" data-i18n="trade.scan_camera_error">⚠️ Caméra indisponible. Vérifiez les autorisations de votre navigateur.</p>
+			<button type="button" id="btnSwitchToManual" class="btn-secondary btn-block" data-i18n="trade.btn_switch_to_manual">Saisir le code à la place</button>
+		</section>
+
+		<!-- ===== Achat : saisie manuelle du code (repli, voir §5.1 du cahier des charges) ===== -->
+		<section id="scanManual" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="trade.manual_entry_title">Entrez le code du vendeur</h2>
+			</div>
+			<label class="field-label" for="manualCodeInput" data-i18n="trade.manual_entry_label">Code à 6 caractères</label>
+			<input id="manualCodeInput" class="field-input qr-code-input" type="text" maxlength="6" autocapitalize="characters" autocomplete="off" placeholder="ABC123">
+			<p id="manualCodeError" class="field-error hidden"></p>
+			<button type="button" id="btnSubmitManualCode" class="btn-primary btn-block" data-i18n="trade.btn_validate_code">Valider</button>
 		</section>
 
 		<!-- ===== Achat : confirmation avant paiement ===== -->

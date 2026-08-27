@@ -50,9 +50,12 @@ public class GecoServer
 {
 	// Port HTTP par défaut : 7000 (arbitraire, choisi libre pour ne pas entrer en conflit
 	// avec les ports standards 8080/3000 souvent déjà utilisés sur les machines de développement).
-	private static final int DEFAULT_PORT = 7000;
-	// Nom de l'unité de persistance JPA, doit correspondre à persistence.xml (module geco-engine).
+	private static final int DEFAULT_PORT = 7000;	// Nom de l'unité de persistance JPA, doit correspondre à persistence.xml (module geco-engine).
 	public static final String DB_DEFAULT_NAME = "geco"; //$NON-NLS-1$
+	// Durée de vie d'une offre de vente (étape 3, achat de carte) - voir
+	// TradeOfferService. Doit rester cohérente avec le compte à rebours
+	// affiché au vendeur (voir QR_VALIDITY_SECONDS dans player-view.js).
+	private static final long TRADE_OFFER_TTL_MS = 90_000;
 
 	// Connexions WebSocket actives, pour diffuser les mises à jour en temps réel.
 	// ConcurrentHashMap.newKeySet() : plusieurs clients peuvent se (dé)connecter en parallèle
@@ -102,6 +105,10 @@ public class GecoServer
 			CatalogSeeds::seedBackgrounds);
 	private final CatalogService mAvatarCatalogService = new CatalogService(Path.of("catalogs/avatars.json"), //$NON-NLS-1$
 			CatalogSeeds::seedAvatars);
+	// Étape 3, achat/vente de carte (voir §5.1) : offres de vente à courte
+	// durée de vie, voir TradeOfferService pour le raisonnement complet
+	// (code court, scan caméra ET saisie manuelle partagent ce même service).
+	private final TradeOfferService mTradeOfferService = new TradeOfferService();
 
 	public GecoServer(final GameService pGameService)
 	{
@@ -127,6 +134,33 @@ public class GecoServer
 		// Port configurable en argument de ligne de commande, pratique pour lancer plusieurs
 		// instances en parallèle (ex: tester une partie en monnaie dette et une en monnaie libre).
 		final int port = pArgs.length > 0 ? Integer.parseInt(pArgs[0]) : DEFAULT_PORT;
+		// Décalage fixe pour le port HTTPS - arbitraire mais stable, pour ne pas
+		// avoir à en configurer un deuxième explicitement (ex. port 8080 -> 8443).
+		final int httpsPort = port + 8363;
+
+		// HTTPS auto-signé (étape 3, achat de cartes par QR/caméra - voir §5.1 du
+		// cahier des charges et SelfSignedCertService) : génère le certificat au
+		// tout premier lancement si besoin, puis active le connecteur HTTPS en plus
+		// du HTTP existant (jamais à la place - l'inscription joueur, elle, n'a
+		// besoin d'aucun HTTPS, voir docs/05-etape3-connectivite.md). Toute la
+		// logique est protégée : un souci de génération du certificat n'empêche
+		// jamais le serveur de démarrer normalement en HTTP seul, comme avant.
+		final Path certPath = Path.of("tls", "geco-cert.pem"); //$NON-NLS-1$
+		final Path keyPath = Path.of("tls", "geco-key.pem"); //$NON-NLS-1$
+		boolean httpsReady = false;
+		try
+		{
+			final List<String> localIps = NetworkUtils.listLocalAddresses().stream()
+					.map(NetworkUtils.NetworkAddress::address).toList();
+			SelfSignedCertService.ensureCertificate(certPath, keyPath, localIps);
+			httpsReady = true;
+		}
+		catch (final Exception e)
+		{
+			System.out.println("HTTPS indisponible (génération du certificat impossible) : " + e.getMessage() //$NON-NLS-1$
+					+ " - l'application démarre en HTTP seul (le scan caméra d'achat de cartes ne fonctionnera pas)."); //$NON-NLS-1$
+		}
+		final boolean httpsEnabled = httpsReady;
 
 		// Une seule EntityManagerFactory pour toute la durée de vie du serveur (coûteuse à créer,
 		// thread-safe en lecture) ; chaque requête HTTP crée ensuite son propre EntityManager
@@ -162,6 +196,19 @@ public class GecoServer
 				staticFiles.location = Location.EXTERNAL;
 			});
 			config.showJavalinBanner = false;
+
+			// Connecteur HTTPS (voir plus haut) - en plus du HTTP normal, jamais à sa
+			// place : app.start(port) continue de fonctionner pour tout le reste de
+			// l'application (inscription joueur, animateur...), seul le scan caméra
+			// d'achat de cartes a besoin de https://.
+			if (httpsEnabled)
+				config.plugins.register(new io.javalin.community.ssl.SslPlugin(ssl -> {
+					ssl.pemFromPath(certPath.toString(), keyPath.toString());
+					ssl.insecure = true;
+					ssl.insecurePort = port;
+					ssl.secure = true;
+					ssl.securePort = httpsPort;
+				}));
 		});
 
 		server.registerRoutes(app);
@@ -187,8 +234,15 @@ public class GecoServer
 		// Ferme proprement la connexion à la base H2 quand le serveur s'arrête (Ctrl+C, kill...).
 		Runtime.getRuntime().addShutdownHook(new Thread(emf::close));
 
-		app.start(port);
-		System.out.println("Geconomicus Helper Server demarre sur http://localhost:" + port); //$NON-NLS-1$
+		if (httpsEnabled)
+			app.start(); // ports gérés par SslPlugin (insecurePort/securePort), voir ci-dessus
+		else
+			app.start(port);
+		if (httpsEnabled)
+			System.out.println("Geconomicus Helper Server demarre sur http://localhost:" + port //$NON-NLS-1$
+					+ " (et https://localhost:" + httpsPort + " pour le scan camera d'achat de cartes)"); //$NON-NLS-1$ //$NON-NLS-2$
+		else
+			System.out.println("Geconomicus Helper Server demarre sur http://localhost:" + port); //$NON-NLS-1$
 	}
 
 	private void registerRoutes(final Javalin pApp)
@@ -509,7 +563,12 @@ public class GecoServer
 					// l'animateur - un joueur sur son propre smartphone ne le
 					// connaît pas. GET /transactions (lecture d'ensemble, écran
 					// animateur) reste, elle, protégée par le PIN normalement.
-					|| (ctx.path().endsWith("/transactions") && (ctx.method() == io.javalin.http.HandlerType.POST))) //$NON-NLS-1$
+					|| (ctx.path().endsWith("/transactions") && (ctx.method() == io.javalin.http.HandlerType.POST)) //$NON-NLS-1$
+					// Offres de vente à courte durée de vie (scan/saisie manuelle,
+					// voir TradeOfferService) : toutes les routes /trade-offers/*
+					// sont initiées par un JOUEUR (vendeur ou acheteur), jamais
+					// l'animateur - même raisonnement que /transactions ci-dessus.
+					|| ctx.path().contains("/trade-offers")) //$NON-NLS-1$
 				return;
 			final int id;
 			try
@@ -917,6 +976,93 @@ public class GecoServer
 		pApp.get("/api/games/{id}/transactions", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			ctx.json(mGameService.listTransactions(id).stream().map(Dtos.TransactionDto::from).toList());
+		});
+
+		// --- Offres de vente à courte durée de vie (scan caméra ET saisie
+		// manuelle, voir TradeOfferService) : le vendeur en crée une, le QR
+		// n'encode que son code, l'acheteur la résout (par scan ou en tapant
+		// le code) puis la consomme (usage unique, ~90s de validité).
+
+		pApp.post("/api/games/{id}/trade-offers", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final Dtos.CreateTradeOfferRequest req = ctx.bodyAsClass(Dtos.CreateTradeOfferRequest.class);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final Player seller = game.getPlayers().stream().filter(p -> p.getId().equals(req.sellerPlayerId()))
+					.findFirst().orElse(null);
+			if (seller == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			if (mAppSettings.isProtectionEnabled() && ((seller.getAccessToken() == null)
+					|| !seller.getAccessToken().equals(req.sellerAccessToken())))
+				throw new ForbiddenResponse("Jeton de vendeur requis ou incorrect."); //$NON-NLS-1$
+			final String code = mTradeOfferService.create(id, req.sellerPlayerId(), seller.getName(),
+					req.cardTypeId(), req.cardLevel(), req.cardName(), req.weakCoins(), req.mediumCoins(),
+					req.strongCoins(), TRADE_OFFER_TTL_MS);
+			ctx.status(201).json(Dtos.TradeOfferDto.from(code, mTradeOfferService.peek(code)));
+		});
+
+		// Résolution d'un code (par scan ou saisie manuelle) SANS le consommer -
+		// permet d'afficher l'écran de confirmation avant paiement.
+		pApp.get("/api/games/{id}/trade-offers/{code}", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final TradeOfferService.Offer offer = mTradeOfferService.peek(ctx.pathParam("code")); //$NON-NLS-1$
+			if ((offer == null) || (offer.gameId() != id))
+			{
+				ctx.status(404);
+				return;
+			}
+			ctx.json(Dtos.TradeOfferDto.from(ctx.pathParam("code"), offer)); //$NON-NLS-1$
+		});
+
+		pApp.post("/api/games/{id}/trade-offers/{code}/redeem", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final String code = ctx.pathParam("code"); //$NON-NLS-1$
+			final Dtos.RedeemTradeOfferRequest req = ctx.bodyAsClass(Dtos.RedeemTradeOfferRequest.class);
+			if (mAppSettings.isProtectionEnabled())
+			{
+				final Game game = mGameService.getGame(id);
+				if (game == null)
+				{
+					ctx.status(404);
+					return;
+				}
+				final boolean tokenMatches = game.getPlayers().stream()
+						.anyMatch(p -> p.getId().equals(req.buyerPlayerId()) && (p.getAccessToken() != null)
+								&& p.getAccessToken().equals(req.buyerAccessToken()));
+				if (!tokenMatches)
+					throw new ForbiddenResponse("Jeton d'acheteur requis ou incorrect."); //$NON-NLS-1$
+			}
+			// redeem() retire l'offre de façon atomique : un second appel avec le
+			// même code (rejeu, double-clic, deux acheteurs qui scannent le même
+			// QR...) échoue toujours, c'est la protection anti-rejeu principale
+			// (voir TradeOfferService) - le nonce vérifié dans recordTransaction
+			// ci-dessous n'est qu'une seconde protection, redondante par design.
+			final TradeOfferService.Offer offer = mTradeOfferService.redeem(code);
+			if ((offer == null) || (offer.gameId() != id))
+			{
+				throw new BadRequestResponse("Ce code est invalide, déjà utilisé, ou a expiré."); //$NON-NLS-1$
+			}
+			if (offer.sellerPlayerId() == req.buyerPlayerId())
+				throw new BadRequestResponse("Le vendeur et l'acheteur ne peuvent pas être le même joueur."); //$NON-NLS-1$
+			try
+			{
+				final Transaction transaction = mGameService.recordTransaction(id, offer.sellerPlayerId(),
+						req.buyerPlayerId(), offer.cardTypeId(), offer.cardLevel(), offer.weakCoins(),
+						offer.mediumCoins(), offer.strongCoins(), code, offer.expiresAtEpochMs());
+				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
+				ctx.status(201).json(Dtos.TransactionDto.from(transaction));
+			}
+			catch (final IllegalArgumentException | PlayerNotFoundException e)
+			{
+				throw new BadRequestResponse(e.getMessage());
+			}
 		});
 
 		// Suppression d'un événement, avec recalcul intégral de l'état de la partie
