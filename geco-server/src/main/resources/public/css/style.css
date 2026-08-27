@@ -526,3 +526,15 @@ body.money-libre .panel-actions .btn.active-mode { background: var(--accent-libr
 }
 .catalog-zoombox-preview img { max-width: 220px; max-height: 220px; border-radius: 12px; border: 1px solid var(--border); }
 .catalog-zoombox-preview .catalog-row-thumb-fallback { width: 140px; height: 140px; font-size: 2.4rem; border-radius: 12px; }
+
+/* ============ Étape 3 : QR/lien d'invitation par partie (bouton "Inviter") ============ */
+.invite-qr-panel {
+	background: #fbfcfe; border: 1px solid var(--border); border-radius: var(--radius);
+	padding: 1.25rem; margin-bottom: 1rem; text-align: center;
+}
+.invite-qr-box { display: flex; justify-content: center; margin-bottom: 0.7rem; }
+.invite-qr-box img, .invite-qr-box canvas { border-radius: 10px; }
+.invite-qr-url {
+	font-family: monospace; font-size: 0.82rem; background: #fff; border: 1px solid var(--border);
+	border-radius: 8px; padding: 0.4rem 0.6rem; word-break: break-all; margin-bottom: 0.7rem;
+}

@@ -2432,6 +2432,60 @@ async function renderConnect() {
 	container.appendChild(noteEl);
 }
 
+// Étape 3 : QR/lien d'invitation propre à UNE partie (join.html?gameId=...) -
+// distinct de renderConnect() ci-dessus, qui ne fait que tester la
+// joignabilité réseau sans connaître de partie précise. Bascule
+// affiché/masqué (voir btnInvitePlayers) plutôt qu'une modale.
+async function renderInviteQr(gameId) {
+	const panel = el("inviteQrPanel");
+	const isOpening = panel.classList.contains("hidden");
+	if (!isOpening) {
+		panel.classList.add("hidden");
+		panel.innerHTML = "";
+		return;
+	}
+	panel.classList.remove("hidden");
+	panel.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">Détection des adresses réseau...</p>';
+
+	let networkInfo;
+	try {
+		networkInfo = await Api.getNetworkInfo();
+	} catch (err) {
+		panel.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Impossible de détecter les adresses réseau.</p>';
+		return;
+	}
+	const addresses = networkInfo.addresses || [];
+	if (addresses.length === 0) {
+		panel.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Aucune adresse réseau détectée. '
+			+ "Vérifiez que l'ordinateur est bien connecté à un réseau (Wifi local ou partage de connexion).</p>";
+		return;
+	}
+	// L'inscription elle-même n'a pas besoin de HTTPS (voir
+	// docs/05-etape3-connectivite.md) : HTTP suffit, plus simple (pas
+	// d'avertissement de certificat à faire accepter avant même d'avoir
+	// rejoint la partie). Seul l'achat de cartes par caméra en a besoin,
+	// plus tard, une fois inscrit (voir buildPlayerLink()).
+	const preferred = addresses.find((a) => a.likelyHotspotOrLan) || addresses[0];
+	const port = location.port || "7000";
+	const url = `http://${preferred.address}:${port}/join.html?gameId=${gameId}`;
+
+	panel.innerHTML = `
+		<div class="invite-qr-box" id="inviteQrCode"></div>
+		<div class="invite-qr-url">${escapeHtml(url)}</div>
+		<button type="button" id="btnCopyInviteLink" class="btn btn-small">📋 Copier le lien</button>`;
+	if (typeof QRCode !== "undefined") {
+		new QRCode(el("inviteQrCode"), { text: url, width: 180, height: 180 });
+	} else {
+		el("inviteQrCode").textContent = "QR indisponible (bibliothèque non chargée)";
+	}
+	el("btnCopyInviteLink").onclick = () => {
+		navigator.clipboard.writeText(url).then(() => {
+			el("btnCopyInviteLink").textContent = "✓ Copié";
+			setTimeout(() => { el("btnCopyInviteLink").textContent = "📋 Copier le lien"; }, 1500);
+		});
+	};
+}
+
 
 // Charts dédiés à cette vue (instances séparées de celles du tableau de bord, pour
 // pouvoir naviguer entre les deux vues sans conflit sur les mêmes <canvas>).
@@ -4207,11 +4261,14 @@ function bindActions() {
 		});
 	};
 
-	// Invitation par QR code (bouton "📱 Inviter") : retirée de l'écran pour l'étape 2
-	// à la demande de l'utilisateur (utile seulement à partir de l'étape 3, une fois
-	// les joueurs réellement autonomes sur leur smartphone). Le mécanisme sous-jacent
-	// (détection réseau, génération QR vers join.html) reste disponible via l'écran
-	// général "Connexion joueurs" et pourra être réintroduit ici tel quel en étape 3.
+	// Étape 3 : invitation par QR code/lien, propre à CETTE partie (voir
+	// index.html pour le raisonnement complet - ce bouton avait été retiré à
+	// l'étape 2, prévu pour revenir ici une fois l'étape 3 commencée).
+	// Bascule affiché/masqué plutôt qu'une boîte de dialogue séparée : les
+	// joueurs scannent souvent en regardant l'écran de l'animateur par-dessus
+	// son épaule, pas confortable dans une modale qui se referme au clic
+	// extérieur.
+	el("btnInvitePlayers").onclick = () => renderInviteQr(state.currentGameId);
 
 	// Ouvre l'assistant de fin de tour (résumé -> décès -> nouveaux-nés -> préparation)
 	// au lieu d'enregistrer directement l'événement "nouveau tour".

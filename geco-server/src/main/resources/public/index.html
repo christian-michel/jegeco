@@ -507,9 +507,17 @@
 						<div class="panel-header">
 							<h3 data-i18n="game.players_title">Joueurs</h3>
 							<div class="panel-actions">
+								<!-- Étape 3 : réintroduit ici, voir le commentaire qui l'avait
+								     retiré à l'étape 2 ("utile seulement à partir de l'étape 3") -
+								     génère le vrai lien join.html?gameId=... pour CETTE partie
+								     précise (voir renderInviteQr() dans app.js), contrairement à
+								     l'écran général "Connexion joueurs" qui ne teste que la
+								     joignabilité réseau sans connaître de partie particulière. -->
+								<button id="btnInvitePlayers" class="btn btn-small" data-i18n="game.invite_btn">📱 Inviter</button>
 								<button id="btnAddPlayer" class="btn btn-small" data-i18n="game.add_player_btn">+ Joueur</button>
 							</div>
 						</div>
+						<div id="inviteQrPanel" class="invite-qr-panel hidden"></div>
 						<ul id="playersList" class="players-list"></ul>
 					</div>
 

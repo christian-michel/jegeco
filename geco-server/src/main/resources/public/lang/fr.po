@@ -360,6 +360,9 @@ msgstr "Masse monétaire"
 msgid "game.players_title"
 msgstr "Joueurs"
 
+msgid "game.invite_btn"
+msgstr "📱 Inviter"
+
 msgid "game.add_player_btn"
 msgstr "+ Joueur"
 
