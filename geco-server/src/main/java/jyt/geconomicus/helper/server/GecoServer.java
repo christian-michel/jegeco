@@ -6,7 +6,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.javalin.Javalin;
+import io.javalin.http.BadRequestResponse;
 import io.javalin.http.ForbiddenResponse;
+import io.javalin.http.NotFoundResponse;
 import io.javalin.http.staticfiles.Location;
 import io.javalin.websocket.WsContext;
 
@@ -82,11 +84,37 @@ public class GecoServer
 	// l'utilisateur pour finaliser l'étape 2. Réutilise l'EntityManagerFactory
 	// déjà créée pour GameService plutôt que d'en ouvrir une seconde.
 	private final BackupService mBackupService;
+	// Étape 3, mode smartphone (écran Paramètres) : les trois tableaux de
+	// gestion des visuels - Cartes (catalogue logique des types de carte),
+	// Visuels (inventaire des fichiers image de fond de carte) et Avatars
+	// (repris du catalogue existant, voir avatars-catalog.js) - voir §5.3 du
+	// cahier des charges étape 3 et CatalogService. Catalogues de démonstration
+	// PROVISOIRES (mêmes précautions que AVATARS_CATALOG côté front) : à
+	// remplacer une fois le vrai catalogue (104 cartes, 4 niveaux de fond, ~100
+	// avatars) importé - le format des entrées, lui, ne change pas.
+	private final CatalogService mCardCatalogService = new CatalogService(Path.of("catalogs/cartes.json"), //$NON-NLS-1$
+			CatalogSeeds::seedCards);
+	private final CatalogService mVisualCatalogService = new CatalogService(Path.of("catalogs/visuels.json"), //$NON-NLS-1$
+			CatalogSeeds::seedVisuals);
+	private final CatalogService mAvatarCatalogService = new CatalogService(Path.of("catalogs/avatars.json"), //$NON-NLS-1$
+			CatalogSeeds::seedAvatars);
 
 	public GecoServer(final GameService pGameService)
 	{
 		mGameService = pGameService;
 		mBackupService = new BackupService(pGameService.getEntityManagerFactory(), Path.of("backups-tmp")); //$NON-NLS-1$
+	}
+
+	/** Résout un des trois catalogues étape 3 par son nom d'URL ; 404 si inconnu. */
+	private CatalogService catalogFor(final String pKind)
+	{
+		return switch (pKind)
+		{
+			case "cartes" -> mCardCatalogService; //$NON-NLS-1$
+			case "visuels" -> mVisualCatalogService; //$NON-NLS-1$
+			case "avatars" -> mAvatarCatalogService; //$NON-NLS-1$
+			default -> throw new io.javalin.http.NotFoundResponse("Catalogue inconnu : " + pKind); //$NON-NLS-1$
+		};
 	}
 
 	public static void main(final String[] pArgs)
@@ -338,6 +366,7 @@ public class GecoServer
 				"soundVolume", mAppSettings.getSoundVolume(), //$NON-NLS-1$
 				"updateCheckUrl", mAppSettings.getUpdateCheckUrl(), //$NON-NLS-1$
 				"protectionEnabled", mAppSettings.isProtectionEnabled(), //$NON-NLS-1$
+				"gameMode", mAppSettings.getGameMode(), //$NON-NLS-1$
 				"currentVersion", AppVersion.CURRENT))); //$NON-NLS-1$
 
 		pApp.put("/api/settings", ctx -> { //$NON-NLS-1$
@@ -349,7 +378,28 @@ public class GecoServer
 			if (req.updateCheckUrl() != null)
 				mAppSettings.setUpdateCheckUrl(req.updateCheckUrl());
 			mAppSettings.setProtectionEnabled(req.protectionEnabled());
+			if (req.gameMode() != null)
+				mAppSettings.setGameMode(req.gameMode());
 			ctx.status(204);
+		});
+
+		// Étape 3, mode smartphone (écran Paramètres) : les trois tableaux de
+		// gestion des visuels - voir CatalogService. "kind" vaut "cartes",
+		// "visuels" ou "avatars" ; toute autre valeur renvoie 404 plutôt que de
+		// deviner. Édition de métadonnées uniquement (jamais l'image elle-même,
+		// voir la zoombox côté front) : PUT applique un patch partiel par id.
+		pApp.get("/api/catalogs/{kind}", ctx -> ctx.json(catalogFor(ctx.pathParam("kind")).list())); //$NON-NLS-1$ //$NON-NLS-2$
+
+		pApp.put("/api/catalogs/{kind}/{id}", ctx -> { //$NON-NLS-1$
+			try
+			{
+				final Dtos.CatalogEntryPatch patch = ctx.bodyAsClass(Dtos.CatalogEntryPatch.class);
+				ctx.json(catalogFor(ctx.pathParam("kind")).patch(ctx.pathParam("id"), patch.fields())); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+			catch (final IllegalArgumentException e)
+			{
+				throw new io.javalin.http.BadRequestResponse(e.getMessage());
+			}
 		});
 
 		// Vérification de mise à jour (écran Paramètres) : lecture seule, voir

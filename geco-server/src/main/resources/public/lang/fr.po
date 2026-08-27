@@ -1235,3 +1235,114 @@ msgstr "Richesse finale brute de chaque joueur, partie par partie."
 
 msgid "compare.explainer_corrected"
 msgstr "Même comparaison, mais en retranchant ce que chaque joueur a reçu \"gratuitement\" (dotation initiale, et en monnaie libre le DU moyen reçu à la naissance et à l'évaluation finale) - pour ne comparer que la richesse réellement produite pendant la partie."
+
+# ============ Étape 3 : mode de jeu (classique/smartphone) ============
+msgid "settings.game_mode_title"
+msgstr "Mode de jeu"
+
+msgid "settings.game_mode_intro"
+msgstr "Choisissez comment se jouent les échanges entre joueurs : avec les cartes et jetons physiques habituels, ou avec le smartphone de chaque joueur."
+
+msgid "settings.game_mode_classic_label"
+msgstr "Classique (cartes et jetons physiques)"
+
+msgid "settings.game_mode_smartphone_label"
+msgstr "Smartphone (un téléphone par joueur)"
+
+# ============ Étape 3 : tableaux Cartes/Visuels/Avatars ============
+msgid "settings.catalogs_title"
+msgstr "Visuels du mode smartphone"
+
+msgid "settings.catalogs_intro"
+msgstr "Ces trois tableaux décrivent les cartes, leurs illustrations et les avatars disponibles. Cliquez sur une ligne pour en modifier les métadonnées (jamais l'image elle-même)."
+
+msgid "settings.catalog_tab_cards"
+msgstr "Cartes"
+
+msgid "settings.catalog_tab_visuals"
+msgstr "Visuels"
+
+msgid "settings.catalog_tab_avatars"
+msgstr "Avatars"
+
+msgid "settings.catalog_loading"
+msgstr "Chargement…"
+
+msgid "settings.catalog_empty"
+msgstr "Aucune entrée dans ce catalogue."
+
+msgid "settings.catalog_zoombox_title"
+msgstr "Modifier les métadonnées"
+
+msgid "settings.catalog_no_visual"
+msgstr "Aucun visuel assigné"
+
+msgid "settings.catalog_field_level"
+msgstr "Niveau"
+
+msgid "settings.catalog_field_sector"
+msgstr "Secteur"
+
+msgid "settings.catalog_field_visual"
+msgstr "Visuel assigné"
+
+msgid "settings.catalog_field_name_intro"
+msgstr "Nom de la carte, dans chaque langue installée :"
+
+msgid "settings.catalog_field_label_intro"
+msgstr "Étiquette du visuel, dans chaque langue installée :"
+
+msgid "settings.catalog_field_filename_label"
+msgstr "Fichier"
+
+msgid "settings.catalog_field_genre"
+msgstr "Genre"
+
+msgid "settings.catalog_field_age"
+msgstr "Tranche d'âge"
+
+# ---- Valeurs fixes (niveau) ----
+msgid "catalog.level.faible"
+msgstr "Faible"
+
+msgid "catalog.level.moyenne"
+msgstr "Moyenne"
+
+msgid "catalog.level.forte"
+msgstr "Forte"
+
+msgid "catalog.level.tresforte"
+msgstr "Très forte"
+
+# ---- Valeurs fixes (secteur - catalogue de démonstration) ----
+msgid "catalog.sector.alimentation"
+msgstr "Alimentation"
+
+msgid "catalog.sector.agriculture"
+msgstr "Agriculture"
+
+msgid "catalog.sector.ressources"
+msgstr "Ressources"
+
+# ---- Valeurs fixes (règle - MDBC, "aucune" pour toutes les cartes aujourd'hui) ----
+msgid "catalog.rule.aucune"
+msgstr "Aucune"
+
+# ---- Valeurs fixes (avatars : genre / tranche d'âge) ----
+msgid "catalog.avatar_genre.homme"
+msgstr "Homme"
+
+msgid "catalog.avatar_genre.femme"
+msgstr "Femme"
+
+msgid "catalog.avatar_genre.neutre"
+msgstr "Neutre"
+
+msgid "catalog.avatar_age.enfant"
+msgstr "Enfant"
+
+msgid "catalog.avatar_age.adulte"
+msgstr "Adulte"
+
+msgid "catalog.avatar_age.senior"
+msgstr "Senior"

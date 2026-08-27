@@ -240,6 +240,44 @@
 					<h2 data-i18n="settings.title">Paramètres</h2>
 				</div>
 
+				<!-- Étape 3 : bascule classique (cartes/jetons physiques) / smartphone
+				     (chaque joueur avec son téléphone) - choix exclusif par bouton
+				     radio, voir AppSettings.gameMode côté serveur. Quand "smartphone"
+				     est sélectionné, le bloc de gestion des visuels ci-dessous
+				     apparaît (masqué sinon, puisque sans objet en mode classique). -->
+				<div class="panel-card">
+					<h3 class="chart-title" data-i18n="settings.game_mode_title">Mode de jeu</h3>
+					<p class="galilee-explainer" data-i18n="settings.game_mode_intro">Choisissez comment se jouent les échanges entre joueurs : avec les cartes et jetons
+						physiques habituels, ou avec le smartphone de chaque joueur.</p>
+					<div class="field-row">
+						<label class="checkbox-label" style="margin:0;">
+							<input type="radio" name="settingsGameMode" id="settingsGameModeClassic" value="classique">
+							<span data-i18n="settings.game_mode_classic_label">Classique (cartes et jetons physiques)</span>
+						</label>
+						<label class="checkbox-label" style="margin:0;">
+							<input type="radio" name="settingsGameMode" id="settingsGameModeSmartphone" value="smartphone">
+							<span data-i18n="settings.game_mode_smartphone_label">Smartphone (un téléphone par joueur)</span>
+						</label>
+					</div>
+				</div>
+
+				<!-- Étape 3, mode smartphone : les trois tableaux de gestion des
+				     visuels (Cartes/Visuels/Avatars), voir §5.3 du cahier des
+				     charges. Chaque ligne est cliquable et ouvre une zoombox
+				     d'édition des métadonnées (jamais l'image elle-même) - voir
+				     renderCatalogsPanel()/openCatalogZoombox() dans app.js. -->
+				<div class="panel-card hidden" id="settingsCatalogsPanel">
+					<h3 class="chart-title" data-i18n="settings.catalogs_title">Visuels du mode smartphone</h3>
+					<p class="galilee-explainer" data-i18n="settings.catalogs_intro">Ces trois tableaux décrivent les cartes, leurs illustrations et les avatars disponibles.
+						Cliquez sur une ligne pour en modifier les métadonnées (jamais l'image elle-même).</p>
+					<div class="settings-catalog-tabs">
+						<button type="button" class="settings-catalog-tab active" data-catalog-kind="cartes" data-i18n="settings.catalog_tab_cards">Cartes</button>
+						<button type="button" class="settings-catalog-tab" data-catalog-kind="visuels" data-i18n="settings.catalog_tab_visuals">Visuels</button>
+						<button type="button" class="settings-catalog-tab" data-catalog-kind="avatars" data-i18n="settings.catalog_tab_avatars">Avatars</button>
+					</div>
+					<div id="settingsCatalogTable"></div>
+				</div>
+
 				<div class="panel-card">
 					<h3 class="chart-title" data-i18n="settings.language_title">Langue</h3>
 					<p class="galilee-explainer" data-i18n="settings.language_intro">Choisissez la langue par défaut de l'application, ou ajoutez/téléchargez un fichier

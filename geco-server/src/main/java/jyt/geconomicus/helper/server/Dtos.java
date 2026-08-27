@@ -144,9 +144,20 @@ public class Dtos
 	{
 	}
 
-	// Corps de requête pour PUT /api/settings (écran Paramètres).
+	// Corps de requête pour PUT /api/settings (écran Paramètres). gameMode :
+	// "classique" ou "smartphone" (voir AppSettings.GAME_MODE_*) - absent/null
+	// laisse la valeur actuelle inchangée, comme defaultLanguage/updateCheckUrl.
 	public record UpdateSettingsRequest(String defaultLanguage, boolean soundMuted, int soundVolume,
-			String updateCheckUrl, boolean protectionEnabled)
+			String updateCheckUrl, boolean protectionEnabled, String gameMode)
+	{
+	}
+
+	// Corps de requête pour PUT /api/catalogs/{kind}/{id} (écran Paramètres,
+	// mode smartphone - tableaux Cartes/Visuels/Avatars) : patch partiel des
+	// métadonnées d'une entrée de catalogue, jamais l'image elle-même (voir
+	// CatalogService). Les clés absentes du patch laissent le champ existant
+	// inchangé.
+	public record CatalogEntryPatch(java.util.Map<String, Object> fields)
 	{
 	}
 

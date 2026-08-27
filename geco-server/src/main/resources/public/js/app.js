@@ -129,6 +129,12 @@ const Api = {
 	// langues personnalisées) - voir AppSettings/LanguageService côté serveur.
 	getSettings: () => api("/api/settings"),
 	updateSettings: (body) => api("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
+	// Étape 3, mode smartphone (écran Paramètres) : les trois tableaux de
+	// gestion des visuels - voir CatalogService côté serveur. kind vaut
+	// "cartes", "visuels" ou "avatars". Patch partiel des métadonnées d'une
+	// entrée (jamais l'image elle-même) - voir openCatalogZoombox().
+	getCatalog: (kind) => api(`/api/catalogs/${kind}`),
+	patchCatalogEntry: (kind, id, fields) => api(`/api/catalogs/${kind}/${id}`, { method: "PUT", body: JSON.stringify({ fields }) }),
 	checkForUpdates: () => api("/api/updates/check"),
 	listLanguages: () => api("/api/languages"),
 	// Le corps envoyé est le contenu BRUT du fichier .po (pas du JSON) - on
@@ -387,6 +393,32 @@ async function renderSettingsView() {
 	// existent", cohérente avec le sélecteur de drapeaux en haut à droite.
 	const settings = await Api.getSettings();
 	mAppSettings = settings; // reflète immédiatement les réglages actuels (son inclus)
+
+	// --- Mode de jeu (étape 3) ---
+	// Remonté par un utilisateur : bouton radio exclusif, pas une case à
+	// cocher indépendante - voir AppSettings.gameMode côté serveur. Le bloc
+	// des trois tableaux (Cartes/Visuels/Avatars) n'a de sens qu'en mode
+	// smartphone, il est donc masqué/affiché en fonction du choix courant.
+	function applyGameModeVisibility(mode) {
+		el("settingsCatalogsPanel").classList.toggle("hidden", mode !== "smartphone");
+		if (mode === "smartphone") renderCatalogsPanel();
+	}
+	el("settingsGameModeClassic").checked = settings.gameMode !== "smartphone";
+	el("settingsGameModeSmartphone").checked = settings.gameMode === "smartphone";
+	applyGameModeVisibility(settings.gameMode);
+	document.querySelectorAll("input[name=settingsGameMode]").forEach((radio) => {
+		radio.onchange = async () => {
+			const mode = document.querySelector("input[name=settingsGameMode]:checked").value;
+			mAppSettings.gameMode = mode;
+			await Api.updateSettings({
+				defaultLanguage: mAppSettings.defaultLanguage, soundMuted: mAppSettings.soundMuted,
+				soundVolume: mAppSettings.soundVolume, updateCheckUrl: mAppSettings.updateCheckUrl,
+				protectionEnabled: mAppSettings.protectionEnabled, gameMode: mode,
+			});
+			applyGameModeVisibility(mode);
+		};
+	});
+
 	// Remonté par un utilisateur : après un import réussi, le sélecteur de
 	// drapeaux (haut à droite) proposait bien la nouvelle langue, mais pas
 	// "Langue par défaut" ici - cause réelle : la liste des langues était lue
@@ -698,7 +730,215 @@ async function renderSettingsView() {
 	});
 }
 
-// ---------- Vue liste des parties ----------
+// ---------- Étape 3, mode smartphone : tableaux Cartes/Visuels/Avatars ----------
+// Voir §5.3 du cahier des charges : trois catalogues distincts (le catalogue
+// "cartes" ne fait qu'assigner un visuel par id, jamais dupliquer sa
+// description), chaque ligne cliquable ouvre une zoombox d'édition des
+// métadonnées (jamais l'image elle-même - pas de recadrage/retouche ici).
+
+// Valeurs fixes (niveau/secteur/règle/genre/tranche d'âge) : un ensemble
+// connu à l'avance, traduit via des clés .po dédiées - si une valeur ne s'y
+// trouve pas encore (ex. un secteur inventé plus tard par l'animateur), on
+// retombe simplement sur le code brut plutôt que d'afficher la clé technique.
+function catalogEnumLabel(pPrefix, pCode) {
+	if (!pCode) return "";
+	const key = `catalog.${pPrefix}.${pCode}`;
+	const translated = window.GecoI18n.t(key);
+	return translated === key ? pCode : translated;
+}
+
+// Champs de texte libre affichés au joueur (nom de carte, étiquette de
+// visuel) : une table {code langue -> texte} stockée DANS le catalogue lui-
+// même (pas dans les .po de l'application, voir CatalogSeeds côté serveur) -
+// l'animateur les édite directement depuis la zoombox, dans toutes les
+// langues actuellement installées. On affiche la langue active, puis le
+// français en repli, puis la première valeur trouvée - jamais une clé vide.
+function catalogTextValue(pValue) {
+	if (!pValue || typeof pValue !== "object") return pValue || "";
+	const activeLang = window.GecoI18n.getActiveLang ? window.GecoI18n.getActiveLang() : "fr";
+	if (pValue[activeLang]) return pValue[activeLang];
+	if (pValue.fr) return pValue.fr;
+	const firstValue = Object.values(pValue).find((v) => v);
+	return firstValue || "";
+}
+
+// Construit un input texte par langue installée pour un champ multilingue de
+// catalogue (voir catalogTextValue ci-dessus) - utilisé dans la zoombox.
+function catalogTextFieldsHtml(pFieldName, pValue) {
+	const langs = window.GecoI18n.getSupportedLangs();
+	const current = (pValue && typeof pValue === "object") ? pValue : {};
+	return langs.map((l) => `
+		<label class="field-label" style="margin-top:0.6rem;">${l.flag} ${escapeHtml(l.label)}</label>
+		<input type="text" class="field-input catalogTextField" data-field="${pFieldName}" data-lang="${l.code}" value="${escapeHtml(current[l.code] || "")}">
+	`).join("");
+}
+
+// Relit les champs construits par catalogTextFieldsHtml() pour reconstituer
+// la table {code langue -> texte} à envoyer au serveur (voir Api.patchCatalogEntry).
+function readCatalogTextFields(pFieldName) {
+	const result = {};
+	document.querySelectorAll(`.catalogTextField[data-field="${pFieldName}"]`).forEach((input) => {
+		result[input.dataset.lang] = input.value;
+	});
+	return result;
+}
+
+// Vignette d'une entrée (carte/visuel/avatar) - un simple <img>, avec repli
+// visuel (icône générique) si le fichier n'existe pas encore sur le disque :
+// c'est le cas attendu tant que les vraies images n'ont pas été déposées (voir
+// CatalogSeeds, catalogues de démonstration).
+function catalogThumbHtml(pUrl, pClass) {
+	if (!pUrl) return `<div class="${pClass || "catalog-row-thumb"}-fallback">🖼️</div>`;
+	return `<img src="${escapeHtml(pUrl)}" class="${pClass || "catalog-row-thumb"}" `
+		+ `onerror="this.outerHTML='<div class=&quot;${pClass || "catalog-row-thumb"}-fallback&quot;>🖼️</div>'">`;
+}
+
+async function renderCatalogsPanel() {
+	const t = window.GecoI18n.t;
+	document.querySelectorAll(".settings-catalog-tab").forEach((btn) => {
+		btn.classList.toggle("active", btn.dataset.catalogKind === mSettingsCatalogKind);
+		btn.onclick = () => { mSettingsCatalogKind = btn.dataset.catalogKind; renderCatalogsPanel(); };
+	});
+
+	const container = el("settingsCatalogTable");
+	container.textContent = t("settings.catalog_loading");
+
+	const entries = await Api.getCatalog(mSettingsCatalogKind);
+	// Le tableau "Cartes" affiche la vignette du visuel qui lui est assigné
+	// (voir "visualId") : il faut donc aussi le catalogue "Visuels" pour
+	// résoudre le nom de fichier correspondant.
+	const visuals = (mSettingsCatalogKind === "cartes") ? await Api.getCatalog("visuels") : null;
+
+	if (entries.length === 0) {
+		container.innerHTML = `<p class="galilee-explainer">${escapeHtml(t("settings.catalog_empty"))}</p>`;
+		return;
+	}
+
+	container.innerHTML = entries.map((entry) => renderCatalogRowHtml(mSettingsCatalogKind, entry, visuals)).join("");
+	container.querySelectorAll(".catalog-row").forEach((row) => {
+		row.addEventListener("click", () => {
+			const entry = entries.find((e) => e.id === row.dataset.id);
+			openCatalogZoombox(mSettingsCatalogKind, entry, visuals);
+		});
+	});
+}
+
+function renderCatalogRowHtml(pKind, pEntry, pVisuals) {
+	const t = window.GecoI18n.t;
+	if (pKind === "cartes") {
+		const visual = pVisuals ? pVisuals.find((v) => v.id === pEntry.visualId) : null;
+		const thumbUrl = visual ? `/cartes/${visual.filename}` : null;
+		const title = catalogTextValue(pEntry.nom) || pEntry.id;
+		const meta = [catalogEnumLabel("level", pEntry.niveau), catalogEnumLabel("sector", pEntry.secteur)]
+			.filter(Boolean).join(" · ");
+		return `
+		<button type="button" class="catalog-row" data-id="${escapeHtml(pEntry.id)}">
+			${catalogThumbHtml(thumbUrl)}
+			<span class="catalog-row-main">
+				<span class="catalog-row-title">${escapeHtml(title)}</span>
+				<span class="catalog-row-meta">${escapeHtml(meta)}</span>
+			</span>
+		</button>`;
+	}
+	if (pKind === "visuels") {
+		const title = catalogTextValue(pEntry.etiquette) || pEntry.filename;
+		const meta = [catalogEnumLabel("level", pEntry.niveau), pEntry.filename].filter(Boolean).join(" · ");
+		return `
+		<button type="button" class="catalog-row" data-id="${escapeHtml(pEntry.id)}">
+			${catalogThumbHtml(`/cartes/${pEntry.filename}`)}
+			<span class="catalog-row-main">
+				<span class="catalog-row-title">${escapeHtml(title)}</span>
+				<span class="catalog-row-meta">${escapeHtml(meta)}</span>
+			</span>
+		</button>`;
+	}
+	// pKind === "avatars"
+	const meta = [catalogEnumLabel("avatar_genre", pEntry.genre), catalogEnumLabel("avatar_age", pEntry.ageCategory)]
+		.filter(Boolean).join(" · ");
+	return `
+	<button type="button" class="catalog-row" data-id="${escapeHtml(pEntry.id)}">
+		${catalogThumbHtml(`/avatars/${pEntry.filename}`)}
+		<span class="catalog-row-main">
+			<span class="catalog-row-title">${escapeHtml(pEntry.id)}</span>
+			<span class="catalog-row-meta">${escapeHtml(meta)}</span>
+		</span>
+	</button>`;
+}
+
+// Zoombox (agrandissement + édition des métadonnées, jamais l'image) - voir
+// §5.3 du cahier des charges. Réutilise openDialog(), comme toutes les autres
+// éditions de l'écran Paramètres (langue, plugins...).
+function openCatalogZoombox(pKind, pEntry, pVisuals) {
+	const t = window.GecoI18n.t;
+	let previewUrl = null;
+	let bodyHtml = "";
+
+	if (pKind === "cartes") {
+		const visual = pVisuals ? pVisuals.find((v) => v.id === pEntry.visualId) : null;
+		previewUrl = visual ? `/cartes/${visual.filename}` : null;
+		const levelOptions = ["faible", "moyenne", "forte", "tresforte"]
+			.map((lvl) => `<option value="${lvl}" ${pEntry.niveau === lvl ? "selected" : ""}>${escapeHtml(catalogEnumLabel("level", lvl))}</option>`).join("");
+		const visualOptions = [`<option value="">${escapeHtml(t("settings.catalog_no_visual"))}</option>`]
+			.concat((pVisuals || []).map((v) => `<option value="${escapeHtml(v.id)}" ${pEntry.visualId === v.id ? "selected" : ""}>${escapeHtml(catalogTextValue(v.etiquette) || v.filename)}</option>`))
+			.join("");
+		bodyHtml = `
+			<label class="field-label">${escapeHtml(t("settings.catalog_field_level"))}</label>
+			<select id="catalogFieldNiveau" class="field-input">${levelOptions}</select>
+			<label class="field-label" style="margin-top:0.6rem;">${escapeHtml(t("settings.catalog_field_sector"))}</label>
+			<input type="text" id="catalogFieldSecteur" class="field-input" value="${escapeHtml(pEntry.secteur || "")}">
+			<label class="field-label" style="margin-top:0.6rem;">${escapeHtml(t("settings.catalog_field_visual"))}</label>
+			<select id="catalogFieldVisualId" class="field-input">${visualOptions}</select>
+			<p class="galilee-explainer" style="margin-top:1rem;">${escapeHtml(t("settings.catalog_field_name_intro"))}</p>
+			${catalogTextFieldsHtml("nom", pEntry.nom)}
+		`;
+	} else if (pKind === "visuels") {
+		previewUrl = `/cartes/${pEntry.filename}`;
+		const levelOptions = ["faible", "moyenne", "forte", "tresforte"]
+			.map((lvl) => `<option value="${lvl}" ${pEntry.niveau === lvl ? "selected" : ""}>${escapeHtml(catalogEnumLabel("level", lvl))}</option>`).join("");
+		bodyHtml = `
+			<p class="galilee-explainer">${escapeHtml(t("settings.catalog_field_filename_label"))} : <strong>${escapeHtml(pEntry.filename)}</strong></p>
+			<label class="field-label">${escapeHtml(t("settings.catalog_field_level"))}</label>
+			<select id="catalogFieldNiveau" class="field-input">${levelOptions}</select>
+			<p class="galilee-explainer" style="margin-top:1rem;">${escapeHtml(t("settings.catalog_field_label_intro"))}</p>
+			${catalogTextFieldsHtml("etiquette", pEntry.etiquette)}
+		`;
+	} else {
+		// avatars
+		previewUrl = `/avatars/${pEntry.filename}`;
+		const genreOptions = ["homme", "femme", "neutre"]
+			.map((g) => `<option value="${g}" ${pEntry.genre === g ? "selected" : ""}>${escapeHtml(catalogEnumLabel("avatar_genre", g))}</option>`).join("");
+		const ageOptions = ["enfant", "adulte", "senior"]
+			.map((a) => `<option value="${a}" ${pEntry.ageCategory === a ? "selected" : ""}>${escapeHtml(catalogEnumLabel("avatar_age", a))}</option>`).join("");
+		bodyHtml = `
+			<p class="galilee-explainer">${escapeHtml(t("settings.catalog_field_filename_label"))} : <strong>${escapeHtml(pEntry.filename)}</strong></p>
+			<label class="field-label">${escapeHtml(t("settings.catalog_field_genre"))}</label>
+			<select id="catalogFieldGenre" class="field-input">${genreOptions}</select>
+			<label class="field-label" style="margin-top:0.6rem;">${escapeHtml(t("settings.catalog_field_age"))}</label>
+			<select id="catalogFieldAge" class="field-input">${ageOptions}</select>
+		`;
+	}
+
+	const previewHtml = `<div class="catalog-zoombox-preview">${catalogThumbHtml(previewUrl, "catalog-row-thumb")}</div>`;
+	openDialog(t("settings.catalog_zoombox_title"), previewHtml + bodyHtml, async () => {
+		let fields;
+		if (pKind === "cartes") {
+			fields = {
+				niveau: el("catalogFieldNiveau").value,
+				secteur: el("catalogFieldSecteur").value,
+				visualId: el("catalogFieldVisualId").value || null,
+				nom: readCatalogTextFields("nom"),
+			};
+		} else if (pKind === "visuels") {
+			fields = { niveau: el("catalogFieldNiveau").value, etiquette: readCatalogTextFields("etiquette") };
+		} else {
+			fields = { genre: el("catalogFieldGenre").value, ageCategory: el("catalogFieldAge").value };
+		}
+		await Api.patchCatalogEntry(pKind, pEntry.id, fields);
+		renderCatalogsPanel();
+	});
+}
+
+
 
 // Construit une carte de partie, réutilisée par l'écran "Nouvelle partie" (5
 // dernières) et l'écran "Parties récentes" (toutes, avec suppression).
@@ -2424,6 +2664,9 @@ const TIMER_RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 // défaut déjà gérée par i18n.js, son ici) - rafraîchis au démarrage et après
 // toute modification depuis l'écran Paramètres, voir renderSettingsView().
 let mAppSettings = { defaultLanguage: "fr", soundMuted: false, soundVolume: 100, protectionEnabled: false };
+// Étape 3, mode smartphone (écran Paramètres) : onglet actif du panneau des
+// trois tableaux (Cartes/Visuels/Avatars) - voir renderCatalogsPanel().
+let mSettingsCatalogKind = "cartes";
 async function refreshAppSettings() {
 	try {
 		const res = await fetch("/api/settings");

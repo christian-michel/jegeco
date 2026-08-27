@@ -1235,3 +1235,114 @@ msgstr "Each player's raw final wealth, game by game."
 
 msgid "compare.explainer_corrected"
 msgstr "Same comparison, but subtracting what each player received \"for free\" (initial endowment, and in free money the average DU received at birth and at the final assessment) - to compare only the wealth actually produced during the game."
+
+# ============ Step 3: game mode (classic/smartphone) ============
+msgid "settings.game_mode_title"
+msgstr "Game mode"
+
+msgid "settings.game_mode_intro"
+msgstr "Choose how exchanges between players happen: with the usual physical cards and coins, or with each player's own smartphone."
+
+msgid "settings.game_mode_classic_label"
+msgstr "Classic (physical cards and coins)"
+
+msgid "settings.game_mode_smartphone_label"
+msgstr "Smartphone (one phone per player)"
+
+# ============ Step 3: Cards/Visuals/Avatars tables ============
+msgid "settings.catalogs_title"
+msgstr "Smartphone mode visuals"
+
+msgid "settings.catalogs_intro"
+msgstr "These three tables describe the cards, their artwork, and the available avatars. Click a row to edit its metadata (never the image itself)."
+
+msgid "settings.catalog_tab_cards"
+msgstr "Cards"
+
+msgid "settings.catalog_tab_visuals"
+msgstr "Visuals"
+
+msgid "settings.catalog_tab_avatars"
+msgstr "Avatars"
+
+msgid "settings.catalog_loading"
+msgstr "Loading…"
+
+msgid "settings.catalog_empty"
+msgstr "No entries in this catalog."
+
+msgid "settings.catalog_zoombox_title"
+msgstr "Edit metadata"
+
+msgid "settings.catalog_no_visual"
+msgstr "No visual assigned"
+
+msgid "settings.catalog_field_level"
+msgstr "Level"
+
+msgid "settings.catalog_field_sector"
+msgstr "Sector"
+
+msgid "settings.catalog_field_visual"
+msgstr "Assigned visual"
+
+msgid "settings.catalog_field_name_intro"
+msgstr "Card name, in each installed language:"
+
+msgid "settings.catalog_field_label_intro"
+msgstr "Visual label, in each installed language:"
+
+msgid "settings.catalog_field_filename_label"
+msgstr "File"
+
+msgid "settings.catalog_field_genre"
+msgstr "Gender"
+
+msgid "settings.catalog_field_age"
+msgstr "Age group"
+
+# ---- Fixed values (level) ----
+msgid "catalog.level.faible"
+msgstr "Weak"
+
+msgid "catalog.level.moyenne"
+msgstr "Medium"
+
+msgid "catalog.level.forte"
+msgstr "Strong"
+
+msgid "catalog.level.tresforte"
+msgstr "Very strong"
+
+# ---- Fixed values (sector - demo catalog) ----
+msgid "catalog.sector.alimentation"
+msgstr "Food"
+
+msgid "catalog.sector.agriculture"
+msgstr "Agriculture"
+
+msgid "catalog.sector.ressources"
+msgstr "Resources"
+
+# ---- Fixed values (rule - CBDC, "none" for every card today) ----
+msgid "catalog.rule.aucune"
+msgstr "None"
+
+# ---- Fixed values (avatars: gender / age group) ----
+msgid "catalog.avatar_genre.homme"
+msgstr "Male"
+
+msgid "catalog.avatar_genre.femme"
+msgstr "Female"
+
+msgid "catalog.avatar_genre.neutre"
+msgstr "Neutral"
+
+msgid "catalog.avatar_age.enfant"
+msgstr "Child"
+
+msgid "catalog.avatar_age.adulte"
+msgstr "Adult"
+
+msgid "catalog.avatar_age.senior"
+msgstr "Senior"

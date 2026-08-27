@@ -33,6 +33,15 @@ public class AppSettings
 	// par défaut : ne change rien pour les installations existantes tant que
 	// l'animateur ne l'active pas explicitement.
 	private boolean mProtectionEnabled;
+	// Étape 3 : bascule "classique" (cartes/jetons physiques, comportement
+	// historique inchangé) / "smartphone" (chaque joueur avec son téléphone) -
+	// choix exclusif par bouton radio (écran Paramètres), pas une case à
+	// cocher indépendante. "classique" par défaut : aucune installation
+	// existante n'est affectée tant que l'animateur ne bascule pas
+	// explicitement. Voir GecoServer pour la validation des valeurs acceptées.
+	public static final String GAME_MODE_CLASSIC = "classique"; //$NON-NLS-1$
+	public static final String GAME_MODE_SMARTPHONE = "smartphone"; //$NON-NLS-1$
+	private String mGameMode = GAME_MODE_CLASSIC;
 
 	public AppSettings(final Path pFile)
 	{
@@ -54,6 +63,8 @@ public class AppSettings
 			if (data.updateCheckUrl != null)
 				mUpdateCheckUrl = data.updateCheckUrl;
 			mProtectionEnabled = data.protectionEnabled;
+			if ((data.gameMode != null) && (GAME_MODE_CLASSIC.equals(data.gameMode) || GAME_MODE_SMARTPHONE.equals(data.gameMode)))
+				mGameMode = data.gameMode;
 		}
 		catch (final IOException e)
 		{
@@ -74,6 +85,7 @@ public class AppSettings
 			data.soundVolume = mSoundVolume;
 			data.updateCheckUrl = mUpdateCheckUrl;
 			data.protectionEnabled = mProtectionEnabled;
+			data.gameMode = mGameMode;
 			new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(mFile.toFile(), data);
 		}
 		catch (final IOException e)
@@ -143,6 +155,19 @@ public class AppSettings
 		save();
 	}
 
+	public String getGameMode()
+	{
+		return mGameMode;
+	}
+
+	/** Ignore silencieusement toute valeur autre que "classique"/"smartphone" (garde-fou identique à {@link #load()}). */
+	public void setGameMode(final String pGameMode)
+	{
+		if (GAME_MODE_CLASSIC.equals(pGameMode) || GAME_MODE_SMARTPHONE.equals(pGameMode))
+			mGameMode = pGameMode;
+		save();
+	}
+
 	// Simple structure de (dé)sérialisation JSON - volontairement minimale.
 	private static class Data
 	{
@@ -151,5 +176,6 @@ public class AppSettings
 		public int soundVolume = 100;
 		public String updateCheckUrl;
 		public boolean protectionEnabled;
+		public String gameMode;
 	}
 }
