@@ -86,8 +86,20 @@ function renderAvatarPreview() {
 }
 
 // ---------- Galerie d'avatars filtrable ----------
-function initAvatarGallery() {
-	const catalog = typeof AVATARS_CATALOG !== "undefined" ? AVATARS_CATALOG : [];
+// Le catalogue vient du serveur (GET /api/catalogs/avatars - voir
+// CatalogService/CatalogSeeds côté serveur, même source de données que
+// l'onglet "Avatars" de l'écran Paramètres) plutôt que d'un fichier statique
+// dupliqué ici : une seule source de vérité, éditable par l'animateur sans
+// jamais avoir à toucher au code ni à recompiler. Route publique (hors PIN
+// de partie), lisible depuis n'importe quel téléphone joueur.
+async function initAvatarGallery() {
+	let catalog = [];
+	try {
+		const res = await fetch("/api/catalogs/avatars");
+		if (res.ok) catalog = await res.json();
+	} catch (e) {
+		console.warn("Catalogue d'avatars indisponible, galerie vide (repli SVG toujours actif).", e);
+	}
 
 	// Le filtre "teint" est peuplé dynamiquement à partir des valeurs réellement
 	// présentes dans le catalogue, plutôt que codées en dur - s'adapte
