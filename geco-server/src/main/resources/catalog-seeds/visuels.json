@@ -1,0 +1,938 @@
+[
+  {
+    "id": "visuel_001",
+    "filename": "carte_001.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Abeilles",
+      "en": "Bees"
+    }
+  },
+  {
+    "id": "visuel_002",
+    "filename": "carte_002.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Blé",
+      "en": "Wheat"
+    }
+  },
+  {
+    "id": "visuel_003",
+    "filename": "carte_003.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Canard",
+      "en": "Duck"
+    }
+  },
+  {
+    "id": "visuel_004",
+    "filename": "carte_004.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Canne à sucre",
+      "en": "Sugar cane"
+    }
+  },
+  {
+    "id": "visuel_005",
+    "filename": "carte_005.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Carottes",
+      "en": "Carrots"
+    }
+  },
+  {
+    "id": "visuel_006",
+    "filename": "carte_006.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Cheval",
+      "en": "Horse"
+    }
+  },
+  {
+    "id": "visuel_007",
+    "filename": "carte_007.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Chataigne",
+      "en": "Chestnut"
+    }
+  },
+  {
+    "id": "visuel_008",
+    "filename": "carte_008.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Chèvre",
+      "en": "Goat"
+    }
+  },
+  {
+    "id": "visuel_009",
+    "filename": "carte_009.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Cochon",
+      "en": "Pig"
+    }
+  },
+  {
+    "id": "visuel_010",
+    "filename": "carte_010.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Coton",
+      "en": "Cotton"
+    }
+  },
+  {
+    "id": "visuel_011",
+    "filename": "carte_011.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Maïs",
+      "en": "Corn"
+    }
+  },
+  {
+    "id": "visuel_012",
+    "filename": "carte_012.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Mouton",
+      "en": "Sheep"
+    }
+  },
+  {
+    "id": "visuel_013",
+    "filename": "carte_013.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Oeufs",
+      "en": "Eggs"
+    }
+  },
+  {
+    "id": "visuel_014",
+    "filename": "carte_014.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Oie",
+      "en": "Goose"
+    }
+  },
+  {
+    "id": "visuel_015",
+    "filename": "carte_015.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Olives",
+      "en": "Olives"
+    }
+  },
+  {
+    "id": "visuel_016",
+    "filename": "carte_016.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Poissons",
+      "en": "Fish"
+    }
+  },
+  {
+    "id": "visuel_017",
+    "filename": "carte_017.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Pomme",
+      "en": "Apple"
+    }
+  },
+  {
+    "id": "visuel_018",
+    "filename": "carte_018.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Pomme de terre",
+      "en": "Potato"
+    }
+  },
+  {
+    "id": "visuel_019",
+    "filename": "carte_019.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Poules",
+      "en": "Chickens"
+    }
+  },
+  {
+    "id": "visuel_020",
+    "filename": "carte_020.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Raisins",
+      "en": "Grapes"
+    }
+  },
+  {
+    "id": "visuel_021",
+    "filename": "carte_021.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Riz",
+      "en": "Rice"
+    }
+  },
+  {
+    "id": "visuel_022",
+    "filename": "carte_022.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Vache",
+      "en": "Cow"
+    }
+  },
+  {
+    "id": "visuel_023",
+    "filename": "carte_023.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Granite",
+      "en": "Granite"
+    }
+  },
+  {
+    "id": "visuel_024",
+    "filename": "carte_024.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Forêt",
+      "en": "Forest"
+    }
+  },
+  {
+    "id": "visuel_025",
+    "filename": "carte_025.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Lait",
+      "en": "Milk"
+    }
+  },
+  {
+    "id": "visuel_026",
+    "filename": "carte_026.png",
+    "niveau": "faible",
+    "etiquette": {
+      "fr": "Sable",
+      "en": "Sand"
+    }
+  },
+  {
+    "id": "visuel_027",
+    "filename": "carte_027.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Aqueduc",
+      "en": "Aqueduct"
+    }
+  },
+  {
+    "id": "visuel_028",
+    "filename": "carte_028.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Bois",
+      "en": "Wood"
+    }
+  },
+  {
+    "id": "visuel_029",
+    "filename": "carte_029.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Clou",
+      "en": "Nail"
+    }
+  },
+  {
+    "id": "visuel_030",
+    "filename": "carte_030.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Chocolat",
+      "en": "Chocolate"
+    }
+  },
+  {
+    "id": "visuel_031",
+    "filename": "carte_031.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Bougie",
+      "en": "Candle"
+    }
+  },
+  {
+    "id": "visuel_032",
+    "filename": "carte_032.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Briques",
+      "en": "Bricks"
+    }
+  },
+  {
+    "id": "visuel_033",
+    "filename": "carte_033.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Meuble en bois",
+      "en": "Wooden furniture"
+    }
+  },
+  {
+    "id": "visuel_034",
+    "filename": "carte_034.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Café",
+      "en": "Coffee"
+    }
+  },
+  {
+    "id": "visuel_035",
+    "filename": "carte_035.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Cuisine français 1970",
+      "en": "French cuisine 1970"
+    }
+  },
+  {
+    "id": "visuel_036",
+    "filename": "carte_036.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Plume",
+      "en": "Feather"
+    }
+  },
+  {
+    "id": "visuel_037",
+    "filename": "carte_037.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Parchemin",
+      "en": "Parchment"
+    }
+  },
+  {
+    "id": "visuel_038",
+    "filename": "carte_038.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Poterie",
+      "en": "Pottery"
+    }
+  },
+  {
+    "id": "visuel_039",
+    "filename": "carte_039.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Diligence",
+      "en": "Stagecoach"
+    }
+  },
+  {
+    "id": "visuel_040",
+    "filename": "carte_040.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Panier tressé",
+      "en": "Woven basket"
+    }
+  },
+  {
+    "id": "visuel_041",
+    "filename": "carte_041.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Papier",
+      "en": "Paper"
+    }
+  },
+  {
+    "id": "visuel_042",
+    "filename": "carte_042.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Tranche de pain",
+      "en": "Slice of bread"
+    }
+  },
+  {
+    "id": "visuel_043",
+    "filename": "carte_043.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Caravelle",
+      "en": "Caravel"
+    }
+  },
+  {
+    "id": "visuel_044",
+    "filename": "carte_044.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Four solaire",
+      "en": "Solar furnace"
+    }
+  },
+  {
+    "id": "visuel_045",
+    "filename": "carte_045.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Métier à tisser",
+      "en": "Weaving loom"
+    }
+  },
+  {
+    "id": "visuel_046",
+    "filename": "carte_046.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Moulin mécanique",
+      "en": "Mechanical mill"
+    }
+  },
+  {
+    "id": "visuel_047",
+    "filename": "carte_047.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Roues",
+      "en": "Wheels"
+    }
+  },
+  {
+    "id": "visuel_048",
+    "filename": "carte_048.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Moulin à vent",
+      "en": "Windmill"
+    }
+  },
+  {
+    "id": "visuel_049",
+    "filename": "carte_049.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Vin",
+      "en": "Wine"
+    }
+  },
+  {
+    "id": "visuel_050",
+    "filename": "carte_050.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Thé",
+      "en": "Tea"
+    }
+  },
+  {
+    "id": "visuel_051",
+    "filename": "carte_051.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Fromage",
+      "en": "Cheese"
+    }
+  },
+  {
+    "id": "visuel_052",
+    "filename": "carte_052.png",
+    "niveau": "moyenne",
+    "etiquette": {
+      "fr": "Savon végétal",
+      "en": "Vegetable soap"
+    }
+  },
+  {
+    "id": "visuel_053",
+    "filename": "carte_053.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Ampoule électrique",
+      "en": "Electric light bulb"
+    }
+  },
+  {
+    "id": "visuel_054",
+    "filename": "carte_054.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Centrale électrique",
+      "en": "Power plant"
+    }
+  },
+  {
+    "id": "visuel_055",
+    "filename": "carte_055.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Éolienne",
+      "en": "Wind turbine"
+    }
+  },
+  {
+    "id": "visuel_056",
+    "filename": "carte_056.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Pilonne haute-tension",
+      "en": "High-voltage pylon"
+    }
+  },
+  {
+    "id": "visuel_057",
+    "filename": "carte_057.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Cuisine gastronomique française",
+      "en": "French gastronomic cuisine"
+    }
+  },
+  {
+    "id": "visuel_058",
+    "filename": "carte_058.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Appareil photo argentique",
+      "en": "Film camera"
+    }
+  },
+  {
+    "id": "visuel_059",
+    "filename": "carte_059.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Ascenseur",
+      "en": "Elevator"
+    }
+  },
+  {
+    "id": "visuel_060",
+    "filename": "carte_060.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Marteau pilon",
+      "en": "Steam hammer"
+    }
+  },
+  {
+    "id": "visuel_061",
+    "filename": "carte_061.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Machine à écrire",
+      "en": "Typewriter"
+    }
+  },
+  {
+    "id": "visuel_062",
+    "filename": "carte_062.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Locomotive à vapeur",
+      "en": "Steam locomotive"
+    }
+  },
+  {
+    "id": "visuel_063",
+    "filename": "carte_063.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Première automobile",
+      "en": "First automobile"
+    }
+  },
+  {
+    "id": "visuel_064",
+    "filename": "carte_064.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Poste radio",
+      "en": "Radio set"
+    }
+  },
+  {
+    "id": "visuel_065",
+    "filename": "carte_065.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Pétrole",
+      "en": "Petroleum"
+    }
+  },
+  {
+    "id": "visuel_066",
+    "filename": "carte_066.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Moteur à combustion",
+      "en": "Combustion engine"
+    }
+  },
+  {
+    "id": "visuel_067",
+    "filename": "carte_067.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Moto",
+      "en": "Motorcycle"
+    }
+  },
+  {
+    "id": "visuel_068",
+    "filename": "carte_068.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Stylos",
+      "en": "Pens"
+    }
+  },
+  {
+    "id": "visuel_069",
+    "filename": "carte_069.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Réfrigérateur",
+      "en": "Refrigerator"
+    }
+  },
+  {
+    "id": "visuel_070",
+    "filename": "carte_070.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Avion",
+      "en": "Airplane"
+    }
+  },
+  {
+    "id": "visuel_071",
+    "filename": "carte_071.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Cinématographe",
+      "en": "Cinematograph"
+    }
+  },
+  {
+    "id": "visuel_072",
+    "filename": "carte_072.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Carte routière",
+      "en": "Road map"
+    }
+  },
+  {
+    "id": "visuel_073",
+    "filename": "carte_073.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Bicyclette",
+      "en": "Bicycle"
+    }
+  },
+  {
+    "id": "visuel_074",
+    "filename": "carte_074.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Montre mécanique",
+      "en": "Mechanical watch"
+    }
+  },
+  {
+    "id": "visuel_075",
+    "filename": "carte_075.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Presse d’imprimerie",
+      "en": "Printing press"
+    }
+  },
+  {
+    "id": "visuel_076",
+    "filename": "carte_076.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Cassette audio",
+      "en": "Audio cassette"
+    }
+  },
+  {
+    "id": "visuel_077",
+    "filename": "carte_077.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Machine à laver",
+      "en": "Washing machine"
+    }
+  },
+  {
+    "id": "visuel_078",
+    "filename": "carte_078.png",
+    "niveau": "forte",
+    "etiquette": {
+      "fr": "Moissonneuse batteuse",
+      "en": "Combine harvester"
+    }
+  },
+  {
+    "id": "visuel_079",
+    "filename": "carte_079.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "PC portable",
+      "en": "Laptop"
+    }
+  },
+  {
+    "id": "visuel_080",
+    "filename": "carte_080.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Appareil photo numérique",
+      "en": "Digital camera"
+    }
+  },
+  {
+    "id": "visuel_081",
+    "filename": "carte_081.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Boutique en ligne",
+      "en": "Online store"
+    }
+  },
+  {
+    "id": "visuel_082",
+    "filename": "carte_082.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Casque audio",
+      "en": "Headphones"
+    }
+  },
+  {
+    "id": "visuel_083",
+    "filename": "carte_083.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Casque de réalité virtuelle",
+      "en": "VR headset"
+    }
+  },
+  {
+    "id": "visuel_084",
+    "filename": "carte_084.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "CD",
+      "en": "CD"
+    }
+  },
+  {
+    "id": "visuel_085",
+    "filename": "carte_085.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Console de jeux vidéos",
+      "en": "Video game console"
+    }
+  },
+  {
+    "id": "visuel_086",
+    "filename": "carte_086.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "CPU",
+      "en": "CPU"
+    }
+  },
+  {
+    "id": "visuel_087",
+    "filename": "carte_087.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Drone",
+      "en": "Drone"
+    }
+  },
+  {
+    "id": "visuel_088",
+    "filename": "carte_088.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Enceinte connectée",
+      "en": "Smart speaker"
+    }
+  },
+  {
+    "id": "visuel_089",
+    "filename": "carte_089.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "GPS",
+      "en": "GPS"
+    }
+  },
+  {
+    "id": "visuel_090",
+    "filename": "carte_090.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Montre connectée",
+      "en": "Smartwatch"
+    }
+  },
+  {
+    "id": "visuel_091",
+    "filename": "carte_091.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Smartphone",
+      "en": "Smartphone"
+    }
+  },
+  {
+    "id": "visuel_092",
+    "filename": "carte_092.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Moteur électrique",
+      "en": "Electric motor"
+    }
+  },
+  {
+    "id": "visuel_093",
+    "filename": "carte_093.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Fusée",
+      "en": "Rocket"
+    }
+  },
+  {
+    "id": "visuel_094",
+    "filename": "carte_094.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Imprimante 3D",
+      "en": "3D printer"
+    }
+  },
+  {
+    "id": "visuel_095",
+    "filename": "carte_095.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Intelligence artificielle",
+      "en": "Artificial intelligence"
+    }
+  },
+  {
+    "id": "visuel_096",
+    "filename": "carte_096.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Blockchain décentralisée",
+      "en": "Decentralized blockchain"
+    }
+  },
+  {
+    "id": "visuel_097",
+    "filename": "carte_097.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Satellite",
+      "en": "Satellite"
+    }
+  },
+  {
+    "id": "visuel_098",
+    "filename": "carte_098.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "TV moderne",
+      "en": "Modern TV"
+    }
+  },
+  {
+    "id": "visuel_099",
+    "filename": "carte_099.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Serveur informatique",
+      "en": "Computer server"
+    }
+  },
+  {
+    "id": "visuel_100",
+    "filename": "carte_100.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Robot",
+      "en": "Robot"
+    }
+  },
+  {
+    "id": "visuel_101",
+    "filename": "carte_101.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Génétique",
+      "en": "Genetics"
+    }
+  },
+  {
+    "id": "visuel_102",
+    "filename": "carte_102.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Maison connectée",
+      "en": "Smart home"
+    }
+  },
+  {
+    "id": "visuel_103",
+    "filename": "carte_103.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "Panneau solaire",
+      "en": "Solar panel"
+    }
+  },
+  {
+    "id": "visuel_104",
+    "filename": "carte_104.png",
+    "niveau": "tresforte",
+    "etiquette": {
+      "fr": "LED",
+      "en": "LED"
+    }
+  }
+]

@@ -1,0 +1,610 @@
+[
+  {
+    "id": "avatar_001",
+    "filename": "avatar_001.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_002",
+    "filename": "avatar_002.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_003",
+    "filename": "avatar_003.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_004",
+    "filename": "avatar_004.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_005",
+    "filename": "avatar_005.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_006",
+    "filename": "avatar_006.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_007",
+    "filename": "avatar_007.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_008",
+    "filename": "avatar_008.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_009",
+    "filename": "avatar_009.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_010",
+    "filename": "avatar_010.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_011",
+    "filename": "avatar_011.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_012",
+    "filename": "avatar_012.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_013",
+    "filename": "avatar_013.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_014",
+    "filename": "avatar_014.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_015",
+    "filename": "avatar_015.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_016",
+    "filename": "avatar_016.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_017",
+    "filename": "avatar_017.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_018",
+    "filename": "avatar_018.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_019",
+    "filename": "avatar_019.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_020",
+    "filename": "avatar_020.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_021",
+    "filename": "avatar_021.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_022",
+    "filename": "avatar_022.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_023",
+    "filename": "avatar_023.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_024",
+    "filename": "avatar_024.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_025",
+    "filename": "avatar_025.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_026",
+    "filename": "avatar_026.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_027",
+    "filename": "avatar_027.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_028",
+    "filename": "avatar_028.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_029",
+    "filename": "avatar_029.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_030",
+    "filename": "avatar_030.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_031",
+    "filename": "avatar_031.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_032",
+    "filename": "avatar_032.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_033",
+    "filename": "avatar_033.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_034",
+    "filename": "avatar_034.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_035",
+    "filename": "avatar_035.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_036",
+    "filename": "avatar_036.png",
+    "genre": "femme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_037",
+    "filename": "avatar_037.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_038",
+    "filename": "avatar_038.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_039",
+    "filename": "avatar_039.png",
+    "genre": "femme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_040",
+    "filename": "avatar_040.png",
+    "genre": "femme",
+    "ageCategory": "enfant",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_041",
+    "filename": "avatar_041.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_042",
+    "filename": "avatar_042.png",
+    "genre": "homme",
+    "ageCategory": "enfant",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_043",
+    "filename": "avatar_043.png",
+    "genre": "homme",
+    "ageCategory": "enfant",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_044",
+    "filename": "avatar_044.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_045",
+    "filename": "avatar_045.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_046",
+    "filename": "avatar_046.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_047",
+    "filename": "avatar_047.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_048",
+    "filename": "avatar_048.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_049",
+    "filename": "avatar_049.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_050",
+    "filename": "avatar_050.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_051",
+    "filename": "avatar_051.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_052",
+    "filename": "avatar_052.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_053",
+    "filename": "avatar_053.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_054",
+    "filename": "avatar_054.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_055",
+    "filename": "avatar_055.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_056",
+    "filename": "avatar_056.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_057",
+    "filename": "avatar_057.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_058",
+    "filename": "avatar_058.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_059",
+    "filename": "avatar_059.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_060",
+    "filename": "avatar_060.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_061",
+    "filename": "avatar_061.png",
+    "genre": "homme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_062",
+    "filename": "avatar_062.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_063",
+    "filename": "avatar_063.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_064",
+    "filename": "avatar_064.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#8D5524",
+    "skinToneLabel": "foncée"
+  },
+  {
+    "id": "avatar_065",
+    "filename": "avatar_065.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_066",
+    "filename": "avatar_066.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_067",
+    "filename": "avatar_067.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_068",
+    "filename": "avatar_068.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_069",
+    "filename": "avatar_069.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_070",
+    "filename": "avatar_070.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_071",
+    "filename": "avatar_071.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_072",
+    "filename": "avatar_072.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_073",
+    "filename": "avatar_073.png",
+    "genre": "homme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_074",
+    "filename": "avatar_074.png",
+    "genre": "homme",
+    "ageCategory": "adulte",
+    "skinTone": "#C68642",
+    "skinToneLabel": "mate"
+  },
+  {
+    "id": "avatar_075",
+    "filename": "avatar_075.png",
+    "genre": "homme",
+    "ageCategory": "senior",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  },
+  {
+    "id": "avatar_076",
+    "filename": "avatar_076.png",
+    "genre": "homme",
+    "ageCategory": "enfant",
+    "skinTone": "#F1C27D",
+    "skinToneLabel": "claire"
+  }
+]

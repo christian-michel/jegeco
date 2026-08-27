@@ -1,0 +1,22 @@
+[
+  {
+    "id": "faible",
+    "niveau": "faible",
+    "filename": "fond_carte_faible.png"
+  },
+  {
+    "id": "moyenne",
+    "niveau": "moyenne",
+    "filename": "fond_carte_moyenne.png"
+  },
+  {
+    "id": "forte",
+    "niveau": "forte",
+    "filename": "fond_carte_forte.png"
+  },
+  {
+    "id": "tresforte",
+    "niveau": "tresforte",
+    "filename": "fond_carte_tresforte.png"
+  }
+]

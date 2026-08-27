@@ -1,0 +1,1146 @@
+[
+  {
+    "id": "carte_001",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Abeilles",
+      "en": "Bees"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_001"
+  },
+  {
+    "id": "carte_002",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Blé",
+      "en": "Wheat"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_002"
+  },
+  {
+    "id": "carte_003",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Canard",
+      "en": "Duck"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_003"
+  },
+  {
+    "id": "carte_004",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Canne à sucre",
+      "en": "Sugar cane"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_004"
+  },
+  {
+    "id": "carte_005",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Carottes",
+      "en": "Carrots"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_005"
+  },
+  {
+    "id": "carte_006",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Cheval",
+      "en": "Horse"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_006"
+  },
+  {
+    "id": "carte_007",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Chataigne",
+      "en": "Chestnut"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_007"
+  },
+  {
+    "id": "carte_008",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Chèvre",
+      "en": "Goat"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_008"
+  },
+  {
+    "id": "carte_009",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Cochon",
+      "en": "Pig"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_009"
+  },
+  {
+    "id": "carte_010",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Coton",
+      "en": "Cotton"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_010"
+  },
+  {
+    "id": "carte_011",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Maïs",
+      "en": "Corn"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_011"
+  },
+  {
+    "id": "carte_012",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Mouton",
+      "en": "Sheep"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_012"
+  },
+  {
+    "id": "carte_013",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Oeufs",
+      "en": "Eggs"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_013"
+  },
+  {
+    "id": "carte_014",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Oie",
+      "en": "Goose"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_014"
+  },
+  {
+    "id": "carte_015",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Olives",
+      "en": "Olives"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_015"
+  },
+  {
+    "id": "carte_016",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Poissons",
+      "en": "Fish"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_016"
+  },
+  {
+    "id": "carte_017",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Pomme",
+      "en": "Apple"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_017"
+  },
+  {
+    "id": "carte_018",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Pomme de terre",
+      "en": "Potato"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_018"
+  },
+  {
+    "id": "carte_019",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Poules",
+      "en": "Chickens"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_019"
+  },
+  {
+    "id": "carte_020",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Raisins",
+      "en": "Grapes"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_020"
+  },
+  {
+    "id": "carte_021",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Riz",
+      "en": "Rice"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_021"
+  },
+  {
+    "id": "carte_022",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Vache",
+      "en": "Cow"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_022"
+  },
+  {
+    "id": "carte_023",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Granite",
+      "en": "Granite"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_023"
+  },
+  {
+    "id": "carte_024",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Forêt",
+      "en": "Forest"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_024"
+  },
+  {
+    "id": "carte_025",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Lait",
+      "en": "Milk"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_025"
+  },
+  {
+    "id": "carte_026",
+    "niveau": "faible",
+    "secteur": "faible",
+    "nom": {
+      "fr": "Sable",
+      "en": "Sand"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_026"
+  },
+  {
+    "id": "carte_027",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Aqueduc",
+      "en": "Aqueduct"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_027"
+  },
+  {
+    "id": "carte_028",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Bois",
+      "en": "Wood"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_028"
+  },
+  {
+    "id": "carte_029",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Clou",
+      "en": "Nail"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_029"
+  },
+  {
+    "id": "carte_030",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Chocolat",
+      "en": "Chocolate"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_030"
+  },
+  {
+    "id": "carte_031",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Bougie",
+      "en": "Candle"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_031"
+  },
+  {
+    "id": "carte_032",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Briques",
+      "en": "Bricks"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_032"
+  },
+  {
+    "id": "carte_033",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Meuble en bois",
+      "en": "Wooden furniture"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_033"
+  },
+  {
+    "id": "carte_034",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Café",
+      "en": "Coffee"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_034"
+  },
+  {
+    "id": "carte_035",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Cuisine français 1970",
+      "en": "French cuisine 1970"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_035"
+  },
+  {
+    "id": "carte_036",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Plume",
+      "en": "Feather"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_036"
+  },
+  {
+    "id": "carte_037",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Parchemin",
+      "en": "Parchment"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_037"
+  },
+  {
+    "id": "carte_038",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Poterie",
+      "en": "Pottery"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_038"
+  },
+  {
+    "id": "carte_039",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Diligence",
+      "en": "Stagecoach"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_039"
+  },
+  {
+    "id": "carte_040",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Panier tressé",
+      "en": "Woven basket"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_040"
+  },
+  {
+    "id": "carte_041",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Papier",
+      "en": "Paper"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_041"
+  },
+  {
+    "id": "carte_042",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Tranche de pain",
+      "en": "Slice of bread"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_042"
+  },
+  {
+    "id": "carte_043",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Caravelle",
+      "en": "Caravel"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_043"
+  },
+  {
+    "id": "carte_044",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Four solaire",
+      "en": "Solar furnace"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_044"
+  },
+  {
+    "id": "carte_045",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Métier à tisser",
+      "en": "Weaving loom"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_045"
+  },
+  {
+    "id": "carte_046",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Moulin mécanique",
+      "en": "Mechanical mill"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_046"
+  },
+  {
+    "id": "carte_047",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Roues",
+      "en": "Wheels"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_047"
+  },
+  {
+    "id": "carte_048",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Moulin à vent",
+      "en": "Windmill"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_048"
+  },
+  {
+    "id": "carte_049",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Vin",
+      "en": "Wine"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_049"
+  },
+  {
+    "id": "carte_050",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Thé",
+      "en": "Tea"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_050"
+  },
+  {
+    "id": "carte_051",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Fromage",
+      "en": "Cheese"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_051"
+  },
+  {
+    "id": "carte_052",
+    "niveau": "moyenne",
+    "secteur": "moyenne",
+    "nom": {
+      "fr": "Savon végétal",
+      "en": "Vegetable soap"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_052"
+  },
+  {
+    "id": "carte_053",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Ampoule électrique",
+      "en": "Electric light bulb"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_053"
+  },
+  {
+    "id": "carte_054",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Centrale électrique",
+      "en": "Power plant"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_054"
+  },
+  {
+    "id": "carte_055",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Éolienne",
+      "en": "Wind turbine"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_055"
+  },
+  {
+    "id": "carte_056",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Pilonne haute-tension",
+      "en": "High-voltage pylon"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_056"
+  },
+  {
+    "id": "carte_057",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Cuisine gastronomique française",
+      "en": "French gastronomic cuisine"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_057"
+  },
+  {
+    "id": "carte_058",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Appareil photo argentique",
+      "en": "Film camera"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_058"
+  },
+  {
+    "id": "carte_059",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Ascenseur",
+      "en": "Elevator"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_059"
+  },
+  {
+    "id": "carte_060",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Marteau pilon",
+      "en": "Steam hammer"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_060"
+  },
+  {
+    "id": "carte_061",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Machine à écrire",
+      "en": "Typewriter"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_061"
+  },
+  {
+    "id": "carte_062",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Locomotive à vapeur",
+      "en": "Steam locomotive"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_062"
+  },
+  {
+    "id": "carte_063",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Première automobile",
+      "en": "First automobile"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_063"
+  },
+  {
+    "id": "carte_064",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Poste radio",
+      "en": "Radio set"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_064"
+  },
+  {
+    "id": "carte_065",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Pétrole",
+      "en": "Petroleum"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_065"
+  },
+  {
+    "id": "carte_066",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Moteur à combustion",
+      "en": "Combustion engine"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_066"
+  },
+  {
+    "id": "carte_067",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Moto",
+      "en": "Motorcycle"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_067"
+  },
+  {
+    "id": "carte_068",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Stylos",
+      "en": "Pens"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_068"
+  },
+  {
+    "id": "carte_069",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Réfrigérateur",
+      "en": "Refrigerator"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_069"
+  },
+  {
+    "id": "carte_070",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Avion",
+      "en": "Airplane"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_070"
+  },
+  {
+    "id": "carte_071",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Cinématographe",
+      "en": "Cinematograph"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_071"
+  },
+  {
+    "id": "carte_072",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Carte routière",
+      "en": "Road map"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_072"
+  },
+  {
+    "id": "carte_073",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Bicyclette",
+      "en": "Bicycle"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_073"
+  },
+  {
+    "id": "carte_074",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Montre mécanique",
+      "en": "Mechanical watch"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_074"
+  },
+  {
+    "id": "carte_075",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Presse d’imprimerie",
+      "en": "Printing press"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_075"
+  },
+  {
+    "id": "carte_076",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Cassette audio",
+      "en": "Audio cassette"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_076"
+  },
+  {
+    "id": "carte_077",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Machine à laver",
+      "en": "Washing machine"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_077"
+  },
+  {
+    "id": "carte_078",
+    "niveau": "forte",
+    "secteur": "forte",
+    "nom": {
+      "fr": "Moissonneuse batteuse",
+      "en": "Combine harvester"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_078"
+  },
+  {
+    "id": "carte_079",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "PC portable",
+      "en": "Laptop"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_079"
+  },
+  {
+    "id": "carte_080",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Appareil photo numérique",
+      "en": "Digital camera"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_080"
+  },
+  {
+    "id": "carte_081",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Boutique en ligne",
+      "en": "Online store"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_081"
+  },
+  {
+    "id": "carte_082",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Casque audio",
+      "en": "Headphones"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_082"
+  },
+  {
+    "id": "carte_083",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Casque de réalité virtuelle",
+      "en": "VR headset"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_083"
+  },
+  {
+    "id": "carte_084",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "CD",
+      "en": "CD"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_084"
+  },
+  {
+    "id": "carte_085",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Console de jeux vidéos",
+      "en": "Video game console"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_085"
+  },
+  {
+    "id": "carte_086",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "CPU",
+      "en": "CPU"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_086"
+  },
+  {
+    "id": "carte_087",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Drone",
+      "en": "Drone"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_087"
+  },
+  {
+    "id": "carte_088",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Enceinte connectée",
+      "en": "Smart speaker"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_088"
+  },
+  {
+    "id": "carte_089",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "GPS",
+      "en": "GPS"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_089"
+  },
+  {
+    "id": "carte_090",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Montre connectée",
+      "en": "Smartwatch"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_090"
+  },
+  {
+    "id": "carte_091",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Smartphone",
+      "en": "Smartphone"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_091"
+  },
+  {
+    "id": "carte_092",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Moteur électrique",
+      "en": "Electric motor"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_092"
+  },
+  {
+    "id": "carte_093",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Fusée",
+      "en": "Rocket"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_093"
+  },
+  {
+    "id": "carte_094",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Imprimante 3D",
+      "en": "3D printer"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_094"
+  },
+  {
+    "id": "carte_095",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Intelligence artificielle",
+      "en": "Artificial intelligence"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_095"
+  },
+  {
+    "id": "carte_096",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Blockchain décentralisée",
+      "en": "Decentralized blockchain"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_096"
+  },
+  {
+    "id": "carte_097",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Satellite",
+      "en": "Satellite"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_097"
+  },
+  {
+    "id": "carte_098",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "TV moderne",
+      "en": "Modern TV"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_098"
+  },
+  {
+    "id": "carte_099",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Serveur informatique",
+      "en": "Computer server"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_099"
+  },
+  {
+    "id": "carte_100",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Robot",
+      "en": "Robot"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_100"
+  },
+  {
+    "id": "carte_101",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Génétique",
+      "en": "Genetics"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_101"
+  },
+  {
+    "id": "carte_102",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Maison connectée",
+      "en": "Smart home"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_102"
+  },
+  {
+    "id": "carte_103",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "Panneau solaire",
+      "en": "Solar panel"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_103"
+  },
+  {
+    "id": "carte_104",
+    "niveau": "tresforte",
+    "secteur": "tresforte",
+    "nom": {
+      "fr": "LED",
+      "en": "LED"
+    },
+    "regle": "aucune",
+    "visualId": "visuel_104"
+  }
+]
