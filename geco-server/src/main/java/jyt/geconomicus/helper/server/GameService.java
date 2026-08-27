@@ -11,6 +11,7 @@ import jyt.geconomicus.helper.EventTypeConverter;
 import jyt.geconomicus.helper.Game;
 import jyt.geconomicus.helper.Player;
 import jyt.geconomicus.helper.PlayerNotFoundException;
+import jyt.geconomicus.helper.Transaction;
 
 /**
  * Couche de service qui encapsule les opérations JPA sur Game/Player/Event.
@@ -339,6 +340,72 @@ public class GameService
 		{
 			// Le "finally" garantit la fermeture de l'EntityManager même en cas d'exception
 			// levée par applyEvent() ou par une violation de contrainte SQL.
+			em.close();
+		}
+	}
+
+	/**
+	 * Enregistre une transaction individuelle carte-contre-jetons entre deux
+	 * joueurs (étape 3, mode smartphone) - voir Transaction.java pour le
+	 * raisonnement complet et sa portée volontairement limitée à ce stade.
+	 * Ne modifie aucun état du moteur (contrairement à recordEvent ci-dessus) :
+	 * ce n'est qu'un journal, à ce stade purement déclaratif - c'est au joueur
+	 * (ou à un futur écran animateur) de refléter le changement de main dans
+	 * son inventaire, cette méthode ne fait qu'en garder la trace.
+	 */
+	public Transaction recordTransaction(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
+			final String pCardTypeId, final String pCardLevel, final int pWeakCoins, final int pMediumCoins,
+			final int pStrongCoins) throws PlayerNotFoundException
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				throw new IllegalArgumentException("Game not found: " + pGameId); //$NON-NLS-1$
+			// Même vérification de propriété que pour recordEvent() ci-dessus :
+			// un joueur ne peut être ni vendeur ni acheteur dans une transaction
+			// d'une AUTRE partie que celle de l'URL.
+			final Player seller = em.find(Player.class, pSellerPlayerId);
+			if ((seller == null) || !seller.getGame().equals(game))
+				throw new PlayerNotFoundException(String.valueOf(pSellerPlayerId));
+			final Player buyer = em.find(Player.class, pBuyerPlayerId);
+			if ((buyer == null) || !buyer.getGame().equals(game))
+				throw new PlayerNotFoundException(String.valueOf(pBuyerPlayerId));
+			if (seller.equals(buyer))
+				throw new IllegalArgumentException("Le vendeur et l'acheteur ne peuvent pas être le même joueur."); //$NON-NLS-1$
+			em.getTransaction().begin();
+			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, pCardLevel, pWeakCoins,
+					pMediumCoins, pStrongCoins);
+			em.persist(transaction);
+			em.getTransaction().commit();
+			return transaction;
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
+	 * Liste les transactions individuelles d'une partie, plus récentes en
+	 * premier - utilisé pour l'instant par un futur écran de statistiques/
+	 * historique (pas encore construit) et par l'historique joueur du mode
+	 * smartphone (§5.1, écran "Historique").
+	 */
+	public List<Transaction> listTransactions(final int pGameId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			return em.createQuery(
+					"SELECT t FROM Transaction t WHERE t.game.id = :gameId ORDER BY t.tstamp DESC", //$NON-NLS-1$
+					Transaction.class)
+					.setParameter("gameId", pGameId) //$NON-NLS-1$
+					.getResultList();
+		}
+		finally
+		{
 			em.close();
 		}
 	}

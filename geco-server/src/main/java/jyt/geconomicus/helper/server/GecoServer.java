@@ -18,6 +18,8 @@ import jakarta.persistence.Persistence;
 import jyt.geconomicus.helper.Event;
 import jyt.geconomicus.helper.Game;
 import jyt.geconomicus.helper.Player;
+import jyt.geconomicus.helper.PlayerNotFoundException;
+import jyt.geconomicus.helper.Transaction;
 import jyt.geconomicus.helper.server.Dtos.AddPlayerRequest;
 import jyt.geconomicus.helper.server.Dtos.CreateGameRequest;
 import jyt.geconomicus.helper.server.Dtos.EditEventRequest;
@@ -498,7 +500,13 @@ public class GecoServer
 		// plus bas, qui ne retourne que les données du joueur concerné).
 		final java.util.function.Consumer<io.javalin.http.Context> checkGamePin = ctx -> {
 			if (ctx.path().endsWith("/join") || ctx.path().endsWith("/unlock") //$NON-NLS-1$ //$NON-NLS-2$
-					|| ctx.path().contains("/players/by-token/")) //$NON-NLS-1$
+					|| ctx.path().contains("/players/by-token/") //$NON-NLS-1$
+					// POST /transactions : authentifiée par le jeton individuel de
+					// l'acheteur (voir la route elle-même), pas par le PIN de
+					// l'animateur - un joueur sur son propre smartphone ne le
+					// connaît pas. GET /transactions (lecture d'ensemble, écran
+					// animateur) reste, elle, protégée par le PIN normalement.
+					|| (ctx.path().endsWith("/transactions") && (ctx.method() == io.javalin.http.HandlerType.POST))) //$NON-NLS-1$
 				return;
 			final int id;
 			try
@@ -853,6 +861,59 @@ public class GecoServer
 					req.weakCoins(), req.mediumCoins(), req.strongCoins());
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
 			ctx.status(201).json(EventDto.from(event));
+		});
+
+		// --- Transactions individuelles (étape 3, mode smartphone) ---
+
+		// Enregistrement d'un échange carte-contre-jetons entre deux joueurs -
+		// voir Transaction.java (geco-engine) et GameService.recordTransaction
+		// pour le raisonnement complet. Contrairement à /events (déclenchée par
+		// l'animateur, protégée par le PIN de partie), cette route est
+		// exemptée du PIN (voir checkGamePin plus haut) : c'est un JOUEUR qui
+		// l'appelle depuis son propre smartphone, authentifié par SON jeton
+		// individuel plutôt que par le PIN de l'animateur.
+		pApp.post("/api/games/{id}/transactions", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final Dtos.RecordTransactionRequest req = ctx.bodyAsClass(Dtos.RecordTransactionRequest.class);
+			// Vérification du jeton de l'acheteur, uniquement quand la protection
+			// par code est activée (même logique que le PIN de partie ci-dessus :
+			// désactivée par défaut, n'affecte aucune installation existante tant
+			// que l'animateur ne l'active pas explicitement).
+			if (mAppSettings.isProtectionEnabled())
+			{
+				final Game game = mGameService.getGame(id);
+				if (game == null)
+				{
+					ctx.status(404);
+					return;
+				}
+				final boolean tokenMatches = game.getPlayers().stream()
+						.anyMatch(p -> p.getId().equals(req.buyerPlayerId()) && (p.getAccessToken() != null)
+								&& p.getAccessToken().equals(req.buyerAccessToken()));
+				if (!tokenMatches)
+					throw new ForbiddenResponse("Jeton d'acheteur requis ou incorrect."); //$NON-NLS-1$
+			}
+			try
+			{
+				final Transaction transaction = mGameService.recordTransaction(id, req.sellerPlayerId(),
+						req.buyerPlayerId(), req.cardTypeId(), req.cardLevel(), req.weakCoins(), req.mediumCoins(),
+						req.strongCoins());
+				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
+				ctx.status(201).json(Dtos.TransactionDto.from(transaction));
+			}
+			catch (final IllegalArgumentException | PlayerNotFoundException e)
+			{
+				throw new BadRequestResponse(e.getMessage());
+			}
+		});
+
+		// Historique des transactions d'une partie - route d'administration
+		// (protégée par le PIN comme les autres lectures détaillées d'une
+		// partie), utile pour un futur écran de statistiques/historique
+		// (StatsService.computeWealthOverTime notamment) - pas encore construit.
+		pApp.get("/api/games/{id}/transactions", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			ctx.json(mGameService.listTransactions(id).stream().map(Dtos.TransactionDto::from).toList());
 		});
 
 		// Suppression d'un événement, avec recalcul intégral de l'état de la partie

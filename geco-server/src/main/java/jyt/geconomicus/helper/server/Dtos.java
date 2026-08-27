@@ -52,6 +52,22 @@ public class Dtos
 		}
 	}
 
+	// Étape 3, mode smartphone : une transaction individuelle carte-contre-
+	// jetons entre deux joueurs - voir Transaction.java (geco-engine) pour le
+	// raisonnement complet et sa portée volontairement limitée à ce stade.
+	public record TransactionDto(Integer id, String uuid, Integer sellerPlayerId, String sellerPlayerName,
+			Integer buyerPlayerId, String buyerPlayerName, int turnNumber, long timestamp, String cardTypeId,
+			String cardLevel, int weakCoins, int mediumCoins, int strongCoins, int totalCoinsValue)
+	{
+		static TransactionDto from(final jyt.geconomicus.helper.Transaction t)
+		{
+			return new TransactionDto(t.getId(), t.getUuid(), t.getSeller().getId(), t.getSeller().getName(),
+					t.getBuyer().getId(), t.getBuyer().getName(), t.getTurnNumber(),
+					t.getTstamp() == null ? 0 : t.getTstamp().getTime(), t.getCardTypeId(), t.getCardLevel(),
+					t.getWeakCoins(), t.getMediumCoins(), t.getStrongCoins(), t.totalCoinsValue());
+		}
+	}
+
 	public record GameSummaryDto(Integer id, String description, int moneySystem, int turnNumber,
 			int nbTurnsPlanned, String location, String curdate)
 	{
@@ -169,6 +185,16 @@ public class Dtos
 	public record RecordEventRequest(String type, Integer playerId, int principal, int interest, int weakCards,
 			int mediumCards, int strongCards, Integer counterpartyPlayerId, int goodsFromPlayer,
 			int goodsFromCounterparty, int weakCoins, int mediumCoins, int strongCoins)
+	{
+	}
+
+	// Corps de requête pour POST /api/games/{id}/transactions (étape 3, mode
+	// smartphone). buyerAccessToken : jeton individuel de l'acheteur (voir
+	// Player.accessToken) - preuve que c'est bien lui qui initie l'achat,
+	// vérifié uniquement quand la protection par code est activée (voir
+	// AppSettings.protectionEnabled), exactement comme pour le PIN de partie.
+	public record RecordTransactionRequest(String buyerAccessToken, Integer sellerPlayerId, Integer buyerPlayerId,
+			String cardTypeId, String cardLevel, int weakCoins, int mediumCoins, int strongCoins)
 	{
 	}
 
