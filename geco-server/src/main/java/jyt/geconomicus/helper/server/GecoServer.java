@@ -215,6 +215,18 @@ public class GecoServer
 					ssl.insecurePort = port;
 					ssl.secure = true;
 					ssl.securePort = httpsPort;
+					// Désactivé volontairement (remonté par un utilisateur au premier
+					// test réel sur téléphone) : HTTP/2 par défaut dans ce plugin
+					// déclenche une négociation ALPN via Conscrypt, qui échoue sur
+					// certaines machines ("No ALPN Processor for
+					// sun.security.ssl.SSLEngineImpl [...ConscryptServerALPNProcessor]")
+					// - un problème connu de l'écosystème Jetty/Conscrypt, sans lien
+					// avec notre certificat. On n'a de toute façon aucun besoin de
+					// HTTP/2 ici (pas de flux vidéo/streaming, juste des requêtes API
+					// classiques) : le désactiver évite complètement la négociation
+					// ALPN, l'app tourne alors en HTTPS/1.1 simple, largement
+					// suffisant pour getUserMedia (caméra) et tout le reste.
+					ssl.http2 = false;
 				}));
 		});
 
