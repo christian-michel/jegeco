@@ -32,6 +32,22 @@ const state = {
 };
 
 const el = (id) => document.getElementById(id);
+// Alias court vers i18n.js (chargé avant ce script, voir join.html) - fonctionne
+// même si i18n.js n'a pas encore fini de charger sa traduction (repli sur la
+// clé elle-même, jamais une exception qui casserait l'écran).
+const t = (key, vars) => (window.GecoI18n ? window.GecoI18n.t(key, vars) : key);
+
+// Teintes de peau : mêmes 3 valeurs que le catalogue d'avatars (voir
+// CatalogSeeds côté serveur) - traduites ici via de petites clés .po dédiées
+// (catalog.skin.*), la valeur brute ("claire"/"mate"/"foncée") restant le code
+// utilisé pour le filtrage, jamais affiché tel quel si une traduction existe.
+const SKIN_LABEL_KEYS = { claire: "catalog.skin.claire", mate: "catalog.skin.mate", "foncée": "catalog.skin.foncee" };
+function skinLabelDisplay(rawLabel) {
+	const key = SKIN_LABEL_KEYS[rawLabel];
+	if (!key) return rawLabel;
+	const translated = t(key);
+	return translated === key ? rawLabel : translated;
+}
 
 // ---------- Génération de l'avatar en SVG (pas besoin d'illustrations externes) ----------
 function buildAvatarSVG(cfg) {
@@ -109,7 +125,7 @@ async function initAvatarGallery() {
 	skinLabels.forEach((label) => {
 		const opt = document.createElement("option");
 		opt.value = label;
-		opt.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+		opt.textContent = skinLabelDisplay(label);
 		skinSelect.appendChild(opt);
 	});
 
@@ -121,7 +137,7 @@ async function initAvatarGallery() {
 		const grid = el("avatarGallery");
 		grid.innerHTML = "";
 		if (filtered.length === 0) {
-			grid.innerHTML = '<div class="avatar-gallery-empty">Aucun avatar ne correspond à ces filtres.</div>';
+			grid.innerHTML = `<div class="avatar-gallery-empty">${t("join.gallery_empty")}</div>`;
 			return;
 		}
 		for (const entry of filtered) {
@@ -201,7 +217,7 @@ function initStep1() {
 	for (let a = 6; a <= 99; a++) {
 		const opt = document.createElement("option");
 		opt.value = String(a);
-		opt.textContent = a + " ans";
+		opt.textContent = t("join.age_option", { age: a });
 		if (a === state.age) opt.selected = true;
 		ageSelect.appendChild(opt);
 	}
@@ -223,7 +239,7 @@ function initStep1() {
 	el("btnStep1Next").addEventListener("click", () => {
 		const name = el("fPrenom").value.trim();
 		if (!name) {
-			el("nameError").textContent = "Merci d'indiquer votre prénom.";
+			el("nameError").textContent = t("join.error_missing_name");
 			el("nameError").classList.remove("hidden");
 			return;
 		}
@@ -232,7 +248,7 @@ function initStep1() {
 		state.age = parseInt(el("fAge").value, 10);
 		el("step1").classList.add("hidden");
 		el("step2").classList.remove("hidden");
-		el("joinSubtitle").textContent = "Créez votre avatar";
+		el("joinSubtitle").textContent = t("join.subtitle_step2");
 		renderAvatarPreview();
 	});
 }
@@ -302,7 +318,7 @@ function buildAvatarConfigForSubmit() {
 async function joinGame() {
 	const btn = el("btnJoin");
 	btn.disabled = true;
-	btn.textContent = "Inscription...";
+	btn.textContent = t("join.btn_joining");
 	try {
 		const res = await fetch(`/api/games/${state.gameId}/join`, {
 			method: "POST",
@@ -316,7 +332,7 @@ async function joinGame() {
 		});
 		if (!res.ok) {
 			const body = await res.json().catch(() => ({}));
-			throw new Error(body.error || `Erreur ${res.status}`);
+			throw new Error(body.error || t("join.generic_error", { status: res.status }));
 		}
 		// Sauvegarde locale : ce téléphone retient qui il est pour cette partie
 		// (utile pour les futures phases : rejoindre à nouveau, échanges...).
@@ -325,14 +341,14 @@ async function joinGame() {
 
 		el("step2").classList.add("hidden");
 		el("stepDone").classList.remove("hidden");
-		el("joinSubtitle").textContent = "Inscription réussie";
-		el("doneTitle").textContent = `Bienvenue, ${state.name} !`;
+		el("joinSubtitle").textContent = t("join.subtitle_done");
+		el("doneTitle").textContent = t("join.done_title", { name: state.name });
 		el("avatarPreviewDone").innerHTML = "";
 		el("avatarPreviewDone").appendChild(el("avatarPreview").firstElementChild.cloneNode(true));
 	} catch (err) {
 		btn.disabled = false;
-		btn.textContent = "Rejoindre la partie !";
-		alert("Impossible de rejoindre la partie : " + err.message);
+		btn.textContent = t("join.btn_join");
+		alert(t("join.join_failed_prefix") + err.message);
 	}
 }
 
@@ -343,7 +359,7 @@ async function init() {
 
 	if (!state.gameId) {
 		el("joinError").classList.remove("hidden");
-		el("joinSubtitle").textContent = "Lien invalide";
+		el("joinSubtitle").textContent = t("join.subtitle_invalid_link");
 		return;
 	}
 
@@ -352,11 +368,11 @@ async function init() {
 		if (!res.ok) throw new Error("not found");
 		const game = await res.json();
 		el("joinSubtitle").textContent = game.description
-			? `Rejoindre : ${game.description}`
-			: "Bienvenue dans la partie !";
+			? t("join.subtitle_join_named", { name: game.description })
+			: t("join.subtitle_default");
 	} catch (err) {
 		el("joinError").classList.remove("hidden");
-		el("joinSubtitle").textContent = "Partie introuvable";
+		el("joinSubtitle").textContent = t("join.subtitle_not_found");
 		return;
 	}
 
@@ -365,4 +381,21 @@ async function init() {
 	initStep2();
 }
 
-init();
+// Démarrage retardé jusqu'à la première traduction effective (voir i18n.js,
+// onChange déclenché une fois la langue chargée) : sans ça, les textContent
+// posés via t() ci-dessus risqueraient d'afficher brièvement la clé brute
+// (ex. "join.subtitle_default") si le fetch du jeu répond avant celui de la
+// langue - contrairement aux textes [data-i18n] du HTML, qui gardent leur
+// valeur française par défaut tant qu'aucune traduction n'est appliquée.
+let started = false;
+function startOnce() {
+	if (started) return;
+	started = true;
+	init();
+}
+if (window.GecoI18n) window.GecoI18n.onChange(startOnce);
+// Filet de sécurité : si i18n.js ne répond jamais (réseau capricieux, script
+// bloqué...), on démarre quand même après un court délai plutôt que de
+// bloquer l'écran indéfiniment - les textes passeront alors par leur clé
+// brute en repli, pas idéal mais l'écran reste utilisable.
+setTimeout(startOnce, 1500);

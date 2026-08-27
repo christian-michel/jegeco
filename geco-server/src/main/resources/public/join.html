@@ -11,64 +11,65 @@
 		<header class="join-header">
 			<div class="join-logo">Ğ</div>
 			<h1>GÉCONOMICUS</h1>
-			<p id="joinSubtitle">Bienvenue dans la partie !</p>
+			<p id="joinSubtitle" data-i18n="join.subtitle_default">Bienvenue dans la partie !</p>
 		</header>
 
 		<!-- Écran "partie introuvable" (lien invalide ou expiré) -->
 		<div id="joinError" class="join-card hidden">
-			<p>⚠️ Impossible de trouver cette partie. Vérifiez le lien ou redemandez un
+			<p data-i18n="join.error_not_found">⚠️ Impossible de trouver cette partie. Vérifiez le lien ou redemandez un
 			nouveau QR code à l'animateur.</p>
 		</div>
 
 		<!-- Étape 1 : créer votre joueur -->
 		<section id="step1" class="join-card hidden">
-			<h2>1. Créez votre joueur</h2>
+			<h2 data-i18n="join.step1_title">1. Créez votre joueur</h2>
 
-			<label class="field-label" for="fPrenom">Votre prénom</label>
-			<input id="fPrenom" class="field-input" type="text" maxlength="24" placeholder="Alice" autocomplete="given-name">
+			<label class="field-label" for="fPrenom" data-i18n="join.name_label">Votre prénom</label>
+			<input id="fPrenom" class="field-input" type="text" maxlength="24" placeholder="Alice"
+				data-i18n-placeholder="join.name_placeholder" autocomplete="given-name">
 			<p id="nameError" class="field-error hidden"></p>
 
-			<label class="field-label" for="fAge">Votre âge</label>
+			<label class="field-label" for="fAge" data-i18n="join.age_label">Votre âge</label>
 			<select id="fAge" class="field-input">
 				<!-- options générées en JS -->
 			</select>
 
-			<label class="field-label">Votre couleur</label>
+			<label class="field-label" data-i18n="join.color_label">Votre couleur</label>
 			<div id="colorPicker" class="swatch-row"></div>
 
-			<button id="btnStep1Next" class="btn-primary btn-block">Continuer</button>
+			<button id="btnStep1Next" class="btn-primary btn-block" data-i18n="join.btn_continue">Continuer</button>
 		</section>
 
 		<!-- Étape 2 : créer votre avatar -->
 		<section id="step2" class="join-card hidden">
-			<h2>2. Créez votre avatar</h2>
+			<h2 data-i18n="join.step2_title">2. Créez votre avatar</h2>
 
 			<div class="avatar-preview-wrap">
 				<div id="avatarPreview" class="avatar-preview"></div>
 			</div>
 
 			<div class="avatar-mode-tabs">
-				<button type="button" id="modeGalleryBtn" class="avatar-mode-tab active">Galerie</button>
-				<button type="button" id="modeCustomBtn" class="avatar-mode-tab">Personnalisé</button>
+				<button type="button" id="modeGalleryBtn" class="avatar-mode-tab active" data-i18n="join.mode_gallery">Galerie</button>
+				<button type="button" id="modeCustomBtn" class="avatar-mode-tab" data-i18n="join.mode_custom">Personnalisé</button>
 			</div>
 
 			<!-- Mode Galerie : avatars prêts à l'emploi, filtrables -->
 			<div id="galleryMode">
 				<div class="avatar-filters">
 					<select id="filterGenre" class="filter-select">
-						<option value="">Genre : tous</option>
-						<option value="femme">Femme</option>
-						<option value="homme">Homme</option>
-						<option value="neutre">Neutre</option>
+						<option value="" data-i18n="join.filter_genre_all">Genre : tous</option>
+						<option value="femme" data-i18n="catalog.avatar_genre.femme">Femme</option>
+						<option value="homme" data-i18n="catalog.avatar_genre.homme">Homme</option>
+						<option value="neutre" data-i18n="catalog.avatar_genre.neutre">Neutre</option>
 					</select>
 					<select id="filterAge" class="filter-select">
-						<option value="">Âge : tous</option>
-						<option value="enfant">Enfant</option>
-						<option value="adulte">Adulte</option>
-						<option value="senior">Senior</option>
+						<option value="" data-i18n="join.filter_age_all">Âge : tous</option>
+						<option value="enfant" data-i18n="catalog.avatar_age.enfant">Enfant</option>
+						<option value="adulte" data-i18n="catalog.avatar_age.adulte">Adulte</option>
+						<option value="senior" data-i18n="catalog.avatar_age.senior">Senior</option>
 					</select>
 					<select id="filterSkin" class="filter-select">
-						<option value="">Teint : tous</option>
+						<option value="" data-i18n="join.filter_skin_all">Teint : tous</option>
 					</select>
 				</div>
 				<div id="avatarGallery" class="avatar-gallery"></div>
@@ -77,15 +78,15 @@
 			<!-- Mode Personnalisé : générateur SVG (repli, toujours disponible) -->
 			<div id="customMode" class="hidden">
 				<div class="avatar-tabs">
-					<button type="button" class="avatar-tab active" data-tab="peau">Peau</button>
-					<button type="button" class="avatar-tab" data-tab="cheveux">Cheveux</button>
-					<button type="button" class="avatar-tab" data-tab="accessoire">Accessoire</button>
+					<button type="button" class="avatar-tab active" data-tab="peau" data-i18n="join.tab_skin">Peau</button>
+					<button type="button" class="avatar-tab" data-tab="cheveux" data-i18n="join.tab_hair">Cheveux</button>
+					<button type="button" class="avatar-tab" data-tab="accessoire" data-i18n="join.tab_accessory">Accessoire</button>
 				</div>
 				<div id="avatarOptions" class="avatar-options"></div>
 			</div>
 
-			<button id="btnJoin" class="btn-primary btn-block">Rejoindre la partie !</button>
-			<p class="join-footnote">En rejoignant la partie, vous acceptez les règles du jeu.</p>
+			<button id="btnJoin" class="btn-primary btn-block" data-i18n="join.btn_join">Rejoindre la partie !</button>
+			<p class="join-footnote" data-i18n="join.footnote">En rejoignant la partie, vous acceptez les règles du jeu.</p>
 		</section>
 
 		<!-- Confirmation -->
@@ -93,11 +94,12 @@
 			<div class="avatar-preview-wrap">
 				<div id="avatarPreviewDone" class="avatar-preview"></div>
 			</div>
-			<h2 id="doneTitle">C'est bon !</h2>
-			<p>Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur son écran.</p>
+			<h2 id="doneTitle" data-i18n="join.done_title_generic">C'est bon !</h2>
+			<p data-i18n="join.done_body">Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur son écran.</p>
 		</section>
 	</div>
 
+	<script src="/js/i18n.js"></script>
 	<script src="/js/player.js"></script>
 </body>
 </html>

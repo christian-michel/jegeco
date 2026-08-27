@@ -17,32 +17,40 @@
 		voir l'historique, etc.) est le sujet de l'étape 3 - cette page se contente
 		de montrer que le jeton fonctionne et donne un premier aperçu utile dès
 		maintenant, sans anticiper des écrans qui restent à concevoir.
+
+		i18n.js chargé comme sur join.html (voir plus bas) : le commentaire d'origine
+		("pas de dépendance à app.js/i18n.js") ne visait que app.js, qui suppose une
+		session animateur - i18n.js, lui, est autonome (aucune dépendance à une
+		session), donc réutilisable tel quel ici (remonté par un utilisateur le
+		27/08/2026 : "le jeu est totalement multilangue").
 	-->
 	<div class="join-shell">
 		<header class="join-header">
 			<div class="join-logo">Ğ</div>
 			<h1>GÉCONOMICUS</h1>
-			<p id="subtitle">Votre partie</p>
+			<p id="subtitle" data-i18n="playerView.subtitle">Votre partie</p>
 		</header>
 
 		<div id="viewError" class="join-card hidden">
-			<p>⚠️ Lien invalide ou expiré. Redemandez un lien à jour à l'animateur.</p>
+			<p data-i18n="playerView.error_invalid_link">⚠️ Lien invalide ou expiré. Redemandez un lien à jour à l'animateur.</p>
 		</div>
 
 		<div id="viewContent" class="join-card hidden">
 			<h2 id="playerName">—</h2>
 			<p id="playerStatus" style="color:var(--text-dim);font-size:0.9rem;"></p>
 			<div id="playerDetails"></div>
-			<p style="font-size:0.78rem;color:var(--text-dim);margin-top:1.5rem;">
+			<p style="font-size:0.78rem;color:var(--text-dim);margin-top:1.5rem;" data-i18n="playerView.footnote">
 				Cette page se rafraîchit automatiquement. Gardez ce lien pour toute la partie.
 			</p>
 		</div>
 	</div>
 
+	<script src="/js/i18n.js"></script>
 	<script>
-		// Remonté par un utilisateur : page volontairement autonome (pas de
-		// dépendance à app.js/i18n.js, qui supposent une session animateur) - un
-		// simple fetch, pas besoin de plus pour cette consultation minimale.
+		// Alias court vers i18n.js (voir player.js pour le même principe et la
+		// justification du délai de démarrage retardé au premier onChange).
+		const t = (key, vars) => (window.GecoI18n ? window.GecoI18n.t(key, vars) : key);
+
 		const params = new URLSearchParams(window.location.search);
 		const gameId = params.get("gameId");
 		const token = params.get("token");
@@ -59,23 +67,35 @@
 				document.getElementById("viewContent").classList.remove("hidden");
 				document.getElementById("playerName").textContent = player.name;
 				document.getElementById("playerStatus").textContent = player.active
-					? "En jeu" : "En attente / hors jeu";
+					? t("playerView.status_active") : t("playerView.status_inactive");
 				const details = document.getElementById("playerDetails");
 				// PlayerDto contient toujours les deux jeux de champs (dette/libre et
 				// troc) quel que soit le système - on affiche juste ceux qui sont
 				// significatifs, sans essayer de deviner le système de la partie.
 				let detailsHtml = "";
-				if (player.goodsCount > 0) detailsHtml += `<p><strong>${player.goodsCount}</strong> biens</p>`;
+				if (player.goodsCount > 0)
+					detailsHtml += `<p>${t("playerView.goods_count", { n: player.goodsCount })}</p>`;
 				if ((player.curDebt > 0) || (player.curInterest > 0))
-					detailsHtml += `<p>Crédit en cours : <strong>${player.curDebt}</strong> (intérêts : ${player.curInterest})</p>`;
+					detailsHtml += `<p>${t("playerView.current_credit", { debt: player.curDebt, interest: player.curInterest })}</p>`;
 				details.innerHTML = detailsHtml;
 			} catch (err) {
 				document.getElementById("viewError").classList.remove("hidden");
 				document.getElementById("viewContent").classList.add("hidden");
 			}
 		}
-		refresh();
-		setInterval(refresh, 5000);
+
+		// Même précaution que sur join.html : attendre la première traduction
+		// effective avant le premier refresh(), pour ne jamais afficher une clé
+		// brute le temps que la langue se charge.
+		let started = false;
+		function startOnce() {
+			if (started) return;
+			started = true;
+			refresh();
+			setInterval(refresh, 5000);
+		}
+		if (window.GecoI18n) window.GecoI18n.onChange(startOnce);
+		setTimeout(startOnce, 1500);
 	</script>
 </body>
 </html>

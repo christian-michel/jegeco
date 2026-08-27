@@ -1352,3 +1352,135 @@ msgstr "Adult"
 
 msgid "catalog.avatar_age.senior"
 msgstr "Senior"
+
+# ============ Mobile screen "Join the game" (join.html/player.js) ============
+msgid "join.subtitle_default"
+msgstr "Welcome to the game!"
+
+msgid "join.error_not_found"
+msgstr "⚠️ Could not find this game. Check the link or ask the facilitator for a new QR code."
+
+msgid "join.step1_title"
+msgstr "1. Create your player"
+
+msgid "join.name_label"
+msgstr "Your first name"
+
+msgid "join.name_placeholder"
+msgstr "Alice"
+
+msgid "join.age_label"
+msgstr "Your age"
+
+msgid "join.age_option"
+msgstr "{age} years old"
+
+msgid "join.color_label"
+msgstr "Your color"
+
+msgid "join.btn_continue"
+msgstr "Continue"
+
+msgid "join.error_missing_name"
+msgstr "Please enter your first name."
+
+msgid "join.step2_title"
+msgstr "2. Create your avatar"
+
+msgid "join.mode_gallery"
+msgstr "Gallery"
+
+msgid "join.mode_custom"
+msgstr "Custom"
+
+msgid "join.filter_genre_all"
+msgstr "Gender: all"
+
+msgid "join.filter_age_all"
+msgstr "Age: all"
+
+msgid "join.filter_skin_all"
+msgstr "Skin tone: all"
+
+msgid "join.gallery_empty"
+msgstr "No avatar matches these filters."
+
+msgid "join.tab_skin"
+msgstr "Skin"
+
+msgid "join.tab_hair"
+msgstr "Hair"
+
+msgid "join.tab_accessory"
+msgstr "Accessory"
+
+msgid "join.btn_join"
+msgstr "Join the game!"
+
+msgid "join.btn_joining"
+msgstr "Joining..."
+
+msgid "join.footnote"
+msgstr "By joining the game, you agree to its rules."
+
+msgid "join.done_title_generic"
+msgstr "All set!"
+
+msgid "join.done_title"
+msgstr "Welcome, {name}!"
+
+msgid "join.done_body"
+msgstr "You're registered. Wait for the facilitator to start the game on their screen."
+
+msgid "join.subtitle_step2"
+msgstr "Create your avatar"
+
+msgid "join.subtitle_done"
+msgstr "Registration successful"
+
+msgid "join.subtitle_invalid_link"
+msgstr "Invalid link"
+
+msgid "join.subtitle_not_found"
+msgstr "Game not found"
+
+msgid "join.subtitle_join_named"
+msgstr "Joining: {name}"
+
+msgid "join.generic_error"
+msgstr "Error {status}"
+
+msgid "join.join_failed_prefix"
+msgstr "Could not join the game: "
+
+# ---- Skin tones (avatar catalog) ----
+msgid "catalog.skin.claire"
+msgstr "Light"
+
+msgid "catalog.skin.mate"
+msgstr "Medium"
+
+msgid "catalog.skin.foncee"
+msgstr "Dark"
+
+# ============ Mobile screen "My game" (player-view.html) ============
+msgid "playerView.subtitle"
+msgstr "Your game"
+
+msgid "playerView.error_invalid_link"
+msgstr "⚠️ Invalid or expired link. Ask the facilitator for an up-to-date link."
+
+msgid "playerView.footnote"
+msgstr "This page refreshes automatically. Keep this link for the whole game."
+
+msgid "playerView.status_active"
+msgstr "Playing"
+
+msgid "playerView.status_inactive"
+msgstr "Waiting / not playing"
+
+msgid "playerView.goods_count"
+msgstr "{n} goods"
+
+msgid "playerView.current_credit"
+msgstr "Current credit: {debt} (interest: {interest})"

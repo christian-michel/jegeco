@@ -1352,3 +1352,135 @@ msgstr "Adulte"
 
 msgid "catalog.avatar_age.senior"
 msgstr "Senior"
+
+# ============ Écran mobile "Rejoindre la partie" (join.html/player.js) ============
+msgid "join.subtitle_default"
+msgstr "Bienvenue dans la partie !"
+
+msgid "join.error_not_found"
+msgstr "⚠️ Impossible de trouver cette partie. Vérifiez le lien ou redemandez un nouveau QR code à l'animateur."
+
+msgid "join.step1_title"
+msgstr "1. Créez votre joueur"
+
+msgid "join.name_label"
+msgstr "Votre prénom"
+
+msgid "join.name_placeholder"
+msgstr "Alice"
+
+msgid "join.age_label"
+msgstr "Votre âge"
+
+msgid "join.age_option"
+msgstr "{age} ans"
+
+msgid "join.color_label"
+msgstr "Votre couleur"
+
+msgid "join.btn_continue"
+msgstr "Continuer"
+
+msgid "join.error_missing_name"
+msgstr "Merci d'indiquer votre prénom."
+
+msgid "join.step2_title"
+msgstr "2. Créez votre avatar"
+
+msgid "join.mode_gallery"
+msgstr "Galerie"
+
+msgid "join.mode_custom"
+msgstr "Personnalisé"
+
+msgid "join.filter_genre_all"
+msgstr "Genre : tous"
+
+msgid "join.filter_age_all"
+msgstr "Âge : tous"
+
+msgid "join.filter_skin_all"
+msgstr "Teint : tous"
+
+msgid "join.gallery_empty"
+msgstr "Aucun avatar ne correspond à ces filtres."
+
+msgid "join.tab_skin"
+msgstr "Peau"
+
+msgid "join.tab_hair"
+msgstr "Cheveux"
+
+msgid "join.tab_accessory"
+msgstr "Accessoire"
+
+msgid "join.btn_join"
+msgstr "Rejoindre la partie !"
+
+msgid "join.btn_joining"
+msgstr "Inscription..."
+
+msgid "join.footnote"
+msgstr "En rejoignant la partie, vous acceptez les règles du jeu."
+
+msgid "join.done_title_generic"
+msgstr "C'est bon !"
+
+msgid "join.done_title"
+msgstr "Bienvenue, {name} !"
+
+msgid "join.done_body"
+msgstr "Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur son écran."
+
+msgid "join.subtitle_step2"
+msgstr "Créez votre avatar"
+
+msgid "join.subtitle_done"
+msgstr "Inscription réussie"
+
+msgid "join.subtitle_invalid_link"
+msgstr "Lien invalide"
+
+msgid "join.subtitle_not_found"
+msgstr "Partie introuvable"
+
+msgid "join.subtitle_join_named"
+msgstr "Rejoindre : {name}"
+
+msgid "join.generic_error"
+msgstr "Erreur {status}"
+
+msgid "join.join_failed_prefix"
+msgstr "Impossible de rejoindre la partie : "
+
+# ---- Teintes de peau (catalogue avatars) ----
+msgid "catalog.skin.claire"
+msgstr "Claire"
+
+msgid "catalog.skin.mate"
+msgstr "Mate"
+
+msgid "catalog.skin.foncee"
+msgstr "Foncée"
+
+# ============ Écran mobile "Ma partie" (player-view.html) ============
+msgid "playerView.subtitle"
+msgstr "Votre partie"
+
+msgid "playerView.error_invalid_link"
+msgstr "⚠️ Lien invalide ou expiré. Redemandez un lien à jour à l'animateur."
+
+msgid "playerView.footnote"
+msgstr "Cette page se rafraîchit automatiquement. Gardez ce lien pour toute la partie."
+
+msgid "playerView.status_active"
+msgstr "En jeu"
+
+msgid "playerView.status_inactive"
+msgstr "En attente / hors jeu"
+
+msgid "playerView.goods_count"
+msgstr "{n} biens"
+
+msgid "playerView.current_credit"
+msgstr "Crédit en cours : {debt} (intérêts : {interest})"
