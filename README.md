@@ -44,9 +44,6 @@ système d'échange — le troc —, corrections de plusieurs formules après v�
 avec l'auteur du projet actuel, nouveau mode "strict TRM" en monnaie libre), en plus
 de la modernisation technique et de l'interface détaillée plus bas.
 
-⚠️ **Licence** : à vérifier sur le dépôt d'origine avant publication — je n'ai pas pu
-confirmer avec certitude la licence exacte utilisée par jytou pour ce projet.
-
 ## Démarrage rapide
 
 **Le plus simple** : lancez le script correspondant à votre système, à la racine du
