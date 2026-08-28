@@ -10,6 +10,28 @@
    ralentir le chargement sur les écrans où la rapidité compte (achat/vente).
 */
 
+/* Police "Sora" hébergée localement (voir /fonts/) plutôt que via Google
+   Fonts - remonté par un utilisateur (28/08/2026) : l'app doit rester
+   visuellement stable même sans accès internet réel pendant un atelier
+   (partage de connexion sans accès internet, réseau local isolé...). Fichiers
+   récupérés via le paquet npm @fontsource/sora (licence SIL Open Font
+   License 1.1, voir fonts/LICENSE-sora.txt) - sous-ensemble "latin" seulement
+   (suffisant pour le français, y compris les caractères accentués : la plage
+   U+0000-00FF couvre é/è/à/ç/ù/ô etc.), 3 graisses (600/700/800), ~15 Ko
+   chacune. */
+@font-face {
+	font-family: "Sora"; font-style: normal; font-weight: 600; font-display: swap;
+	src: url("/fonts/sora-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+	font-family: "Sora"; font-style: normal; font-weight: 700; font-display: swap;
+	src: url("/fonts/sora-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+	font-family: "Sora"; font-style: normal; font-weight: 800; font-display: swap;
+	src: url("/fonts/sora-latin-800-normal.woff2") format("woff2");
+}
+
 :root {
 	--ink: #171339;
 	--ink-soft: #2a2359;
@@ -147,7 +169,10 @@ body {
    ce sont deux feuilles de style distinctes. */
 .galilee-explainer { font-size: 0.82rem; color: var(--text-dim); text-align: center; margin: 0 0 0.9rem; line-height: 1.4; }
 
-#stepDone { text-align: center; }
+#stepDone { text-align: center; position: relative; padding-top: 100px; }
+#stepDone .avatar-preview-wrap {
+	position: absolute; top: -84px; left: 50%; transform: translateX(-50%); margin: 0 0 1.4rem;
+}
 #stepDone h2 { margin-top: 0.6rem; font-size: 1.3rem; }
 
 /* ============ Galerie d'avatars filtrable ============ */
