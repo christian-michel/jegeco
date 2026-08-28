@@ -1594,3 +1594,25 @@ msgstr "Vous ne pouvez pas acheter votre propre carte."
 
 msgid "trade.result_error_title"
 msgstr "Une erreur est survenue"
+
+# ============ Solde en jetons dérivé (étape 3, hub d'échange) ============
+msgid "trade.balance_label"
+msgstr "Solde jetons (échanges)"
+
+msgid "trade.balance_value"
+msgstr "{n} jetons"
+
+msgid "trade.btn_cancel_sell"
+msgstr "✕ Annuler la vente"
+
+msgid "trade.balance_row_current"
+msgstr "Votre solde actuel"
+
+msgid "trade.balance_row_to_pay"
+msgstr "Montant à payer"
+
+msgid "trade.balance_row_after"
+msgstr "Nouveau solde"
+
+msgid "trade.result_success_body_balance"
+msgstr "Vous avez acheté : {name}. Nouveau solde : {balance} jetons."

@@ -1594,3 +1594,25 @@ msgstr "You cannot buy your own card."
 
 msgid "trade.result_error_title"
 msgstr "Something went wrong"
+
+# ============ Derived token balance (step 3, trading hub) ============
+msgid "trade.balance_label"
+msgstr "Trade token balance"
+
+msgid "trade.balance_value"
+msgstr "{n} tokens"
+
+msgid "trade.btn_cancel_sell"
+msgstr "✕ Cancel sale"
+
+msgid "trade.balance_row_current"
+msgstr "Your current balance"
+
+msgid "trade.balance_row_to_pay"
+msgstr "Amount to pay"
+
+msgid "trade.balance_row_after"
+msgstr "New balance"
+
+msgid "trade.result_success_body_balance"
+msgstr "You bought: {name}. New balance: {balance} tokens."

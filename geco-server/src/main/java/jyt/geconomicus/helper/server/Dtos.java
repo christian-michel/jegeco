@@ -36,6 +36,24 @@ public class Dtos
 		}
 	}
 
+	// Réponse de GET /api/games/{id}/players/by-token/{token} (écran joueur,
+	// player-view.html) - PlayerDto + le solde de jetons dérivé (voir
+	// GameService.computeTradeBalance). Volontairement séparé de PlayerDto
+	// (utilisé ailleurs pour des LISTES de joueurs - y ajouter une requête
+	// supplémentaire par joueur y créerait un problème de performance N+1) :
+	// cette route ne renvoie jamais qu'UN seul joueur, le coût est négligeable.
+	public record PlayerSelfViewDto(Integer id, String name, boolean active, int curDebt, int curInterest,
+			boolean visitedBank, Integer declaredAge, String favoriteColor, String avatarConfigJson,
+			int goodsCount, String accessToken, int tradeBalance)
+	{
+		static PlayerSelfViewDto from(final Player p, final int pTradeBalance)
+		{
+			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
+					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
+					p.getGoodsCount(), p.getAccessToken(), pTradeBalance);
+		}
+	}
+
 	public record EventDto(Integer id, String type, String typeLabel, Integer playerId, String playerName,
 			long timestamp, int principal, int interest, Integer counterpartyPlayerId, String counterpartyPlayerName,
 			int goodsFromPlayer, int goodsFromCounterparty)

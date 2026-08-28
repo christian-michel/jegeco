@@ -879,7 +879,7 @@ public class GecoServer
 				ctx.status(404).json(java.util.Map.of("error", "Jeton inconnu.")); //$NON-NLS-1$ //$NON-NLS-2$
 				return;
 			}
-			ctx.json(PlayerDto.from(player, 0));
+			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId())));
 		});
 
 		// Suppression totale d'un joueur (et de ses événements associés), avec recalcul

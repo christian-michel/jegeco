@@ -80,6 +80,7 @@ async function refreshPlayer() {
 		el("viewError").classList.add("hidden");
 		el("playerName").textContent = state.player.name;
 		el("playerStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
+		el("balanceCardValue").textContent = t("trade.balance_value", { n: state.player.tradeBalance });
 		const details = el("playerDetails");
 		let detailsHtml = "";
 		if (state.player.goodsCount > 0) detailsHtml += `<p>${t("playerView.goods_count", { n: state.player.goodsCount })}</p>`;
@@ -141,8 +142,8 @@ async function openSellPicker() {
 function sellCardRowHtml(entry) {
 	const visual = state.visualsCatalog.find((v) => v.id === entry.visualId);
 	const thumb = visual
-		? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" class="trade-card-thumb" onerror="this.outerHTML='<div class=&quot;trade-card-thumb-fallback&quot;>🖼️</div>'">`
-		: `<div class="trade-card-thumb-fallback">🖼️</div>`;
+		? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" class="trade-card-thumb level-${entry.niveau}" onerror="this.outerHTML='<div class=&quot;trade-card-thumb-fallback level-${entry.niveau}&quot;>🖼️</div>'">`
+		: `<div class="trade-card-thumb-fallback level-${entry.niveau}">🖼️</div>`;
 	return `
 	<button type="button" class="trade-card-row" data-id="${escapeHtmlLocal(entry.id)}">
 		${thumb}
@@ -170,12 +171,15 @@ function renderSellPriceCardInfo() {
 	const thumb = visual
 		? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" onerror="this.outerHTML='<div class=&quot;trade-card-thumb-fallback&quot;>🖼️</div>'">`
 		: `<div class="trade-card-thumb-fallback">🖼️</div>`;
-	el("sellPriceCardInfo").innerHTML = `
+	const html = `
 		${thumb}
 		<div class="trade-card-info-main">
 			<span class="trade-card-info-name">${escapeHtmlLocal(catalogTextValue(entry.nom) || entry.id)}</span>
 			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", entry.niveau))}</span>
 		</div>`;
+	const infoEl = el("sellPriceCardInfo");
+	infoEl.className = `trade-card-info level-${entry.niveau}`;
+	infoEl.innerHTML = html;
 }
 
 function renderPriceSteppers() {
@@ -235,6 +239,11 @@ async function createOfferAndShowQr() {
 }
 
 function renderQrAndCountdown(code, expiresAt) {
+	// Contexte de la carte, conservé visible pendant tout l'affichage du QR
+	// (voir player-view.html) - même contenu que l'étape prix.
+	el("sellQrCardInfo").innerHTML = el("sellPriceCardInfo").innerHTML;
+	el("sellQrCardInfo").className = el("sellPriceCardInfo").className;
+
 	const box = el("sellQrCode");
 	box.innerHTML = "";
 	// eslint-disable-next-line no-undef
@@ -412,7 +421,9 @@ function renderScanConfirm(offer) {
 	if (offer.strongCoins > 0) priceParts.push(t("trade.price_strong", { n: offer.strongCoins }));
 	const priceText = priceParts.length > 0 ? priceParts.join(" + ") : t("trade.price_free");
 
-	el("scanConfirmInfo").innerHTML = `
+	const infoEl = el("scanConfirmInfo");
+	infoEl.className = `trade-card-info level-${offer.cardLevel}`;
+	infoEl.innerHTML = `
 		<div class="trade-card-thumb-fallback">🖼️</div>
 		<div class="trade-card-info-main">
 			<span class="trade-card-info-name">${escapeHtmlLocal(name)}</span>
@@ -420,6 +431,28 @@ function renderScanConfirm(offer) {
 			<span class="trade-card-info-price">${escapeHtmlLocal(priceText)}</span>
 		</div>`;
 	el("scanConfirmError").classList.add("hidden");
+
+	// Solde avant/après (voir GameService.computeTradeBalance) - jamais
+	// inventé : state.player.tradeBalance vient du dernier chargement
+	// (refreshPlayer), la valeur "après" est calculée ici côté client pour un
+	// affichage immédiat, mais c'est bien le SERVEUR qui fait foi au moment
+	// de la confirmation réelle (voir confirmPurchase).
+	const price = offer.weakCoins + (2 * offer.mediumCoins) + (4 * offer.strongCoins);
+	const current = state.player.tradeBalance || 0;
+	const after = current - price;
+	el("scanConfirmBalanceRows").innerHTML = `
+		<div class="trade-balance-row">
+			<span class="trade-balance-row-label">${escapeHtmlLocal(t("trade.balance_row_current"))}</span>
+			<span class="trade-balance-row-value">${current}</span>
+		</div>
+		<div class="trade-balance-row">
+			<span class="trade-balance-row-label">${escapeHtmlLocal(t("trade.balance_row_to_pay"))}</span>
+			<span class="trade-balance-row-value negative">−${price}</span>
+		</div>
+		<div class="trade-balance-row total">
+			<span class="trade-balance-row-label">${escapeHtmlLocal(t("trade.balance_row_after"))}</span>
+			<span class="trade-balance-row-value">${after}</span>
+		</div>`;
 }
 
 async function confirmPurchase() {
@@ -437,8 +470,15 @@ async function confirmPurchase() {
 			const body = await res.json().catch(() => ({}));
 			throw new Error(body.error || body.msg || t("join.generic_error", { status: res.status }));
 		}
+		// Le prix qui fait foi est celui renvoyé par le serveur (TransactionDto.
+		// totalCoinsValue), pas une estimation côté client - même s'ils
+		// coïncident presque toujours en pratique.
+		const transaction = await res.json();
+		const newBalance = (state.player.tradeBalance || 0) - transaction.totalCoinsValue;
 		showTradeResult(true, t("trade.result_success_title"),
-			t("trade.result_success_body", { name: catalogTextValue(offer.cardName) || offer.cardTypeId }));
+			t("trade.result_success_body_balance", {
+				name: catalogTextValue(offer.cardName) || offer.cardTypeId, balance: newBalance,
+			}));
 		refreshPlayer();
 	} catch (err) {
 		el("scanConfirmError").textContent = err.message;
@@ -477,6 +517,7 @@ function initTradeUI() {
 	initPriceSteppers();
 	el("btnGenerateQr").addEventListener("click", createOfferAndShowQr);
 	el("btnRegenerateQr").addEventListener("click", createOfferAndShowQr);
+	el("btnCancelSell").addEventListener("click", () => showScreen("viewContent"));
 
 	el("btnSubmitManualCode").addEventListener("click", submitManualCode);
 	el("manualCodeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") submitManualCode(); });

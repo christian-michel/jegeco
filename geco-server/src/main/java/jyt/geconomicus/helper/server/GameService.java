@@ -430,6 +430,45 @@ public class GameService
 	}
 
 	/**
+	 * Solde en jetons d'un joueur, DÉRIVÉ de l'historique des transactions
+	 * individuelles carte-contre-jetons (étape 3, mode smartphone) - voir
+	 * Transaction.java. Volontairement distinct de curDebt/curInterest (le
+	 * système dette/libre "classique", qui ne connaît pas ce mécanisme) :
+	 * ce solde ne reflète QUE les ventes/achats de cartes par QR, pas une
+	 * dotation initiale ni les intérêts de crédit - remonté un utilisateur
+	 * (28/08/2026) souhaitant afficher "solde avant/après" sur les écrans
+	 * d'achat, sur le modèle de son mockup de référence. N'invente aucune
+	 * donnée : un joueur qui n'a encore fait aucun échange a un solde de 0,
+	 * affiché tel quel plutôt que de simuler une dotation de départ que le
+	 * jeu ne définit pas encore pour ce mode.
+	 */
+	public int computeTradeBalance(final int pGameId, final int pPlayerId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final List<Transaction> txs = em.createQuery(
+					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid)", //$NON-NLS-1$
+					Transaction.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.getResultList();
+			int balance = 0;
+			for (final Transaction t : txs)
+			{
+				if (t.getSeller().getId().equals(pPlayerId))
+					balance += t.totalCoinsValue();
+				if (t.getBuyer().getId().equals(pPlayerId))
+					balance -= t.totalCoinsValue();
+			}
+			return balance;
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
 	 * Supprime un événement et recalcule intégralement l'état de la partie à partir
 	 * des événements restants (dette de chaque joueur, masse monétaire, numéro de
 	 * tour...). Ce recalcul complet est nécessaire : un événement au milieu de

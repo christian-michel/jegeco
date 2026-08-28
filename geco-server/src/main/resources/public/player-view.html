@@ -37,6 +37,16 @@
 			<p id="playerStatus" style="color:var(--text-dim);font-size:0.9rem;"></p>
 			<div id="playerDetails"></div>
 
+			<!-- Solde en jetons, dérivé de l'historique des échanges par QR (voir
+			     GameService.computeTradeBalance) - rempli par refreshPlayer(). -->
+			<div class="balance-card">
+				<span class="balance-card-icon" aria-hidden="true">🪙</span>
+				<div>
+					<div class="balance-card-label" data-i18n="trade.balance_label">Solde jetons (échanges)</div>
+					<div class="balance-card-value" id="balanceCardValue">0</div>
+				</div>
+			</div>
+
 			<div class="trade-actions">
 				<button type="button" id="btnOpenSell" class="btn-primary btn-block" data-i18n="trade.btn_sell">Vendre une carte</button>
 				<button type="button" id="btnOpenScan" class="btn-secondary btn-block" data-i18n="trade.btn_scan">Scanner un achat</button>
@@ -98,6 +108,9 @@
 			<div class="trade-header" style="text-align:left;">
 				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
 			</div>
+			<!-- Contexte de la carte conservé visible pendant tout l'affichage du QR
+			     (voir player-view.js:generateQr) - reprend le même bloc que l'étape prix. -->
+			<div id="sellQrCardInfo" class="trade-card-info" style="text-align:left;"></div>
 			<div id="sellQrCode" class="qr-box"></div>
 			<p class="qr-code-text" id="sellQrCodeText"></p>
 			<!-- Anneau "pièce qui se vide" - signature visuelle de l'écran de vente
@@ -115,6 +128,7 @@
 			<p class="galilee-explainer" data-i18n="trade.qr_instructions">Présentez ce QR code à l'acheteur pour qu'il le scanne.</p>
 			<p id="qrExpiredMsg" class="field-error hidden" data-i18n="trade.qr_expired">⏱️ Ce QR code a expiré.</p>
 			<button type="button" id="btnRegenerateQr" class="btn-primary btn-block hidden" data-i18n="trade.btn_regenerate_qr">Générer un nouveau QR code</button>
+			<button type="button" id="btnCancelSell" class="btn-cancel-link" data-i18n="trade.btn_cancel_sell">✕ Annuler la vente</button>
 		</section>
 
 		<!-- ===== Achat : caméra ===== -->
@@ -125,6 +139,7 @@
 			</div>
 			<div class="scan-viewport">
 				<video id="scanVideo" playsinline autoplay muted></video>
+				<div class="scan-frame" aria-hidden="true"><span></span></div>
 			</div>
 			<p id="scanCameraError" class="field-error hidden" data-i18n="trade.scan_camera_error">⚠️ Caméra indisponible. Vérifiez les autorisations de votre navigateur.</p>
 			<button type="button" id="btnSwitchToManual" class="btn-secondary btn-block" data-i18n="trade.btn_switch_to_manual">Saisir le code à la place</button>
@@ -146,6 +161,9 @@
 		<section id="scanConfirm" class="join-card hidden">
 			<h2 data-i18n="trade.confirm_title">Confirmer l'achat ?</h2>
 			<div id="scanConfirmInfo" class="trade-card-info"></div>
+			<!-- Solde avant/après (voir GameService.computeTradeBalance et
+			     player-view.js:renderScanConfirm) - rempli dynamiquement. -->
+			<div id="scanConfirmBalanceRows" class="trade-balance-rows"></div>
 			<button type="button" id="btnConfirmBuy" class="btn-primary btn-block" data-i18n="trade.btn_confirm_buy">Confirmer l'achat</button>
 			<button type="button" id="btnCancelBuy" class="btn-secondary btn-block" data-i18n="trade.btn_cancel">Annuler</button>
 			<p id="scanConfirmError" class="field-error hidden"></p>

@@ -262,3 +262,65 @@ body {
 /* Résultat (succès/échec) */
 .trade-result-icon { font-size: 3.2rem; margin-bottom: 0.6rem; }
 #tradeResult h2 { font-family: var(--font-display); margin: 0 0 0.5rem; font-size: 1.25rem; }
+
+/* ============ Couleurs par niveau (faible/moyenne/forte/tresforte) ============
+   Analogue honnête aux couleurs par bien du mockup de référence : nos
+   données sont organisées par NIVEAU (voir CatalogSeeds côté serveur,
+   secteur=niveau pour l'instant), pas encore par bien individuel - ces
+   teintes servent de repère visuel cohérent sur tous les écrans d'échange
+   (sélection, prix, QR, confirmation). */
+.level-faible { --level-bg: #fef3c7; --level-fg: #92400e; }
+.level-moyenne { --level-bg: #dbeafe; --level-fg: #1e40af; }
+.level-forte { --level-bg: #dcfce7; --level-fg: #166534; }
+.level-tresforte { --level-bg: #ede9fe; --level-fg: #5b21b6; }
+
+.trade-card-thumb-fallback, .trade-card-thumb { background: var(--level-bg, var(--mist)); }
+.trade-card-info { background: var(--level-bg, var(--mist)); }
+.trade-card-info-meta { color: var(--level-fg, var(--text-dim)); font-weight: 700; }
+
+/* Boutons d'annulation explicite (vs le simple lien "Retour") - mockup de
+   référence : un "Annuler" visible sous le QR pendant la vente. */
+.btn-cancel-link {
+	display: block; width: 100%; text-align: center; border: none; background: none;
+	color: var(--danger); font-weight: 700; font-size: 0.88rem; cursor: pointer;
+	font-family: inherit; padding: 0.6rem 0; margin-top: 0.2rem;
+}
+
+/* Cadre de visée caméra (mockup : coins violets superposés au flux vidéo) */
+.scan-viewport { position: relative; }
+.scan-frame { position: absolute; inset: 12%; pointer-events: none; }
+.scan-frame::before, .scan-frame::after,
+.scan-frame span::before, .scan-frame span::after {
+	content: ""; position: absolute; width: 26px; height: 26px; border: 3px solid var(--gold);
+}
+.scan-frame::before { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 6px 0 0 0; }
+.scan-frame::after { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 6px 0 0; }
+.scan-frame span::before { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 6px; }
+.scan-frame span::after { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 6px 0; }
+
+/* Lignes de calcul (Valeur / Votre solde / Nouveau solde) - écran de
+   confirmation d'achat, sur le modèle du mockup de référence. */
+.trade-balance-rows { background: var(--mist); border-radius: 14px; padding: 0.2rem 1rem; margin-bottom: 1.1rem; }
+.trade-balance-row {
+	display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0;
+	font-size: 0.9rem; border-bottom: 1px solid var(--border);
+}
+.trade-balance-row:last-child { border-bottom: none; }
+.trade-balance-row-label { color: var(--text-dim); }
+.trade-balance-row-value { font-family: var(--font-display); font-weight: 700; }
+.trade-balance-row-value.negative { color: var(--danger); }
+.trade-balance-row-value.positive { color: #16a34a; }
+.trade-balance-row.total .trade-balance-row-label { color: var(--text); font-weight: 700; }
+.trade-balance-row.total .trade-balance-row-value { color: var(--gold-dark); font-size: 1.05rem; }
+
+/* Récapitulatif de solde sur le hub (voir player-view.js:refreshPlayer) */
+.balance-card {
+	display: flex; align-items: center; gap: 0.8rem; background: linear-gradient(135deg, #fff7e6, #fff);
+	border: 1.5px solid #fde8b8; border-radius: 16px; padding: 0.9rem 1rem; margin: 0.9rem 0 1rem;
+}
+.balance-card-icon {
+	width: 40px; height: 40px; border-radius: 50%; background: var(--gold); color: #fff;
+	display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;
+}
+.balance-card-label { font-size: 0.78rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+.balance-card-value { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; color: var(--ink); }
