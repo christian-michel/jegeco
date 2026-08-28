@@ -177,8 +177,14 @@
 		</section>
 	</div>
 
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+	<!-- Bibliothèques hébergées localement (voir js/vendor/) plutôt qu'en CDN -
+	     remonté par un utilisateur (28/08/2026) : sur un réseau sans accès
+	     internet réel (partage de connexion isolé, atelier hors ligne...), un
+	     CDN externe ne charge jamais, et le scan QR "ne fait rien" sans
+	     aucune erreur visible pour l'utilisateur - exactement le symptôme
+	     observé. Même raisonnement que pour la police Sora (voir player.css). -->
+	<script src="/js/vendor/qrcode.js"></script>
+	<script src="/js/vendor/jsQR.js"></script>
 	<script src="/js/i18n.js"></script>
 	<script src="/js/player-view.js"></script>
 </body>

@@ -179,7 +179,7 @@ body {
    donc pile là où le haut de la carte se trouvait AVANT ce chevauchement -
    le même espace de respiration qu'avant avec l'en-tête, aucune régression
    possible tant que cette égalité est conservée. */
-#stepDone { text-align: center; position: relative; padding-top: 100px; margin-top: 84px; }
+#stepDone { text-align: center; position: relative; padding-top: 100px; margin-top: 100px; }
 #stepDone .avatar-preview-wrap {
 	position: absolute; top: -84px; left: 50%; transform: translateX(-50%); margin: 0 0 1.4rem;
 }

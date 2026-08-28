@@ -399,7 +399,10 @@ async function joinGame() {
 
 		el("avatarPreviewDone").innerHTML = "";
 		el("avatarPreviewDone").appendChild(el("avatarPreview").firstElementChild.cloneNode(true));
-		await goToPlayerSpace(player, state.name, 1800);
+		// Délai un peu plus long qu'un simple "temps d'admirer l'avatar" :
+		// laisse le temps de lire la note sur l'avertissement de sécurité
+		// possible (voir join.html) avant la redirection automatique.
+		await goToPlayerSpace(player, state.name, 2600);
 	} catch (err) {
 		btn.disabled = false;
 		btn.textContent = t("join.btn_join");

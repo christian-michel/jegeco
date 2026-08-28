@@ -1438,6 +1438,9 @@ msgstr "You're registered. Wait for the facilitator to start the game on their s
 msgid "join.btn_go_to_space"
 msgstr "Go to my space"
 
+msgid "join.https_warning_note"
+msgstr "A security warning may appear on your first visit (local certificate, normal): tap \"Advanced\" then \"Proceed\"."
+
 msgid "join.subtitle_step2"
 msgstr "Create your avatar"
 

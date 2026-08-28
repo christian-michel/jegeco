@@ -109,6 +109,13 @@
 			     joinGame) - ce lien est le filet de sécurité si la redirection
 			     automatique est bloquée par le navigateur. -->
 			<a id="btnGoToPlayerSpace" href="#" class="btn-primary btn-block hidden" data-i18n="join.btn_go_to_space" style="display:block;text-decoration:none;text-align:center;box-sizing:border-box;">Accéder à mon espace</a>
+			<!-- Remonté par un utilisateur (28/08/2026) : première visite de
+			     l'espace personnel en HTTPS -> avertissement "connexion non
+			     privée" (certificat auto-signé, normal - voir SelfSignedCertService
+			     côté serveur). Impossible à éviter en JavaScript (limite du
+			     navigateur, pas un bug), donc on prévient à l'avance plutôt que de
+			     laisser l'utilisateur découvrir un écran d'alerte sans explication. -->
+			<p class="join-footnote" id="httpsWarningNote" data-i18n="join.https_warning_note">Un avertissement de sécurité peut apparaître à la première visite (certificat local, normal) : appuyez sur "Paramètres avancés" puis "Continuer".</p>
 		</section>
 	</div>
 
