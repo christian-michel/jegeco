@@ -1444,6 +1444,9 @@ msgstr "Create your avatar"
 msgid "join.subtitle_done"
 msgstr "Registration successful"
 
+msgid "join.subtitle_already_joined"
+msgstr "You're already registered"
+
 msgid "join.subtitle_invalid_link"
 msgstr "Invalid link"
 

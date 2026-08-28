@@ -325,6 +325,51 @@ function buildAvatarConfigForSubmit() {
 	return { type: "custom", ...state.avatarCustom };
 }
 
+// Construit l'URL de l'espace personnel du joueur - en HTTPS quand c'est
+// possible (nécessaire pour le scan caméra d'achat), pas juste un chemin
+// relatif qui hériterait du protocole de CETTE page (http://, volontaire :
+// l'inscription elle-même n'a pas besoin de caméra). Voir joinGame() et
+// init() (rejeu d'une inscription déjà faite sur cet appareil) - les deux
+// aboutissent au même espace, donc la même construction d'URL.
+async function buildPlayerViewUrl(player) {
+	let url = `/player-view.html?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
+	try {
+		const netInfo = await fetch("/api/network-info").then((r) => r.json());
+		if (netInfo.httpsPort) {
+			url = `https://${location.hostname}:${netInfo.httpsPort}/player-view.html`
+				+ `?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
+		}
+	} catch (err) {
+		// Repli sur le chemin relatif ci-dessus si /api/network-info échoue -
+		// mieux vaut arriver sans caméra que ne pas arriver du tout.
+	}
+	return url;
+}
+
+// Affiche l'écran de confirmation puis bascule vers l'espace personnel -
+// utilisé aussi bien après une inscription fraîche (joinGame) qu'en cas de
+// ré-inscription détectée sur un appareil déjà inscrit (voir init()).
+async function goToPlayerSpace(player, pName, pDelayMs) {
+	el("step1").classList.add("hidden");
+	el("step2").classList.add("hidden");
+	el("stepDone").classList.remove("hidden");
+	el("joinSubtitle").textContent = t("join.subtitle_done");
+	updateStepDots(2);
+	el("doneTitle").textContent = t("join.done_title", { name: pName });
+	const playerViewUrl = await buildPlayerViewUrl(player);
+	el("btnGoToPlayerSpace").href = playerViewUrl;
+	el("btnGoToPlayerSpace").classList.remove("hidden");
+	// Laisse le temps de voir la confirmation, puis joue l'animation de
+	// sortie (voir player.css : la photo part à droite, le cadre part à
+	// gauche, l'un et l'autre se déforment) avant de naviguer réellement -
+	// la navigation attend la fin de l'animation (~400ms) plutôt que de la
+	// couper en plein milieu.
+	setTimeout(() => {
+		el("stepDone").classList.add("stepDone-exit");
+		setTimeout(() => { window.location.href = playerViewUrl; }, 420);
+	}, pDelayMs);
+}
+
 // ---------- Envoi de l'inscription ----------
 async function joinGame() {
 	const btn = el("btnJoin");
@@ -346,52 +391,15 @@ async function joinGame() {
 			throw new Error(body.error || t("join.generic_error", { status: res.status }));
 		}
 		// Sauvegarde locale : ce téléphone retient qui il est pour cette partie
-		// (utile pour les futures phases : rejoindre à nouveau, échanges...).
+		// (utile pour les futures phases : rejoindre à nouveau, échanges...) -
+		// et sert aussi à empêcher une ré-inscription depuis le même appareil
+		// (voir init(), un smartphone = un seul joueur par partie).
 		const player = await res.json();
 		localStorage.setItem(`geco_player_${state.gameId}`, JSON.stringify(player));
 
-		el("step2").classList.add("hidden");
-		el("stepDone").classList.remove("hidden");
-		el("joinSubtitle").textContent = t("join.subtitle_done");
-		updateStepDots(2);
-		el("doneTitle").textContent = t("join.done_title", { name: state.name });
 		el("avatarPreviewDone").innerHTML = "";
 		el("avatarPreviewDone").appendChild(el("avatarPreview").firstElementChild.cloneNode(true));
-
-		// Remonté par un utilisateur (28/08/2026) : l'écran de confirmation ne
-		// menait nulle part - aucun lien n'existait vers l'espace personnel du
-		// joueur (player-view.html : solde, vente, achat).
-		// Bascule vers l'espace personnel - en HTTPS quand c'est possible, pas
-		// juste un chemin relatif : cette page-ci (join.html) est
-		// volontairement chargée en http:// (l'inscription n'a
-		// pas besoin de caméra), mais l'espace personnel, lui, EN A besoin
-		// (scan QR d'achat) - un chemin relatif aurait hérité du protocole
-		// courant (http:), rendant la caméra indisponible dès l'arrivée sur
-		// cette page ("Caméra indisponible", remonté par un utilisateur le
-		// 28/08/2026 - cause trouvée après coup, pas un souci de permission
-		// navigateur comme le message le laissait penser).
-		let playerViewUrl = `/player-view.html?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
-		try {
-			const netInfo = await fetch("/api/network-info").then((r) => r.json());
-			if (netInfo.httpsPort) {
-				playerViewUrl = `https://${location.hostname}:${netInfo.httpsPort}/player-view.html`
-					+ `?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
-			}
-		} catch (err) {
-			// Repli sur le lien relatif ci-dessus si /api/network-info échoue -
-			// mieux vaut arriver sans caméra que ne pas arriver du tout.
-		}
-		el("btnGoToPlayerSpace").href = playerViewUrl;
-		el("btnGoToPlayerSpace").classList.remove("hidden");
-		// Laisse le temps de voir la confirmation, puis joue l'animation de
-		// sortie (voir player.css : la photo part à droite, le cadre part à
-		// gauche, l'un et l'autre se déforment) avant de naviguer réellement -
-		// la navigation attend la fin de l'animation (~400ms) plutôt que de
-		// la couper en plein milieu.
-		setTimeout(() => {
-			el("stepDone").classList.add("stepDone-exit");
-			setTimeout(() => { window.location.href = playerViewUrl; }, 420);
-		}, 1800);
+		await goToPlayerSpace(player, state.name, 1800);
 	} catch (err) {
 		btn.disabled = false;
 		btn.textContent = t("join.btn_join");
@@ -421,6 +429,49 @@ async function init() {
 		el("joinError").classList.remove("hidden");
 		el("joinSubtitle").textContent = t("join.subtitle_not_found");
 		return;
+	}
+
+	// Un seul joueur par appareil pour une même partie (remonté par un
+	// utilisateur : "1 smartphone ne peut créer qu'un seul joueur par
+	// partie") - on ne bloque pas le bouton "retour" du navigateur lui-même
+	// (impossible à empêcher côté web), mais on détecte ici qu'un joueur a
+	// déjà été créé depuis CET appareil pour CETTE partie (voir joinGame(),
+	// qui enregistre systématiquement geco_player_<gameId> après succès) et
+	// on redirige directement vers son espace au lieu de proposer un second
+	// formulaire d'inscription.
+	const existingPlayerRaw = localStorage.getItem(`geco_player_${state.gameId}`);
+	if (existingPlayerRaw) {
+		try {
+			const existingPlayer = JSON.parse(existingPlayerRaw);
+			if (existingPlayer && existingPlayer.accessToken) {
+				el("joinSubtitle").textContent = t("join.subtitle_already_joined");
+				// Reconstruit l'aperçu d'avatar à partir de la config sauvegardée
+				// (voir avatarConfigJson) - même logique que renderAvatarPreview(),
+				// juste sans dépendre de state.avatarMode/state.avatarCustom qui ne
+				// sont jamais renseignés dans ce parcours (l'inscription elle-même
+				// n'a pas eu lieu sur cette visite).
+				el("avatarPreviewDone").innerHTML = "";
+				try {
+					const cfg = JSON.parse(existingPlayer.avatarConfigJson || "{}");
+					if (cfg.type === "gallery" && cfg.filename) {
+						const img = document.createElement("img");
+						img.src = `/avatars/${cfg.filename}`;
+						img.alt = cfg.id || "";
+						el("avatarPreviewDone").appendChild(img);
+					} else {
+						el("avatarPreviewDone").innerHTML = buildAvatarSVG(cfg);
+					}
+				} catch (parseErr) {
+					// Config illisible : aperçu vide plutôt qu'un écran cassé, sans
+					// gravité vu la brièveté de cet écran de passage.
+				}
+				await goToPlayerSpace(existingPlayer, existingPlayer.name, 1200);
+				return;
+			}
+		} catch (err) {
+			// Donnée locale corrompue/illisible : on ignore et on laisse
+			// l'inscription normale continuer plutôt que de bloquer l'écran.
+		}
 	}
 
 	el("step1").classList.remove("hidden");
