@@ -367,20 +367,18 @@ public class StatsService
 	 * (https://rml.creationmonetaire.info/modules/) : la convergence des comptes
 	 * individuels vers la moyenne au fil du temps.
 	 * <p>
-	 * <b>Limite assumée, importante</b> : le moteur ne connaît la richesse réelle
-	 * d'un joueur qu'aux moments où elle est explicitement évaluée - c'est-à-dire
-	 * uniquement aux événements Mort/Fin de partie (`DEATH`/`QUIT`), où l'animateur
-	 * saisit ce que le joueur possède physiquement à cet instant (cartes/jetons en
-	 * main). Les échanges directs entre joueurs (achat/vente de cartes valeur) ne
-	 * sont aujourd'hui pas enregistrés comme des événements individuels - ils se
-	 * déroulent physiquement, hors logiciel. Entre deux évaluations, on ne peut
-	 * donc pas savoir avec certitude ce qu'un joueur possède : cette méthode
-	 * **maintient la dernière valeur connue** plutôt que d'inventer une évolution
-	 * continue qui ne reposerait sur aucune donnée réelle.
-	 * <p>
-	 * Cette limite disparaîtra avec l'étape 3 : le système de cartes numériques
-	 * prévu enregistrera chaque échange individuellement, rendant alors possible
-	 * une courbe de richesse réellement continue et précise.
+	 * <b>Limite assumée</b>, désormais partielle depuis l'étape 3 (voir
+	 * EventType.WEALTH_CHECKPOINT) : en monnaie libre, si l'animateur utilise
+	 * l'assistant de fin de tour en mode smartphone, la richesse de CHAQUE joueur
+	 * actif (pas seulement ceux qui meurent) est désormais mesurée à chaque tour,
+	 * à partir des transactions réellement enregistrées - la courbe est alors
+	 * continue et précise, comme anticipé de longue date dans ce commentaire.
+	 * Sans ce mécanisme (monnaie dette, partie classique sans smartphone, ou
+	 * animateur qui saisit encore l'inventaire à la main), la limite d'origine
+	 * s'applique toujours : le moteur ne connaît la richesse réelle d'un joueur
+	 * qu'aux évaluations Mort/Fin de partie (`DEATH`/`QUIT`), et cette méthode
+	 * **maintient la dernière valeur connue** entre deux évaluations plutôt que
+	 * d'inventer une évolution qui ne reposerait sur aucune donnée réelle.
 	 */
 	public WealthOverTimeReport computeWealthOverTime(final Game pGame)
 	{
@@ -430,6 +428,23 @@ public class StatsService
 				pointsByPlayer.get(name)
 						.add(new PlayerWealthPoint(turnCounter[0], assessedValue, round2(relative)));
 				lastKnownValue.put(name, 0);
+			}
+			else if ((event.getEvt() == EventType.WEALTH_CHECKPOINT) && (event.getPlayer() != null)
+					&& lastKnownValue.containsKey(event.getPlayer().getName()))
+			{
+				// Étape 3, monnaie libre, mode smartphone (voir Event.java) : un
+				// survivant, contrairement à DEATH/QUIT ci-dessus - on met juste à
+				// jour la dernière valeur connue, SANS ajouter de point immédiatement
+				// (pas de renaissance à 0 : le joueur continue de jouer) et SANS
+				// retirer quoi que ce soit de la masse monétaire (déjà garanti par
+				// Event.applyEvent(), qui traite ce type comme un pur no-op). Posé
+				// juste avant l'événement TURN dans le déroulé de l'assistant de fin
+				// de tour (voir GecoServer/wizard côté web) : le point TURN
+				// juste après lira cette valeur fraîchement mise à jour via
+				// lastKnownValue.getOrDefault(...) ci-dessus, sans code
+				// supplémentaire nécessaire à cet endroit précis.
+				final int checkpointValue = computeGain(pGame, event, currentFactor[0]);
+				lastKnownValue.put(event.getPlayer().getName(), checkpointValue);
 			}
 		});
 

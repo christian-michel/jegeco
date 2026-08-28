@@ -77,7 +77,22 @@ public class Event implements Serializable
 		// communautaires ajoutent beaucoup de types d'événements (toutes les
 		// lettres disponibles finiraient par être prises) - à revoir alors, pas
 		// urgent tant qu'il n'y a qu'une poignée de systèmes.
-		GOODS_TRADE(Messages.getString("BaseMessage.Event.GoodsTrade")); //$NON-NLS-1$
+		GOODS_TRADE(Messages.getString("BaseMessage.Event.GoodsTrade")), //$NON-NLS-1$
+		// Étape 3, mode smartphone, monnaie libre uniquement (voir §5.1 du cahier
+		// des charges et la conversation du 28/08/2026 avec l'utilisateur) : point
+		// de contrôle LÉGER du solde en jetons d'un joueur, posé à chaque fin de
+		// tour pour TOUS les joueurs actifs - pas seulement ceux qui meurent,
+		// contrairement à DEATH/QUIT. Volontairement SANS AUCUN EFFET sur la masse
+		// monétaire ni sur les cartes (voir applyEvent() ci-dessous, cas no-op) :
+		// ce n'est qu'un point de mesure pour la courbe de richesse en continu
+		// (StatsService.computeWealthOverTime), jamais un mouvement d'argent réel -
+		// contrairement à DEATH/QUIT, qui EUX retirent réellement la valeur
+		// saisie de la masse monétaire (le joueur sort du jeu). Remonté par
+		// l'utilisateur : avant cette étape, seuls les joueurs mourant un tour
+		// donné avaient leur solde numériquement enregistré - la courbe restait
+		// plate entre deux morts pour tous les autres, faute de mieux (voir le
+		// commentaire historique sur StatsService.computeWealthOverTime).
+		WEALTH_CHECKPOINT(Messages.getString("BaseMessage.Event.WealthCheckpoint")); //$NON-NLS-1$
 
 		private String description;
 		EventType(String pDescription)
@@ -431,6 +446,13 @@ public class Event implements Serializable
 		case END:
 		case XTECHNOLOGICAL_BREAKTHROUGH:
 			// Nothing to do here
+			break;
+		case WEALTH_CHECKPOINT:
+			// Volontairement AUCUN effet sur l'état du jeu (voir le commentaire sur
+			// ce type d'événement ci-dessus) : ni masse monétaire, ni cartes, ni
+			// saisie - un simple point de mesure pour StatsService.
+			// computeWealthOverTime, jamais un mouvement d'argent réel comme le
+			// sont DEATH/QUIT juste au-dessus.
 			break;
 		case SIDE_INVESTMENT:
 			// The bank invests some money and cards
