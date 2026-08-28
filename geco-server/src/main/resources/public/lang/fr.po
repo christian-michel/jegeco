@@ -1435,6 +1435,9 @@ msgstr "Bienvenue, {name} !"
 msgid "join.done_body"
 msgstr "Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur son écran."
 
+msgid "join.btn_go_to_space"
+msgstr "Accéder à mon espace"
+
 msgid "join.subtitle_step2"
 msgstr "Créez votre avatar"
 

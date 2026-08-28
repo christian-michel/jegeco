@@ -106,6 +106,10 @@
 			</div>
 			<h2 id="doneTitle" data-i18n="join.done_title_generic">C'est bon !</h2>
 			<p data-i18n="join.done_body">Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur son écran.</p>
+			<!-- Bascule automatiquement vers l'espace personnel (voir player.js:
+			     joinGame) - ce lien est le filet de sécurité si la redirection
+			     automatique est bloquée par le navigateur. -->
+			<a id="btnGoToPlayerSpace" href="#" class="btn-primary btn-block hidden" data-i18n="join.btn_go_to_space" style="display:block;text-decoration:none;text-align:center;box-sizing:border-box;">Accéder à mon espace</a>
 		</section>
 	</div>
 

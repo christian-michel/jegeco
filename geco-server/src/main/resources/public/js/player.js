@@ -357,6 +357,17 @@ async function joinGame() {
 		el("doneTitle").textContent = t("join.done_title", { name: state.name });
 		el("avatarPreviewDone").innerHTML = "";
 		el("avatarPreviewDone").appendChild(el("avatarPreview").firstElementChild.cloneNode(true));
+
+		// Remonté par un utilisateur (28/08/2026) : l'écran de confirmation ne
+		// menait nulle part - aucun lien n'existait vers l'espace personnel du
+		// joueur (player-view.html : solde, vente, achat). On y bascule
+		// automatiquement après un court délai (le temps de voir la
+		// confirmation), avec un bouton pour y aller tout de suite - au cas où
+		// la redirection automatique serait bloquée par le navigateur.
+		const playerViewUrl = `/player-view.html?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
+		el("btnGoToPlayerSpace").href = playerViewUrl;
+		el("btnGoToPlayerSpace").classList.remove("hidden");
+		setTimeout(() => { window.location.href = playerViewUrl; }, 2200);
 	} catch (err) {
 		btn.disabled = false;
 		btn.textContent = t("join.btn_join");
