@@ -243,17 +243,28 @@ function renderQrAndCountdown(code, expiresAt) {
 
 	el("qrExpiredMsg").classList.add("hidden");
 	el("btnRegenerateQr").classList.add("hidden");
-	el("qrCountdownValue").classList.remove("hidden");
+	el("coinTimer").classList.remove("coin-timer-expired");
+
+	// Anneau "pièce qui se vide" (voir player-view.html) : la circonférence du
+	// cercle (r=52) sert de référence pour le stroke-dashoffset - à 0 restant,
+	// l'anneau doré a entièrement disparu, comme une pièce dépensée.
+	const ring = el("coinTimerProgress");
+	const CIRCUMFERENCE = 2 * Math.PI * 52;
+	ring.style.strokeDasharray = `${CIRCUMFERENCE}`;
+	const totalMs = expiresAt - Date.now();
 
 	clearQrCountdown();
 	const updateCountdown = () => {
-		const remaining = Math.max(0, Math.round((expiresAt - Date.now()) / 1000));
+		const remainingMs = Math.max(0, expiresAt - Date.now());
+		const remaining = Math.round(remainingMs / 1000);
 		const mm = Math.floor(remaining / 60);
 		const ss = String(remaining % 60).padStart(2, "0");
 		el("qrCountdownValue").textContent = `${mm}:${ss}`;
-		if (remaining <= 0) {
+		const fraction = totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 0;
+		ring.style.strokeDashoffset = `${CIRCUMFERENCE * (1 - fraction)}`;
+		if (remainingMs <= 0) {
 			clearQrCountdown();
-			el("qrCountdownValue").classList.add("hidden");
+			el("coinTimer").classList.add("coin-timer-expired");
 			el("qrExpiredMsg").classList.remove("hidden");
 			el("btnRegenerateQr").classList.remove("hidden");
 		}

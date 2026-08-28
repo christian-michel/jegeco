@@ -32,6 +32,16 @@ const state = {
 };
 
 const el = (id) => document.getElementById(id);
+
+// Points de progression sous l'en-tête (purement visuel) - index 0/1/2 pour
+// les écrans 1 (créer le joueur), 2 (créer l'avatar), confirmation.
+function updateStepDots(activeIndex) {
+	const dots = document.querySelectorAll("#stepDots .step-dot");
+	dots.forEach((dot, i) => {
+		dot.classList.toggle("active", i === activeIndex);
+		dot.classList.toggle("done", i < activeIndex);
+	});
+}
 // Alias court vers i18n.js (chargé avant ce script, voir join.html) - fonctionne
 // même si i18n.js n'a pas encore fini de charger sa traduction (repli sur la
 // clé elle-même, jamais une exception qui casserait l'écran).
@@ -249,6 +259,7 @@ function initStep1() {
 		el("step1").classList.add("hidden");
 		el("step2").classList.remove("hidden");
 		el("joinSubtitle").textContent = t("join.subtitle_step2");
+		updateStepDots(1);
 		renderAvatarPreview();
 	});
 }
@@ -342,6 +353,7 @@ async function joinGame() {
 		el("step2").classList.add("hidden");
 		el("stepDone").classList.remove("hidden");
 		el("joinSubtitle").textContent = t("join.subtitle_done");
+		updateStepDots(2);
 		el("doneTitle").textContent = t("join.done_title", { name: state.name });
 		el("avatarPreviewDone").innerHTML = "";
 		el("avatarPreviewDone").appendChild(el("avatarPreview").firstElementChild.cloneNode(true));
@@ -377,6 +389,7 @@ async function init() {
 	}
 
 	el("step1").classList.remove("hidden");
+	updateStepDots(0);
 	initStep1();
 	initStep2();
 }

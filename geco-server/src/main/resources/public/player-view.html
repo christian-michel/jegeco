@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Ma partie — Ğeconomicus</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="/css/player.css">
 </head>
 <body>
@@ -99,7 +100,18 @@
 			</div>
 			<div id="sellQrCode" class="qr-box"></div>
 			<p class="qr-code-text" id="sellQrCodeText"></p>
-			<p class="qr-countdown"><span id="qrCountdownValue">1:30</span></p>
+			<!-- Anneau "pièce qui se vide" - signature visuelle de l'écran de vente
+			     (voir player.css / player-view.js:renderQrAndCountdown). Le cercle
+			     doré se réduit avec le temps restant, comme une pièce qu'on dépense -
+			     ancre visuellement l'idée d'une offre à durée de vie limitée, plus
+			     parlant qu'un simple texte "1:30". -->
+			<div id="coinTimer" class="coin-timer">
+				<svg viewBox="0 0 120 120" class="coin-timer-ring">
+					<circle class="coin-timer-track" cx="60" cy="60" r="52"></circle>
+					<circle id="coinTimerProgress" class="coin-timer-progress" cx="60" cy="60" r="52"></circle>
+				</svg>
+				<span class="coin-timer-value" id="qrCountdownValue">1:30</span>
+			</div>
 			<p class="galilee-explainer" data-i18n="trade.qr_instructions">Présentez ce QR code à l'acheteur pour qu'il le scanne.</p>
 			<p id="qrExpiredMsg" class="field-error hidden" data-i18n="trade.qr_expired">⏱️ Ce QR code a expiré.</p>
 			<button type="button" id="btnRegenerateQr" class="btn-primary btn-block hidden" data-i18n="trade.btn_regenerate_qr">Générer un nouveau QR code</button>

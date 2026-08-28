@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Rejoindre la partie — Ğeconomicus</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="/css/player.css">
 </head>
 <body>
@@ -12,6 +13,13 @@
 			<div class="join-logo">Ğ</div>
 			<h1>GÉCONOMICUS</h1>
 			<p id="joinSubtitle" data-i18n="join.subtitle_default">Bienvenue dans la partie !</p>
+			<!-- Repères d'avancement (étape 1/2/confirmation) - purement visuel,
+			     mis à jour par updateStepDots() dans player.js à chaque écran. -->
+			<div id="stepDots" class="step-dots">
+				<span class="step-dot"></span>
+				<span class="step-dot"></span>
+				<span class="step-dot"></span>
+			</div>
 		</header>
 
 		<!-- Écran "partie introuvable" (lien invalide ou expiré) -->
@@ -46,6 +54,7 @@
 
 			<div class="avatar-preview-wrap">
 				<div id="avatarPreview" class="avatar-preview"></div>
+				<span class="avatar-preview-badge" aria-hidden="true">✎</span>
 			</div>
 
 			<div class="avatar-mode-tabs">
@@ -93,6 +102,7 @@
 		<section id="stepDone" class="join-card hidden">
 			<div class="avatar-preview-wrap">
 				<div id="avatarPreviewDone" class="avatar-preview"></div>
+				<span class="avatar-preview-badge avatar-preview-badge-success" aria-hidden="true">✓</span>
 			</div>
 			<h2 id="doneTitle" data-i18n="join.done_title_generic">C'est bon !</h2>
 			<p data-i18n="join.done_body">Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur son écran.</p>
