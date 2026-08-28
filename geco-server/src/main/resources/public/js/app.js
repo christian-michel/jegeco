@@ -75,7 +75,7 @@ async function api(path, options = {}) {
 		if (pin) headers["X-Game-Pin"] = pin;
 	}
 	let res = await fetch(path, { ...options, headers });
-	if ((res.status === 403) && gameIdMatch) {
+	if ((res.status === 403) && gameIdMatch && !mSuppressPinPromptForBackgroundRefresh) {
 		// Partie protégée, PIN manquant ou incorrect : le demande une fois via une
 		// simple invite navigateur (choix pragmatique - c'est une interaction rare,
 		// une seule fois par appareil, qui ne justifie pas une boîte de dialogue
@@ -221,6 +221,22 @@ const EVENT_TYPES = [
 // dette ; la variante monnaie libre reste à préciser (retour utilisateur à venir).
 const PLAYER_EVENT_TYPES = ["D", "N", "I", "R", "C"];
 
+// Remonté par un utilisateur (partie protégée par PIN) : un joueur inscrit
+// depuis son smartphone n'apparaissait jamais dans le tableau de bord de
+// l'animateur. Piste retenue : le rafraîchissement automatique déclenché par
+// le WebSocket (ci-dessous) appelle Api.getGame(), qui - sur une partie
+// protégée - peut ouvrir une popup NATIVE BLOQUANTE (window.prompt(), voir
+// api() plus bas) si le PIN mémorisé est absent ou invalide. Une popup
+// native bloque TOUT le JavaScript de la page (minuteries, autres
+// événements...) jusqu'à ce qu'un humain la voie et y réponde - si personne
+// ne regarde l'écran du PC à ce moment précis (le cas typique : l'animateur
+// est en train de regarder le téléphone du joueur), la page semble
+// simplement figée, sans aucun signe visible de ce qui bloque. Ce drapeau
+// désactive cette popup PENDANT un rafraîchissement en arrière-plan : on
+// laisse simplement l'appel échouer silencieusement (voir le catch
+// ci-dessous) plutôt que de risquer de geler toute la page sans prévenir.
+let mSuppressPinPromptForBackgroundRefresh = false;
+
 // ---------- WebSocket temps réel ----------
 function connectWs() {
 	const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -231,7 +247,7 @@ function connectWs() {
 	ws.onclose = () => { setConnStatus(false); setTimeout(connectWs, 2000); };
 	ws.onerror = () => ws.close();
 
-	ws.onmessage = (evt) => {
+	ws.onmessage = async (evt) => {
 		const msg = JSON.parse(evt.data);
 		// Comparaison en chaîne plutôt qu'en nombre : élimine par précaution
 		// tout risque de faux négatif si l'un des deux côtés véhiculait un
@@ -239,7 +255,18 @@ function connectWs() {
 		// ici, mais un rafraîchissement manqué est un bug silencieux difficile
 		// à repérer - autant s'en prémunir).
 		if (String(msg.gameId) === String(state.currentGameId)) {
-			renderGameDetail(state.currentGameId);
+			mSuppressPinPromptForBackgroundRefresh = true;
+			try {
+				await renderGameDetail(state.currentGameId);
+			} catch (err) {
+				// Échec silencieux volontaire (voir le commentaire au-dessus de
+				// mSuppressPinPromptForBackgroundRefresh) : pas de popup, juste une
+				// trace en console pour le diagnostic. Le prochain rafraîchissement
+				// (message WS suivant, ou action explicite de l'animateur) réessaiera.
+				console.warn("Rafraîchissement automatique impossible (partie protégée ? PIN pas encore mémorisé) :", err);
+			} finally {
+				mSuppressPinPromptForBackgroundRefresh = false;
+			}
 		}
 	};
 }
