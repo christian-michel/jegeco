@@ -169,11 +169,66 @@ body {
    ce sont deux feuilles de style distinctes. */
 .galilee-explainer { font-size: 0.82rem; color: var(--text-dim); text-align: center; margin: 0 0 0.9rem; line-height: 1.4; }
 
-#stepDone { text-align: center; position: relative; padding-top: 100px; }
+/* Écran de confirmation d'inscription (stepDone) : l'avatar dépasse du bord
+   supérieur de la carte blanche (voir mockup de référence), MAIS sans jamais
+   chevaucher l'en-tête au-dessus (titre/points de progression) - remonté
+   par un utilisateur (28/08/2026, capture à l'appui) : la première version
+   remontait de 84px sans compenser l'espace, empiétant carrément sur le
+   titre "GÉCONOMICUS". Le margin-top ci-dessous compense EXACTEMENT le
+   décalage de l'avatar (même valeur, 84px) : son bord supérieur atterrit
+   donc pile là où le haut de la carte se trouvait AVANT ce chevauchement -
+   le même espace de respiration qu'avant avec l'en-tête, aucune régression
+   possible tant que cette égalité est conservée. */
+#stepDone { text-align: center; position: relative; padding-top: 100px; margin-top: 84px; }
 #stepDone .avatar-preview-wrap {
 	position: absolute; top: -84px; left: 50%; transform: translateX(-50%); margin: 0 0 1.4rem;
 }
 #stepDone h2 { margin-top: 0.6rem; font-size: 1.3rem; }
+
+/* ============ Animations d'ouverture/fermeture (écran de confirmation) ============
+   Remonté par un utilisateur : rendre cet écran plus dynamique, "dans
+   l'esprit du jeu", avec un style dessin animé/cartoon (rebond exagéré,
+   déformations). Rejoue automatiquement à chaque fois que l'écran redevient
+   visible : une animation CSS repart de zéro quand un élément display:none
+   redevient affiché, pas besoin de JS pour l'entrée - seule la SORTIE (avant
+   la redirection vers l'espace personnel) a besoin d'un déclenchement
+   explicite, voir player.js. */
+@keyframes stepDoneCardEnter {
+	0% { transform: translateY(140%) rotate(-3deg); opacity: 0; }
+	50% { transform: translateY(-14px) rotate(2deg); opacity: 1; }
+	68% { transform: translateY(6px) rotate(-1.2deg); }
+	82% { transform: translateY(-3px) rotate(0.6deg); }
+	100% { transform: translateY(0) rotate(0deg); }
+}
+@keyframes stepDoneAvatarEnter {
+	0%, 30% { transform: translateX(-50%) scale(0.4) rotate(-10deg); opacity: 0; }
+	55% { transform: translateX(-50%) scale(1.18) rotate(7deg); opacity: 1; }
+	70% { transform: translateX(-50%) scale(0.9) rotate(-5deg); }
+	85% { transform: translateX(-50%) scale(1.06) rotate(3deg); }
+	100% { transform: translateX(-50%) scale(1) rotate(0deg); }
+}
+#stepDone { animation: stepDoneCardEnter 0.55s cubic-bezier(.34,1.56,.64,1) both; }
+#stepDone .avatar-preview-wrap { animation: stepDoneAvatarEnter 0.65s cubic-bezier(.34,1.56,.64,1) both; }
+
+@keyframes stepDoneCardExit {
+	to { transform: translate(-130%, 6%) rotate(-14deg) skewY(-8deg); opacity: 0; }
+}
+@keyframes stepDoneAvatarExit {
+	to { transform: translate(calc(-50% + 170%), -14%) scale(0.45) rotate(30deg) skewX(12deg); opacity: 0; }
+}
+/* Sélecteurs composés (plus spécifiques que les règles d'entrée ci-dessus) :
+   remplacent l'animation d'entrée dès que .stepDone-exit est ajoutée en JS. */
+#stepDone.stepDone-exit { animation: stepDoneCardExit 0.38s cubic-bezier(.55,0,1,0.45) forwards; }
+#stepDone.stepDone-exit .avatar-preview-wrap { animation: stepDoneAvatarExit 0.38s cubic-bezier(.55,0,1,0.45) forwards; }
+
+/* Respect des préférences d'accessibilité : pas d'animation exagérée pour
+   qui a demandé de réduire les mouvements - transition instantanée à la place. */
+@media (prefers-reduced-motion: reduce) {
+	#stepDone, #stepDone .avatar-preview-wrap,
+	#stepDone.stepDone-exit, #stepDone.stepDone-exit .avatar-preview-wrap {
+		animation: none !important;
+	}
+}
 
 /* ============ Galerie d'avatars filtrable ============ */
 .avatar-filters { display: flex; gap: 0.5rem; margin-bottom: 0.9rem; }

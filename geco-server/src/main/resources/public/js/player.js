@@ -360,14 +360,38 @@ async function joinGame() {
 
 		// Remonté par un utilisateur (28/08/2026) : l'écran de confirmation ne
 		// menait nulle part - aucun lien n'existait vers l'espace personnel du
-		// joueur (player-view.html : solde, vente, achat). On y bascule
-		// automatiquement après un court délai (le temps de voir la
-		// confirmation), avec un bouton pour y aller tout de suite - au cas où
-		// la redirection automatique serait bloquée par le navigateur.
-		const playerViewUrl = `/player-view.html?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
+		// joueur (player-view.html : solde, vente, achat).
+		// Bascule vers l'espace personnel - en HTTPS quand c'est possible, pas
+		// juste un chemin relatif : cette page-ci (join.html) est
+		// volontairement chargée en http:// (l'inscription n'a
+		// pas besoin de caméra), mais l'espace personnel, lui, EN A besoin
+		// (scan QR d'achat) - un chemin relatif aurait hérité du protocole
+		// courant (http:), rendant la caméra indisponible dès l'arrivée sur
+		// cette page ("Caméra indisponible", remonté par un utilisateur le
+		// 28/08/2026 - cause trouvée après coup, pas un souci de permission
+		// navigateur comme le message le laissait penser).
+		let playerViewUrl = `/player-view.html?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
+		try {
+			const netInfo = await fetch("/api/network-info").then((r) => r.json());
+			if (netInfo.httpsPort) {
+				playerViewUrl = `https://${location.hostname}:${netInfo.httpsPort}/player-view.html`
+					+ `?gameId=${state.gameId}&token=${encodeURIComponent(player.accessToken)}`;
+			}
+		} catch (err) {
+			// Repli sur le lien relatif ci-dessus si /api/network-info échoue -
+			// mieux vaut arriver sans caméra que ne pas arriver du tout.
+		}
 		el("btnGoToPlayerSpace").href = playerViewUrl;
 		el("btnGoToPlayerSpace").classList.remove("hidden");
-		setTimeout(() => { window.location.href = playerViewUrl; }, 2200);
+		// Laisse le temps de voir la confirmation, puis joue l'animation de
+		// sortie (voir player.css : la photo part à droite, le cadre part à
+		// gauche, l'un et l'autre se déforment) avant de naviguer réellement -
+		// la navigation attend la fin de l'animation (~400ms) plutôt que de
+		// la couper en plein milieu.
+		setTimeout(() => {
+			el("stepDone").classList.add("stepDone-exit");
+			setTimeout(() => { window.location.href = playerViewUrl; }, 420);
+		}, 1800);
 	} catch (err) {
 		btn.disabled = false;
 		btn.textContent = t("join.btn_join");
