@@ -56,7 +56,8 @@ public class Dtos
 
 	public record EventDto(Integer id, String type, String typeLabel, Integer playerId, String playerName,
 			long timestamp, int principal, int interest, Integer counterpartyPlayerId, String counterpartyPlayerName,
-			int goodsFromPlayer, int goodsFromCounterparty)
+			int goodsFromPlayer, int goodsFromCounterparty, int weakCoins, int mediumCoins, int strongCoins,
+			int weakCards, int mediumCards, int strongCards)
 	{
 		static EventDto from(final Event e)
 		{
@@ -66,7 +67,16 @@ public class Dtos
 					e.getTstamp() == null ? 0 : e.getTstamp().getTime(), e.getPrincipal(), e.getInterest(),
 					e.getCounterpartyPlayer() == null ? null : e.getCounterpartyPlayer().getId(),
 					e.getCounterpartyPlayer() == null ? null : e.getCounterpartyPlayer().getName(),
-					e.getGoodsFromPlayer(), e.getGoodsFromCounterparty());
+					e.getGoodsFromPlayer(), e.getGoodsFromCounterparty(),
+					// Étape 3, monnaie libre : ces trois champs manquaient jusqu'ici -
+					// jamais nécessaires avant (le client ne faisait qu'ÉCRIRE ces
+					// valeurs, ex. l'inventaire saisi à une mort, jamais les RELIRE
+					// après coup). Nécessaires maintenant pour retrouver le dernier
+					// solde connu d'un joueur (voir renderStepAllPlayersMoney côté
+					// front, qui pré-remplit désormais l'assistant de fin de tour à
+					// partir du dernier WEALTH_CHECKPOINT/DEATH/QUIT enregistré).
+					e.getWeakCoins(), e.getMediumCoins(), e.getStrongCoins(),
+					e.getWeakCards(), e.getMediumCards(), e.getStrongCards());
 		}
 	}
 

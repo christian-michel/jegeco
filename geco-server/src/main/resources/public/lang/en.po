@@ -982,6 +982,9 @@ msgstr "Token inventory for every player"
 msgid "wiz.all_players_money_intro"
 msgstr "First, note how many weak, medium and strong tokens each active player currently has - dying and staying players alike. This check verifies the total matches the global money mass, before death changes it."
 
+msgid "wiz.all_players_money_prefill_note"
+msgstr "Fields pre-filled from smartphone transactions and the last known balance - review before validating, correct if needed."
+
 msgid "wiz.step2_intro"
 msgstr "Select the player(s) who die this turn. They won't be able to trade anymore and will be reborn next turn with 0 units."
 

@@ -135,6 +135,11 @@ const Api = {
 	// entrée (jamais l'image elle-même) - voir openCatalogZoombox().
 	getCatalog: (kind) => api(`/api/catalogs/${kind}`),
 	patchCatalogEntry: (kind, id, fields) => api(`/api/catalogs/${kind}/${id}`, { method: "PUT", body: JSON.stringify({ fields }) }),
+	// Étape 3, monnaie libre : historique des transactions smartphone d'une
+	// partie (voir GameService.listTransactions côté serveur) - utilisé par
+	// l'assistant de fin de tour pour pré-remplir automatiquement le bilan de
+	// chaque joueur (voir renderStepAllPlayersMoney dans openEndOfTurnWizard).
+	getTransactions: (gameId) => api(`/api/games/${gameId}/transactions`),
 	checkForUpdates: () => api("/api/updates/check"),
 	listLanguages: () => api("/api/languages"),
 	// Le corps envoyé est le contenu BRUT du fichier .po (pas du JSON) - on
@@ -3071,7 +3076,7 @@ function stopTurnTimer() {
 // Remplace l'ancien bouton "Nouveau tour" qui enregistrait l'événement immédiatement :
 // suit maintenant la séquence de la maquette (résumé du tour -> décès -> nouveaux-nés
 // -> préparation) avant de réellement faire avancer le tour.
-function openEndOfTurnWizard() {
+async function openEndOfTurnWizard() {
 	// Remonté par un utilisateur (avec capture d'écran à l'appui) : "boucle
 	// infinie" qui repropose sans arrêt le bilan des joueurs endettés. Vraie
 	// cause trouvée : le canal WebSocket renvoie ses messages à TOUS les clients
@@ -3147,6 +3152,61 @@ function openEndOfTurnWizard() {
 	// valeur = { weak, medium, strong }.
 	let allPlayersMoneyInventory = {};
 
+	// Étape 3, monnaie libre : historique des transactions smartphone de cette
+	// partie (voir Api.getTransactions), chargé une seule fois à l'ouverture de
+	// l'assistant plutôt qu'à chaque passage par renderStepAllPlayersMoney -
+	// utilisé pour pré-remplir automatiquement le bilan de chaque joueur (voir
+	// computeLibrePrefill ci-dessous). Tableau vide (pas d'erreur bloquante) si
+	// le chargement échoue - l'assistant reste utilisable, juste sans pré-
+	// remplissage, comme avant cette fonctionnalité.
+	let allTransactionsThisGame = [];
+
+	// Étape 3, monnaie libre : dernier solde en jetons connu d'un joueur, à
+	// partir du plus récent événement WEALTH_CHECKPOINT/DEATH/QUIT le
+	// concernant dans l'historique (voir game.events, déjà chargé). Renvoie
+	// {weak:0, medium:0, strong:0} si aucun de ces événements n'existe encore
+	// pour ce joueur (avant le tout premier tour où cette automatisation est
+	// utilisée sur cette partie, ou joueur qui vient de rejoindre) - point de
+	// départ honnête plutôt qu'une valeur inventée : l'animateur peut toujours
+	// corriger le champ pré-rempli si la réalité physique diffère.
+	function computeLastKnownLibreCoins(playerId) {
+		const relevant = game.events
+			.filter((e) => (e.playerId === playerId)
+				&& ["WEALTH_CHECKPOINT", "DEATH", "QUIT"].includes(e.type))
+			.sort((a, b) => b.timestamp - a.timestamp);
+		if (relevant.length === 0) return { weak: 0, medium: 0, strong: 0 };
+		const latest = relevant[0];
+		return { weak: latest.weakCoins, medium: latest.mediumCoins, strong: latest.strongCoins };
+	}
+
+	// Étape 3, monnaie libre : mouvement net de jetons d'un joueur pour le tour
+	// EN COURS (celui que l'assistant est en train de clôturer) via les
+	// transactions smartphone - vendeur : +valeur reçue, acheteur : -valeur
+	// payée. Ne regarde QUE les transactions de ce tour précis (Transaction.
+	// turnNumber, déjà posé côté serveur) : celles des tours précédents sont
+	// déjà reflétées dans le dernier solde connu (computeLastKnownLibreCoins),
+	// les compter à nouveau serait un double comptage.
+	function computeThisTurnTransactionDelta(playerId) {
+		return allTransactionsThisGame
+			.filter((tx) => tx.turnNumber === game.turnNumber)
+			.reduce((sum, tx) => {
+				if (tx.sellerPlayerId === playerId) return sum + tx.totalCoinsValue;
+				if (tx.buyerPlayerId === playerId) return sum - tx.totalCoinsValue;
+				return sum;
+			}, 0);
+	}
+
+	// Pré-remplissage complet pour un joueur (monnaie libre uniquement) :
+	// dernier solde connu + mouvements smartphone de ce tour, décomposé en
+	// jetons faibles/moyens/forts via le même algorithme déjà utilisé pour les
+	// suggestions de DU (computeTokenBreakdown, plus bas dans ce fichier).
+	function computeLibrePrefill(playerId) {
+		const last = computeLastKnownLibreCoins(playerId);
+		const lastValue = (last.weak + (2 * last.medium) + (4 * last.strong)) * game.weakCoinValue;
+		const total = Math.max(0, lastValue + computeThisTurnTransactionDelta(playerId));
+		return computeTokenBreakdown(total, game.weakCoinValue);
+	}
+
 	// Partagée entre renderStep0() (affichage) et le retour après "Ne peut pas
 	// payer" (pour savoir s'il reste encore quelqu'un à traiter) - même logique
 	// dans les deux cas, un seul endroit à maintenir.
@@ -3185,6 +3245,18 @@ function openEndOfTurnWizard() {
 	// il enchaîne directement sur la sortie de tous les joueurs puis la fin de
 	// partie (voir renderEndGameInventory/renderEndGameSummary plus bas).
 	const isLastTurn = game.turnNumber >= game.nbTurnsPlanned;
+
+	// Étape 3, monnaie libre uniquement : charge l'historique des transactions
+	// smartphone une seule fois, avant toute étape de l'assistant (voir
+	// allTransactionsThisGame plus haut) - inutile en dette/troc, qui n'ont pas
+	// (encore, pour le troc) cette automatisation.
+	if (!isDebt && !isTroc) {
+		try {
+			allTransactionsThisGame = await Api.getTransactions(state.currentGameId);
+		} catch (err) {
+			allTransactionsThisGame = [];
+		}
+	}
 
 	// Remonté par un utilisateur, avec la formule précisée (et confirmée via les
 	// règles officielles - geconomicus.glibre.org/libre_money.html, qui indique
@@ -3242,16 +3314,24 @@ function openEndOfTurnWizard() {
 		el("dlgTitle").textContent = t("wiz.all_players_money_title");
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.all_players_money_intro")}</p>
-			${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => `
+			<p class="galilee-explainer">${t("wiz.all_players_money_prefill_note")}</p>
+			${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
+				// Étape 3, monnaie libre : pré-rempli à partir du dernier solde connu
+				// + des transactions smartphone de ce tour (voir computeLibrePrefill) -
+				// l'animateur n'a plus qu'à valider, ou corriger si la réalité
+				// physique diffère (voir la note d'explication ci-dessus).
+				const prefill = computeLibrePrefill(p.id);
+				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}</legend>
 				<div class="field-row">
-					<div><label>${t("wiz.field_weak_tokens")}</label><input type="number" class="amWeak" value="0" min="0"></div>
-					<div><label>${t("wiz.field_medium_tokens")}</label><input type="number" class="amMedium" value="0" min="0"></div>
+					<div><label>${t("wiz.field_weak_tokens")}</label><input type="number" class="amWeak" value="${prefill.weak}" min="0"></div>
+					<div><label>${t("wiz.field_medium_tokens")}</label><input type="number" class="amMedium" value="${prefill.medium}" min="0"></div>
 				</div>
 				<label>${t("wiz.field_strong_tokens")}</label>
-				<input type="number" class="amStrong" value="0" min="0">
-			</fieldset>`).join("")}
+				<input type="number" class="amStrong" value="${prefill.strong}" min="0">
+			</fieldset>`;
+			}).join("")}
 			<div id="allPlayersMoneyCheckBlock" style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--border);">
 				<p class="am-remaining" style="font-weight:600;"></p>
 			</div>
@@ -4028,6 +4108,39 @@ function openEndOfTurnWizard() {
 			<button type="button" class="btn btn-new-turn btn-block" id="wizFinish">${t("common.validate")}</button>`;
 		el("wizFinish").onclick = async () => {
 			const autoStart = el("wizAutoStart").checked;
+			// Étape 3, monnaie libre : pose un WEALTH_CHECKPOINT pour CHAQUE joueur
+			// actif (pas seulement les survivants) - voir Event.java pour le
+			// raisonnement complet. Toujours posé, que "démarrer automatiquement le
+			// tour suivant" soit coché ou non : ce point représente le solde
+			// confirmé à l'instant où l'animateur valide cette dernière étape, pas
+			// une conséquence du démarrage du tour suivant. Posé AVANT l'événement
+			// TURN (voir plus bas) - StatsService.computeWealthOverTime lit cette
+			// valeur fraîche au moment même où il traite le point TURN qui suit.
+			//
+			// Cas particulier des joueurs qui viennent de mourir/renaître CE
+			// tour-ci (voir selectedDeathIds) : leur DEATH event ne représente que
+			// ce qu'ils avaient AVANT renaissance (l'inventaire saisi à la mort),
+			// pas leur nouveau départ - sans ce point de contrôle séparé pour eux
+			// aussi, le pré-remplissage du PROCHAIN tour lirait à tort cette valeur
+			// pré-mort comme "dernier solde connu". Leur renaissance se fait avec
+			// le DU seul (voir plugins/libre/manifest.json, "onRebirth").
+			if (!isDebt && !isTroc) {
+				const du = computeCurrentDU();
+				for (const p of game.players.filter((pl) => pl.active)) {
+					let breakdown;
+					if (selectedDeathIds.includes(p.id)) {
+						breakdown = computeTokenBreakdown(du, game.weakCoinValue);
+					} else {
+						const coins = allPlayersMoneyInventory[p.id] || { weak: 0, medium: 0, strong: 0 };
+						const currentValue = (coins.weak + (2 * coins.medium) + (4 * coins.strong)) * game.weakCoinValue;
+						breakdown = computeTokenBreakdown(currentValue + du, game.weakCoinValue);
+					}
+					await Api.recordEvent(state.currentGameId, {
+						type: "W", playerId: p.id, principal: 0, interest: 0,
+						weakCoins: breakdown.weak, mediumCoins: breakdown.medium, strongCoins: breakdown.strong,
+					});
+				}
+			}
 			// Remonté par un utilisateur : une case à cocher (cochée par défaut, mais
 			// décochable) permet de démarrer automatiquement le tour suivant en même
 			// temps qu'on valide cette dernière étape, plutôt que de devoir fermer puis
