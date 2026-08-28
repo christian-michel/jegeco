@@ -233,7 +233,12 @@ function connectWs() {
 
 	ws.onmessage = (evt) => {
 		const msg = JSON.parse(evt.data);
-		if (msg.gameId === state.currentGameId) {
+		// Comparaison en chaîne plutôt qu'en nombre : élimine par précaution
+		// tout risque de faux négatif si l'un des deux côtés véhiculait un
+		// identifiant sous forme de texte plutôt que de nombre (jamais observé
+		// ici, mais un rafraîchissement manqué est un bug silencieux difficile
+		// à repérer - autant s'en prémunir).
+		if (String(msg.gameId) === String(state.currentGameId)) {
 			renderGameDetail(state.currentGameId);
 		}
 	};

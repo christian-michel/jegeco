@@ -186,11 +186,17 @@ public class GameService
 				throw new IllegalArgumentException("Game not found: " + pGameId); //$NON-NLS-1$
 			em.getTransaction().begin();
 			final Player player = new Player(game, pName);
-			// Remonté par un utilisateur : jeton d'accès individuel, uniquement si la
-			// protection par code est active pour CETTE partie (signalée par la
-			// présence d'un PIN, voir Game.pin) - jamais pour une partie non protégée.
-			if ((game.getPin() != null) && !game.getPin().isEmpty())
-				player.setAccessToken(java.util.UUID.randomUUID().toString());
+			// Étape 3 : jeton d'accès individuel désormais généré pour TOUT
+			// joueur, systématiquement - plus seulement si la partie est
+			// protégée par PIN (comme à l'étape 2). Depuis l'étape 3, ce jeton
+			// n'est plus qu'une sécurité optionnelle : c'est aussi l'identifiant
+			// qui permet au joueur d'atteindre son espace personnel
+			// (player-view.html - consultation, vente, achat), indispensable
+			// que la protection par PIN soit activée ou non. Remonté par un
+			// utilisateur (27/08/2026) : sans ce correctif, un joueur inscrit
+			// dans une partie non protégée par PIN (le cas par défaut) n'avait
+			// tout simplement aucun moyen d'atteindre son propre espace.
+			player.setAccessToken(java.util.UUID.randomUUID().toString());
 			final Event joinEvent = new Event(game, EventType.JOIN, player);
 			joinEvent.applyEvent();
 			em.persist(player);
@@ -232,10 +238,10 @@ public class GameService
 			player.setDeclaredAge(pDeclaredAge);
 			player.setFavoriteColor(pFavoriteColor);
 			player.setAvatarConfigJson(pAvatarConfigJson);
-			// Remonté par un utilisateur : voir le même commentaire dans addPlayer()
-			// ci-dessus - jeton généré uniquement si cette partie est protégée.
-			if ((game.getPin() != null) && !game.getPin().isEmpty())
-				player.setAccessToken(java.util.UUID.randomUUID().toString());
+			// Étape 3 : voir le même correctif dans addPlayer() ci-dessus - jeton
+			// généré systématiquement, plus seulement si la partie est protégée
+			// par PIN (indispensable pour atteindre player-view.html).
+			player.setAccessToken(java.util.UUID.randomUUID().toString());
 			final Event joinEvent = new Event(game, EventType.JOIN, player);
 			joinEvent.applyEvent();
 			em.persist(player);
