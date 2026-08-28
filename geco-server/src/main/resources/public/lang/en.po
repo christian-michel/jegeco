@@ -1631,3 +1631,46 @@ msgstr "New balance"
 
 msgid "trade.result_success_body_balance"
 msgstr "You bought: {name}. New balance: {balance} tokens."
+
+# ============ Step 3: QR trade history (game view) ============
+msgid "game.transactions_title"
+msgstr "QR code trades"
+
+msgid "game.transactions_toggle_btn"
+msgstr "📊 Show"
+
+msgid "game.transactions_toggle_btn_hide"
+msgstr "📊 Hide"
+
+msgid "game.transactions_load_error"
+msgstr "Could not load the trade history."
+
+msgid "game.transactions_empty"
+msgstr "No QR code trades yet for this game."
+
+msgid "game.transactions_summary"
+msgstr "{count} trade(s) in total, for a combined volume of {volume} tokens."
+
+msgid "game.transactions_col_player"
+msgstr "Player"
+
+msgid "game.transactions_col_sells"
+msgstr "Sales"
+
+msgid "game.transactions_col_buys"
+msgstr "Purchases"
+
+msgid "game.transactions_col_sell_volume"
+msgstr "Sold volume"
+
+msgid "game.transactions_col_buy_volume"
+msgstr "Bought volume"
+
+msgid "game.transactions_col_top_partner"
+msgstr "Top partner"
+
+msgid "game.transactions_turn_label"
+msgstr "turn {n}"
+
+msgid "game.transactions_amount"
+msgstr "{n} tokens"

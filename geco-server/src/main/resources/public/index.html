@@ -532,6 +532,21 @@
 						<ul id="eventsList" class="events-list"></ul>
 					</div>
 				</div>
+
+				<!-- Étape 3, mode smartphone : historique complet des échanges par QR
+				     code de cette partie - qui échange avec qui, quand, combien (voir
+				     renderTransactionsPanel() dans app.js). Visible uniquement en mode
+				     smartphone (même filtre que le bouton "Inviter" ci-dessus) : sans
+				     objet en mode classique, où les échanges restent physiques. -->
+				<div class="panel-card hidden" id="transactionsPanelCard">
+					<div class="panel-header">
+						<h3 data-i18n="game.transactions_title">Échanges par QR code</h3>
+						<div class="panel-actions">
+							<button id="btnToggleTransactions" class="btn btn-small" data-i18n="game.transactions_toggle_btn">📊 Afficher</button>
+						</div>
+					</div>
+					<div id="transactionsPanelBody" class="hidden"></div>
+				</div>
 				<div id="turnEndToast" class="turn-end-toast hidden" data-i18n="game.toast_end_turn">Fin de tour</div>
 			</section>
 

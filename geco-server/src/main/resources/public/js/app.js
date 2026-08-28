@@ -1875,6 +1875,13 @@ async function renderGameDetail(gameId) {
 			el("inviteQrPanel").classList.add("hidden");
 			el("inviteQrPanel").innerHTML = "";
 		}
+		// Étape 3 : historique des échanges par QR - même filtre que le bouton
+		// "Inviter" ci-dessus (voir renderTransactionsPanel).
+		el("transactionsPanelCard").classList.toggle("hidden", !isSmartphoneMode);
+		if (!isSmartphoneMode) {
+			el("transactionsPanelBody").classList.add("hidden");
+			el("transactionsPanelBody").innerHTML = "";
+		}
 	});
 
 	const isDebt = game.moneySystem === 1;
@@ -2547,6 +2554,128 @@ async function renderInviteQr(gameId) {
 			setTimeout(() => { el("btnCopyInviteLink").textContent = "📋 Copier le lien"; }, 1500);
 		});
 	};
+}
+
+// Étape 3, mode smartphone : historique des échanges par QR code (voir
+// GameService.listTransactions côté serveur) - remonté par l'utilisateur
+// ("historisation de toutes les transactions de tous les joueurs... qui
+// échange avec qui, quand, combien"). Bascule affiché/masqué comme le
+// panneau d'invitation ci-dessus : évite de charger cette donnée à chaque
+// affichage de la vue partie si l'animateur ne la consulte pas.
+async function toggleTransactionsPanel(gameId) {
+	const body = el("transactionsPanelBody");
+	const btn = el("btnToggleTransactions");
+	const isOpening = body.classList.contains("hidden");
+	if (!isOpening) {
+		body.classList.add("hidden");
+		body.innerHTML = "";
+		btn.textContent = window.GecoI18n.t("game.transactions_toggle_btn");
+		return;
+	}
+	body.classList.remove("hidden");
+	btn.textContent = window.GecoI18n.t("game.transactions_toggle_btn_hide");
+	await renderTransactionsPanel(gameId);
+}
+
+async function renderTransactionsPanel(gameId) {
+	const t = window.GecoI18n.t;
+	const body = el("transactionsPanelBody");
+	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+
+	let transactions;
+	let cardsCatalog;
+	try {
+		[transactions, cardsCatalog] = await Promise.all([Api.getTransactions(gameId), Api.getCatalog("cartes")]);
+	} catch (err) {
+		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
+		return;
+	}
+
+	if (transactions.length === 0) {
+		body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("game.transactions_empty")}</p>`;
+		return;
+	}
+
+	// Nom d'affichage d'une carte (langue courante) - repli sur son
+	// identifiant technique si elle a été retirée du catalogue depuis.
+	function cardName(cardTypeId) {
+		const entry = cardsCatalog.find((c) => c.id === cardTypeId);
+		return entry ? (catalogTextValue(entry.nom) || cardTypeId) : cardTypeId;
+	}
+
+	// Agrégats par joueur (voir .activity-table, déjà utilisé pour le rapport
+	// de fin de partie - même style, nouvelle donnée). "Partenaire principal"
+	// : celui avec qui ce joueur a le plus échangé, tous rôles confondus -
+	// répond directement au besoin "qui échange le plus avec qui".
+	const byPlayer = new Map(); // name -> { sellCount, buyCount, sellVolume, buyVolume, partners: Map(name -> count) }
+	function ensurePlayer(name) {
+		if (!byPlayer.has(name)) byPlayer.set(name, { sellCount: 0, buyCount: 0, sellVolume: 0, buyVolume: 0, partners: new Map() });
+		return byPlayer.get(name);
+	}
+	function bumpPartner(stats, partnerName) {
+		stats.partners.set(partnerName, (stats.partners.get(partnerName) || 0) + 1);
+	}
+	for (const tx of transactions) {
+		const seller = ensurePlayer(tx.sellerPlayerName);
+		seller.sellCount++;
+		seller.sellVolume += tx.totalCoinsValue;
+		bumpPartner(seller, tx.buyerPlayerName);
+		const buyer = ensurePlayer(tx.buyerPlayerName);
+		buyer.buyCount++;
+		buyer.buyVolume += tx.totalCoinsValue;
+		bumpPartner(buyer, tx.sellerPlayerName);
+	}
+	function topPartner(stats) {
+		let best = null;
+		let bestCount = 0;
+		stats.partners.forEach((count, name) => { if (count > bestCount) { best = name; bestCount = count; } });
+		return best ? `${escapeHtml(best)} (${bestCount})` : "—";
+	}
+
+	const totalVolume = transactions.reduce((s, tx) => s + tx.totalCoinsValue, 0);
+	const sortedPlayers = [...byPlayer.entries()].sort((a, b) => (b[1].sellCount + b[1].buyCount) - (a[1].sellCount + a[1].buyCount));
+
+	const summaryHtml = `
+		<p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:0.9rem;">
+			${t("game.transactions_summary", { count: transactions.length, volume: totalVolume })}
+		</p>`;
+
+	const activityHtml = `
+		<table class="activity-table" style="margin-bottom:1.2rem;">
+			<thead><tr>
+				<th>${t("game.transactions_col_player")}</th>
+				<th>${t("game.transactions_col_sells")}</th>
+				<th>${t("game.transactions_col_buys")}</th>
+				<th>${t("game.transactions_col_sell_volume")}</th>
+				<th>${t("game.transactions_col_buy_volume")}</th>
+				<th>${t("game.transactions_col_top_partner")}</th>
+			</tr></thead>
+			<tbody>
+				${sortedPlayers.map(([name, s], i) => `
+				<tr class="${i === 0 ? "top-player" : ""}">
+					<td>${escapeHtml(name)}</td>
+					<td>${s.sellCount}</td>
+					<td>${s.buyCount}</td>
+					<td>${s.sellVolume}</td>
+					<td>${s.buyVolume}</td>
+					<td>${topPartner(s)}</td>
+				</tr>`).join("")}
+			</tbody>
+		</table>`;
+
+	// Historique brut, du plus récent au plus ancien (déjà l'ordre renvoyé par
+	// GameService.listTransactions) - qui a échangé quoi, avec qui, à quel
+	// tour, pour quel montant.
+	const historyHtml = `
+		<ul class="events-list">
+			${transactions.map((tx) => `
+			<li>
+				<strong>${escapeHtml(tx.sellerPlayerName)} → ${escapeHtml(tx.buyerPlayerName)}</strong>
+				<span class="event-meta">${escapeHtml(cardName(tx.cardTypeId))} · ${t("game.transactions_turn_label", { n: tx.turnNumber })} · ${t("game.transactions_amount", { n: tx.totalCoinsValue })}</span>
+			</li>`).join("")}
+		</ul>`;
+
+	body.innerHTML = summaryHtml + activityHtml + historyHtml;
 }
 
 
@@ -4440,6 +4569,7 @@ function bindActions() {
 	// son épaule, pas confortable dans une modale qui se referme au clic
 	// extérieur.
 	el("btnInvitePlayers").onclick = () => renderInviteQr(state.currentGameId);
+	el("btnToggleTransactions").onclick = () => toggleTransactionsPanel(state.currentGameId);
 
 	// Ouvre l'assistant de fin de tour (résumé -> décès -> nouveaux-nés -> préparation)
 	// au lieu d'enregistrer directement l'événement "nouveau tour".

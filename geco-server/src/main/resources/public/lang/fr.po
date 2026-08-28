@@ -1631,3 +1631,46 @@ msgstr "Nouveau solde"
 
 msgid "trade.result_success_body_balance"
 msgstr "Vous avez acheté : {name}. Nouveau solde : {balance} jetons."
+
+# ============ Étape 3 : historique des échanges par QR (vue partie) ============
+msgid "game.transactions_title"
+msgstr "Échanges par QR code"
+
+msgid "game.transactions_toggle_btn"
+msgstr "📊 Afficher"
+
+msgid "game.transactions_toggle_btn_hide"
+msgstr "📊 Masquer"
+
+msgid "game.transactions_load_error"
+msgstr "Impossible de charger l'historique des échanges."
+
+msgid "game.transactions_empty"
+msgstr "Aucun échange par QR code pour l'instant sur cette partie."
+
+msgid "game.transactions_summary"
+msgstr "{count} échange(s) au total, pour un volume cumulé de {volume} jetons."
+
+msgid "game.transactions_col_player"
+msgstr "Joueur"
+
+msgid "game.transactions_col_sells"
+msgstr "Ventes"
+
+msgid "game.transactions_col_buys"
+msgstr "Achats"
+
+msgid "game.transactions_col_sell_volume"
+msgstr "Volume vendu"
+
+msgid "game.transactions_col_buy_volume"
+msgstr "Volume acheté"
+
+msgid "game.transactions_col_top_partner"
+msgstr "Partenaire principal"
+
+msgid "game.transactions_turn_label"
+msgstr "tour {n}"
+
+msgid "game.transactions_amount"
+msgstr "{n} jetons"
