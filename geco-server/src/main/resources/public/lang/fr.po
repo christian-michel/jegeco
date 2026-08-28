@@ -1438,6 +1438,9 @@ msgstr "Vous êtes inscrit·e. Attendez que l'animateur démarre la partie sur s
 msgid "join.btn_go_to_space"
 msgstr "Accéder à mon espace"
 
+msgid "join.btn_go_to_space_countdown"
+msgstr "Patientez... {n}s"
+
 msgid "join.https_warning_note"
 msgstr "Un avertissement de sécurité peut apparaître à la première visite (certificat local, normal) : appuyez sur \"Paramètres avancés\" puis \"Continuer\"."
 

@@ -339,8 +339,16 @@ function scanTick() {
 		// eslint-disable-next-line no-undef
 		const code = jsQR(imageData.data, imageData.width, imageData.height);
 		if (code && code.data && OFFER_CODE_PATTERN.test(code.data.trim().toUpperCase())) {
-			stopCamera();
-			resolveCode(code.data.trim().toUpperCase());
+			// Remonté par un utilisateur (28/08/2026) : la caméra était coupée ICI,
+			// AVANT même de savoir si le code allait réellement aboutir - si
+			// resolveCode() retombait sur son chemin "on continue de scanner"
+			// (offre expirée entre-temps, propre carte...), il relançait la boucle
+			// sur un flux déjà arrêté (state.scanStream == null), et scanTick()
+			// s'arrêtait aussitôt sans jamais rien afficher : écran de caméra figé
+			// et noir, sans erreur ni sortie possible. La caméra ne doit être
+			// coupée qu'une fois le succès confirmé (voir resolveCode ci-dessous),
+			// jamais avant.
+			resolveCode(code.data.trim().toUpperCase(), true);
 			return; // pas de nouvelle frame tant que le résultat n'est pas traité
 		}
 	}
@@ -374,18 +382,22 @@ async function submitManualCode() {
 		return;
 	}
 	el("manualCodeError").classList.add("hidden");
-	await resolveCode(raw);
+	await resolveCode(raw, false);
 }
 
 // ---------- Résolution du code (commune scan/saisie manuelle) ----------
-async function resolveCode(code) {
+// pFromCamera : true si appelé depuis la boucle de scan (le flux caméra est
+// encore actif à cet instant), false depuis la saisie manuelle (pas de
+// caméra à gérer). Détermine comment réagir à un code invalide/expiré : en
+// reprenant le scan (caméra encore vivante) ou en affichant une erreur
+// textuelle (saisie manuelle).
+async function resolveCode(code, pFromCamera) {
 	try {
 		const res = await fetch(`/api/games/${state.gameId}/trade-offers/${code}`);
 		if (!res.ok) {
-			if (el("scanManual").classList.contains("hidden")) {
-				// Venait du scan caméra : on ignore et on continue de scanner
-				// plutôt que d'interrompre l'utilisateur pour un QR expiré capté
-				// par erreur (ex. reflet, ancien QR encore affiché ailleurs).
+			if (pFromCamera) {
+				// Toujours en vie à cet instant (voir le commentaire dans
+				// scanTick) : on peut reprendre la boucle sans rien redémarrer.
 				state.scanRAF = requestAnimationFrame(scanTick);
 			} else {
 				el("manualCodeError").textContent = t("trade.manual_code_not_found");
@@ -396,7 +408,7 @@ async function resolveCode(code) {
 		const offer = await res.json();
 		if (offer.sellerPlayerId === state.player.id) {
 			// On ne peut pas s'acheter sa propre carte.
-			if (el("scanManual").classList.contains("hidden")) {
+			if (pFromCamera) {
 				state.scanRAF = requestAnimationFrame(scanTick);
 			} else {
 				el("manualCodeError").textContent = t("trade.manual_code_own_card");
@@ -404,6 +416,9 @@ async function resolveCode(code) {
 			}
 			return;
 		}
+		// Seulement maintenant qu'on sait qu'on quitte réellement l'écran caméra :
+		// sans effet si pFromCamera est faux (déjà arrêtée ou jamais démarrée).
+		stopCamera();
 		state.pendingOffer = offer;
 		renderScanConfirm(offer);
 		showScreen("scanConfirm");

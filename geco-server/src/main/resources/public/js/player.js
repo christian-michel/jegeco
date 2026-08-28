@@ -349,7 +349,16 @@ async function buildPlayerViewUrl(player) {
 // Affiche l'écran de confirmation puis bascule vers l'espace personnel -
 // utilisé aussi bien après une inscription fraîche (joinGame) qu'en cas de
 // ré-inscription détectée sur un appareil déjà inscrit (voir init()).
-async function goToPlayerSpace(player, pName, pDelayMs) {
+// Nombre de secondes pendant lesquelles le bouton "Accéder à mon espace"
+// reste désactivé - remonté par un utilisateur : laisser le temps de lire
+// l'écran plutôt qu'une redirection automatique. Note honnête : ce délai ne
+// change RIEN à la validation du certificat HTTPS auto-signé elle-même
+// (aucune action côté client ne peut l'accélérer, voir SelfSignedCertService
+// côté serveur) - c'est uniquement pour donner le temps de lire la note
+// ci-dessus avant d'agir, pas une astuce technique pour le certificat.
+const PLAYER_SPACE_BUTTON_DELAY_SECONDS = 30;
+
+async function goToPlayerSpace(player, pName) {
 	el("step1").classList.add("hidden");
 	el("step2").classList.add("hidden");
 	el("stepDone").classList.remove("hidden");
@@ -357,17 +366,37 @@ async function goToPlayerSpace(player, pName, pDelayMs) {
 	updateStepDots(2);
 	el("doneTitle").textContent = t("join.done_title", { name: pName });
 	const playerViewUrl = await buildPlayerViewUrl(player);
-	el("btnGoToPlayerSpace").href = playerViewUrl;
-	el("btnGoToPlayerSpace").classList.remove("hidden");
-	// Laisse le temps de voir la confirmation, puis joue l'animation de
-	// sortie (voir player.css : la photo part à droite, le cadre part à
-	// gauche, l'un et l'autre se déforment) avant de naviguer réellement -
-	// la navigation attend la fin de l'animation (~400ms) plutôt que de la
-	// couper en plein milieu.
-	setTimeout(() => {
-		el("stepDone").classList.add("stepDone-exit");
-		setTimeout(() => { window.location.href = playerViewUrl; }, 420);
-	}, pDelayMs);
+	const btn = el("btnGoToPlayerSpace");
+	btn.href = playerViewUrl;
+	btn.classList.remove("hidden");
+
+	// Remonté par un utilisateur : plus de redirection automatique - on
+	// n'avance que sur un clic explicite, avec le bouton désactivé pendant
+	// PLAYER_SPACE_BUTTON_DELAY_SECONDS (voir le commentaire au-dessus de
+	// cette constante). L'animation de sortie (voir player.css : la photo
+	// part à droite, le cadre part à gauche) se joue au clic, juste avant la
+	// navigation réelle.
+	let remaining = PLAYER_SPACE_BUTTON_DELAY_SECONDS;
+	const preventEarlyClick = (e) => e.preventDefault();
+	btn.classList.add("btn-countdown");
+	btn.addEventListener("click", preventEarlyClick);
+	const tick = () => {
+		if (remaining <= 0) {
+			btn.classList.remove("btn-countdown");
+			btn.textContent = t("join.btn_go_to_space");
+			btn.removeEventListener("click", preventEarlyClick);
+			btn.addEventListener("click", (e) => {
+				e.preventDefault();
+				el("stepDone").classList.add("stepDone-exit");
+				setTimeout(() => { window.location.href = playerViewUrl; }, 420);
+			});
+			return;
+		}
+		btn.textContent = t("join.btn_go_to_space_countdown", { n: remaining });
+		remaining -= 1;
+		setTimeout(tick, 1000);
+	};
+	tick();
 }
 
 // ---------- Envoi de l'inscription ----------
@@ -402,7 +431,7 @@ async function joinGame() {
 		// Délai un peu plus long qu'un simple "temps d'admirer l'avatar" :
 		// laisse le temps de lire la note sur l'avertissement de sécurité
 		// possible (voir join.html) avant la redirection automatique.
-		await goToPlayerSpace(player, state.name, 2600);
+		await goToPlayerSpace(player, state.name);
 	} catch (err) {
 		btn.disabled = false;
 		btn.textContent = t("join.btn_join");
@@ -468,7 +497,7 @@ async function init() {
 					// Config illisible : aperçu vide plutôt qu'un écran cassé, sans
 					// gravité vu la brièveté de cet écran de passage.
 				}
-				await goToPlayerSpace(existingPlayer, existingPlayer.name, 1200);
+				await goToPlayerSpace(existingPlayer, existingPlayer.name);
 				return;
 			}
 		} catch (err) {

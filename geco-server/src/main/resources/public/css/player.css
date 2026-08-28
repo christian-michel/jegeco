@@ -122,6 +122,10 @@ body {
 }
 .btn-primary:active { transform: translateY(1px); box-shadow: 0 4px 10px -4px rgba(91, 75, 209, 0.6); }
 .btn-primary:disabled { opacity: 0.6; box-shadow: none; cursor: default; }
+/* Équivalent visuel de :disabled pour un <a> (pas d'état disabled natif) -
+   voir goToPlayerSpace() dans player.js : bouton "Accéder à mon espace"
+   désactivé pendant le compte à rebours. */
+.btn-primary.btn-countdown { opacity: 0.6; box-shadow: none; cursor: default; pointer-events: none; }
 .btn-block { width: 100%; margin-top: 1.6rem; }
 
 .btn-secondary {
@@ -179,7 +183,7 @@ body {
    donc pile là où le haut de la carte se trouvait AVANT ce chevauchement -
    le même espace de respiration qu'avant avec l'en-tête, aucune régression
    possible tant que cette égalité est conservée. */
-#stepDone { text-align: center; position: relative; padding-top: 100px; margin-top: 100px; }
+#stepDone { text-align: center; position: relative; padding-top: 100px; margin-top: 116px; }
 #stepDone .avatar-preview-wrap {
 	position: absolute; top: -84px; left: 50%; transform: translateX(-50%); margin: 0 0 1.4rem;
 }
