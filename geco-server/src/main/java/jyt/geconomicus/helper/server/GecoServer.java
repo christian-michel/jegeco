@@ -587,7 +587,11 @@ public class GecoServer
 					// voir TradeOfferService) : toutes les routes /trade-offers/*
 					// sont initiées par un JOUEUR (vendeur ou acheteur), jamais
 					// l'animateur - même raisonnement que /transactions ci-dessus.
-					|| ctx.path().contains("/trade-offers")) //$NON-NLS-1$
+					|| ctx.path().contains("/trade-offers") //$NON-NLS-1$
+					// Infos publiques d'une partie (nom affiché sur l'écran
+					// d'inscription, voir PublicGameInfoDto) : un joueur qui n'a
+					// pas encore rejoint la partie ne connaît jamais le PIN.
+					|| ctx.path().endsWith("/public-info")) //$NON-NLS-1$
 				return;
 			final int id;
 			try
@@ -680,6 +684,19 @@ public class GecoServer
 
 		// Détail d'une partie (joueurs + journal des événements) : c'est la vue principale
 		// pendant le jeu, équivalent web de la fenêtre principale HelperUI.
+		// Voir PublicGameInfoDto : route volontairement publique, à ne jamais
+		// enrichir avec des données qui justifieraient la protection par PIN.
+		pApp.get("/api/games/{id}/public-info", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			ctx.json(new Dtos.PublicGameInfoDto(game.getId(), game.getDescription()));
+		});
+
 		pApp.get("/api/games/{id}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			final Game game = mGameService.getGame(id);

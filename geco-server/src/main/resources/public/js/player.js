@@ -364,7 +364,7 @@ async function init() {
 	}
 
 	try {
-		const res = await fetch(`/api/games/${state.gameId}`);
+		const res = await fetch(`/api/games/${state.gameId}/public-info`);
 		if (!res.ok) throw new Error("not found");
 		const game = await res.json();
 		el("joinSubtitle").textContent = game.description

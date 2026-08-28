@@ -246,4 +246,19 @@ public class Dtos
 	public record NetworkInfoDto(java.util.List<NetworkUtils.NetworkAddress> addresses, Integer httpsPort)
 	{
 	}
+
+	// Réponse de GET /api/games/{id}/public-info (écran d'inscription joueur,
+	// join.html) - remonté par un utilisateur (28/08/2026) : GET /api/games/{id}
+	// (utilisée par join.html pour vérifier que la partie existe et afficher
+	// son nom) est protégée par le PIN dès que la partie en a un - un joueur,
+	// qui ne le connaît jamais, se voyait donc refuser jusqu'à la simple
+	// CONSULTATION de l'écran d'inscription, avec un message trompeur
+	// ("partie introuvable" au lieu de la vraie cause). Cette route est donc
+	// volontairement PUBLIQUE (exemptée du PIN, voir checkGamePin) et ne
+	// renvoie QUE l'information déjà destinée à être publique (le nom de la
+	// partie affiché sur l'écran d'inscription) - jamais les joueurs, les
+	// finances, ni quoi que ce soit qui justifierait la protection par PIN.
+	public record PublicGameInfoDto(Integer id, String description)
+	{
+	}
 }
