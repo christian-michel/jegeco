@@ -373,31 +373,49 @@ C'est ce qui fait passer le badge "pas encore jouable" à un vrai bouton
 
 ## Interactions avec les smartphones des joueurs (étape 3)
 
-Honnêteté d'abord : **l'étape 3 n'est pas construite**. Ce qui existe
-aujourd'hui (`join.html`, `js/player.js`, l'écran "Connexion joueurs" avec
-QR code) ne couvre que **l'auto-inscription** d'un joueur depuis son
-téléphone (nom, âge, couleur, avatar) - rien côté échanges. Un joueur ne peut
-pas, à ce jour, initier ou confirmer un échange depuis son téléphone.
+Mise à jour du 28/08/2026 - l'étape 3 est maintenant **bien avancée** (mais
+pas terminée). Ce qui existe concrètement aujourd'hui :
 
-Ce qui est déjà anticipé dans le contrat de plugin (`docs/11`, section
-"Anticiper l'étape 3"), pour que votre système survive à ce chantier sans
-devoir être repensé :
+- **Inscription** (`join.html`, `js/player.js`) : un joueur s'inscrit depuis
+  son téléphone (nom, âge, couleur, avatar), en HTTP simple - pas besoin de
+  caméra ni de certificat pour cette partie-là.
+- **Espace personnel + échanges** (`player-view.html`, `js/player-view.js`,
+  en HTTPS - voir `SelfSignedCertService`) : un joueur peut désormais vendre
+  une carte (choisie dans le catalogue, prix fixé en jetons, QR code à courte
+  durée de vie généré via `TradeOfferService`) et en acheter une (scan caméra
+  ou saisie manuelle du code à 6 caractères). Chaque échange devient une
+  `Transaction` (nouvelle entité `geco-engine`, voir `docs/11`).
+- **Fusion avec l'économie "officielle" du jeu, en monnaie libre uniquement
+  pour l'instant** : à chaque fin de tour, l'assistant récupère
+  automatiquement l'historique des transactions de chaque joueur, pré-remplit
+  le bilan (au lieu de la saisie verbale historique), et pose un
+  `WEALTH_CHECKPOINT` une fois validé par l'animateur (voir `docs/11`, socle
+  commun d'événements).
 
-- Le champ `roles` de chaque `eventType` (ex. `["initiator", "counterparty"]`
-  pour le troc) identifie déjà clairement qui est qui dans un échange - la
-  structure est prête pour un flux "les deux téléphones confirment", même si
-  ce flux n'existe pas encore.
-- Si votre système a des variantes de nature d'échange (comme les
-  "catégories" de troc évoquées au tout début - vêtements, livres...),
-  pensez-les comme un simple champ `category` sur l'`eventType` plutôt que
-  des types distincts, pour rester compatible avec cette anticipation.
+Ce qui **n'existe toujours pas** à ce jour :
+- La fusion en monnaie dette (prise de crédit depuis le téléphone, validée
+  par la banque/l'animateur) et en troc (échange carte-contre-carte, taux
+  d'échange 4 cartes d'un niveau = 1 carte du niveau supérieur déjà décidé,
+  voir `docs/10-etape-plugins-troc.md`) - ces deux systèmes n'ont, à ce jour,
+  **aucune interaction smartphone du tout** au-delà de l'inscription.
+- Un écran de statistiques/historique exploitant cette nouvelle donnée
+  (`Transaction`) - en cours de construction.
+
+**Ce que ça change pour vous si vous créez un nouveau système d'échange** :
+le mécanisme d'échange smartphone (`TradeOfferService`, `Transaction`) est,
+pour l'instant, **spécifique à un prix en jetons** (dette/libre) - il ne
+gère pas nativement un échange bien-contre-bien comme le fait le troc en
+présentiel. Si votre système a besoin d'un échange smartphone qui ne
+ressemble pas à "une carte contre des jetons", il faudra probablement
+étendre `Transaction`/`TradeOfferService` plutôt que les réutiliser tels
+quels - un point de conception encore ouvert (voir la divergence documentée
+dans `docs/11`, section étape 3 : les échanges smartphone ne suivent pas le
+mécanisme `eventTypes` déclaratif décrit plus haut dans ce guide).
 
 **Ce que ça veut dire concrètement pour vous aujourd'hui** : concevez vos
 règles indépendamment de qui les saisit (l'animateur depuis le tableau de
-bord, ou plus tard un joueur depuis son téléphone) - toute la logique de
-validation doit vivre côté serveur (`GameService`), jamais seulement côté
-client, précisément pour rester valable le jour où un smartphone appellera
-directement `recordEvent()` sans passer par l'interface de l'animateur.
+bord, ou un joueur depuis son téléphone) - toute la logique de validation
+doit vivre côté serveur (`GameService`), jamais seulement côté client.
 
 ## Limites actuelles et pistes pour aller plus loin
 

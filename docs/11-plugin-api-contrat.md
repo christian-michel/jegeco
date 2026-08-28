@@ -80,9 +80,17 @@ Chaque champ devient un input numérique généré automatiquement sur l'écran
 ### Vocabulaire d'événements
 
 Chaque plugin peut définir ses propres types d'événements, en plus du socle
-commun obligatoire (`JOIN`, `TURN`, `DEATH`, `QUIT`, `END` - gérés par le
-moteur central, jamais par un plugin, pour garantir les invariants de
-comparabilité : mêmes tours, mêmes morts/renaissances partout).
+commun obligatoire (`JOIN`, `TURN`, `DEATH`, `QUIT`, `END`, `WEALTH_CHECKPOINT`
+- gérés par le moteur central, jamais par un plugin, pour garantir les
+invariants de comparabilité : mêmes tours, mêmes morts/renaissances partout).
+
+`WEALTH_CHECKPOINT` (ajouté à l'étape 3, voir plus bas) : un pur no-op côté
+moteur (aucun effet sur la masse monétaire ni les cartes) - juste un point de
+mesure de la richesse d'un joueur À UN INSTANT DONNÉ, sans qu'il s'agisse
+d'une mort/sortie. Utile à tout plugin qui veut une courbe de richesse en
+continu plutôt que seulement échantillonnée aux morts (voir
+`StatsService.computeWealthOverTime`, câblé pour la monnaie libre en premier
+mais réutilisable tel quel par n'importe quel autre système).
 
 ```json
 "eventTypes": [
@@ -216,30 +224,54 @@ strictement (motif `[a-z]{2}(-[a-z]{2})?`) pour ne jamais laisser passer une
 traversée de répertoire, même si un plugin tiers malveillant tentait
 d'exploiter cette route avec un code de langue fabriqué à la main.
 
-## Anticiper l'étape 3 (échanges depuis les smartphones)
+## Étape 3 (échanges depuis les smartphones) : anticipé, puis réellement construit
 
-Quelques implications à garder en tête pour que ce contrat survive à l'étape 3
-sans devoir être redéfini :
+Cette section décrivait, avant l'étape 3, ce qu'il faudrait anticiper pour que
+ce contrat survive à l'arrivée des échanges par smartphone. L'étape 3 est
+maintenant bien avancée (28/08/2026) - voici ce qui s'est **réellement** passé,
+pour que ce document reste un repère fiable plutôt qu'une prévision datée :
 
-- **Les échanges pourront être initiés par les joueurs eux-mêmes** (deux
-  téléphones qui se synchronisent), pas seulement saisis après coup par
-  l'animateur. Le champ `roles` de chaque `eventType` (ex.
-  `["initiator","counterparty"]`) est pensé pour ça : il identifie clairement
-  qui est qui dans l'échange, ce qui permettra plus tard un flux "les deux
-  joueurs confirment sur leur téléphone" sans changer la structure de
-  l'événement.
-- **Statistiques supplémentaires rendues possibles par la saisie en direct** :
-  durée de négociation (temps entre le début et la confirmation d'un
-  échange), qui échange avec qui (graphe des échanges, utile pour un système
-  comme le troc où "avec qui négocie-t-on" est une donnée en soi), fréquence
-  des échanges par joueur dans le temps plutôt qu'un simple total en fin de
-  partie.
-- **Nature/variantes d'échange** (troc thématique/généraliste/services,
-  mentionnés par l'utilisateur) : modélisables comme une simple métadonnée
-  supplémentaire sur un `eventType` plutôt que des types distincts - par
-  exemple un champ `category` sur `TRADE_GOODS` plutôt que
-  `TRADE_GOODS_VETEMENTS`, `TRADE_GOODS_LIVRES`, etc. À revoir une fois
-  l'étape 3 abordée concrètement.
+- **Les échanges sont bien initiés par les joueurs eux-mêmes**, comme anticipé
+  - mais pas via "deux téléphones qui se synchronisent" en direct : un QR code
+    à courte durée de vie (~90s), scanné par l'acheteur (caméra ou saisie
+    manuelle du code), voir `TradeOfferService.java` côté serveur et
+    `player-view.js` côté client. Chaque échange devient une `Transaction`
+    (nouvelle entité `geco-engine`, PAS un `Event` classique - voir plus bas
+    pourquoi) : vendeur, acheteur, tour, horodatage, type/niveau de carte,
+    jetons échangés.
+- **Statistiques rendues possibles, confirmées en usage** : qui échange avec
+  qui, quand, pour combien - exactement ce qui était espéré. Voir l'écran de
+  stats/historique (en cours de construction, voir `docs/13-*` une fois
+  écrit) qui exploite directement cette table `Transaction`.
+- **Point de conception qui a divergé de ce qui était imaginé ici** : les
+  échanges smartphone n'ont **pas** été modélisés comme un nouvel `eventType`
+  déclaré par un plugin (`TRADE_GOODS`/`TRADE_SERVICE` façon troc), mais comme
+  une entité séparée (`Transaction`), volontairement DÉCOUPLÉE du journal
+  d'événements classique (`Event`) - celui-ci reste réservé à ce qu'un
+  animateur constate/valide (crédits, morts, tours), jamais à un mouvement
+  déclenché en direct par un joueur sur son téléphone. Voir le commentaire de
+  tête de `Transaction.java` pour le raisonnement complet. Un plugin qui
+  voudrait un système d'échange smartphone différent du sien (troc, futur
+  MDBC...) devra donc, pour l'instant, composer avec cette même table
+  `Transaction` plutôt qu'avec le mécanisme `eventTypes` décrit plus haut dans
+  ce document - une incohérence assumée, à résoudre si/quand ce contrat sera
+  réellement branché au moteur (voir "Prochaine étape technique" ci-dessous,
+  toujours pas commencée à ce jour).
+- **Fusion avec l'économie "officielle" du jeu, en monnaie libre uniquement
+  pour l'instant** : les jetons échangés par smartphone ne sont PAS une
+  comptabilité parallèle indéfiniment - à chaque fin de tour, l'assistant
+  (voir `openEndOfTurnWizard` dans `app.js`) récupère l'historique des
+  transactions de chaque joueur et pose un `WEALTH_CHECKPOINT` (voir plus
+  haut) après validation de l'animateur. Décision explicite de l'utilisateur
+  (28/08/2026) : cette fusion reste à construire pour la monnaie dette (une
+  prise de crédit initiée depuis le téléphone, validée par l'animateur/la
+  banque) et pour le troc (échange carte-contre-carte, taux de 4 cartes d'un
+  niveau = 1 carte du niveau supérieur, pas encore implémenté).
+- **Nature/variantes d'échange, catégorie de bien** : toujours pas
+  implémenté - le catalogue de cartes (voir `CatalogService.java`,
+  `docs/etape3-*` s'ils existent) porte bien un champ `secteur` par carte,
+  mais il n'est pour l'instant qu'une simple étiquette sans effet sur les
+  règles d'échange.
 
 ## Prochaine étape technique
 

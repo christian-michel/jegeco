@@ -149,3 +149,25 @@ Les règles définitives du troc, telles qu'elles restent après ce retour en
 arrière, sont donc les points 1, 3, 6 (biens seulement), 7, 8 et 9 de la
 section "Règles du troc" ci-dessus - les points 2, 4 et 5 (temps de vie,
 échange de service, épuisement du temps) ne s'appliquent plus.
+
+## Mise à jour (28/08/2026) : taux d'échange smartphone, distinct du calcul de richesse
+
+Décision prise avec l'utilisateur pour le futur échange carte-contre-carte
+par QR code (pas encore implémenté à ce jour - voir
+`docs/11-plugin-api-contrat.md`, section étape 3) : un taux d'échange entre
+niveaux, cohérent avec le reste du jeu (mêmes proportions que les jetons
+faible/moyen/fort) - **1 carte forte = 4 cartes moyennes = 16 cartes
+faibles**, et de même 1 carte très forte = 4 cartes fortes = 16 cartes
+moyennes = 64 cartes faibles.
+
+**Point important, à ne pas confondre** : ce taux d'échange sert uniquement
+de **guide de négociation** pour l'écran d'échange smartphone (aider les
+joueurs à composer une offre équilibrée entre biens de niveaux différents) -
+il ne change RIEN à la règle 7 déjà actée ci-dessus ("un objet compte pour 1
+quel que soit son niveau"), qui reste la formule de calcul de la RICHESSE
+(`wealthFormula: { field: "goodsCount" }` dans le manifeste). Un joueur qui
+échange 1 carte forte contre 4 cartes moyennes ne voit donc PAS sa richesse
+changer dans les statistiques - c'est exactement voulu : ce taux ne fait que
+faciliter des échanges perçus comme "justes" par les joueurs, sans réintroduire
+une notion de valeur monétaire que le troc a explicitement rejetée (règle 3 :
+"jamais de monnaie ni de jeton d'aucune sorte").
