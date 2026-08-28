@@ -75,7 +75,7 @@ async function api(path, options = {}) {
 		if (pin) headers["X-Game-Pin"] = pin;
 	}
 	let res = await fetch(path, { ...options, headers });
-	if ((res.status === 403) && gameIdMatch && !mSuppressPinPromptForBackgroundRefresh) {
+	if ((res.status === 403) && gameIdMatch && (mBackgroundRefreshDepth === 0)) {
 		// Partie protégée, PIN manquant ou incorrect : le demande une fois via une
 		// simple invite navigateur (choix pragmatique - c'est une interaction rare,
 		// une seule fois par appareil, qui ne justifie pas une boîte de dialogue
@@ -231,11 +231,21 @@ const PLAYER_EVENT_TYPES = ["D", "N", "I", "R", "C"];
 // événements...) jusqu'à ce qu'un humain la voie et y réponde - si personne
 // ne regarde l'écran du PC à ce moment précis (le cas typique : l'animateur
 // est en train de regarder le téléphone du joueur), la page semble
-// simplement figée, sans aucun signe visible de ce qui bloque. Ce drapeau
+// simplement figée, sans aucun signe visible de ce qui bloque. Ce compteur
 // désactive cette popup PENDANT un rafraîchissement en arrière-plan : on
 // laisse simplement l'appel échouer silencieusement (voir le catch
 // ci-dessous) plutôt que de risquer de geler toute la page sans prévenir.
-let mSuppressPinPromptForBackgroundRefresh = false;
+//
+// Un COMPTEUR plutôt qu'un simple booléen (remonté par un utilisateur -
+// deuxième bug trouvé le 28/08/2026, en creusant un compte à rebours de fin
+// de tour qui ne redémarrait pas sur une partie protégée) : plusieurs
+// rafraîchissements en arrière-plan peuvent se chevaucher (plusieurs
+// notifications WebSocket arrivant coup sur coup, ex. en toute fin de tour)
+// - avec un simple booléen, le PREMIER à se terminer réactivait la popup
+// alors qu'un SECOND rafraîchissement était encore en cours, recréant
+// exactement le risque de gel qu'on voulait éviter. Le compteur ne redevient
+// 0 que quand TOUS les rafraîchissements en cours sont terminés.
+let mBackgroundRefreshDepth = 0;
 
 // ---------- WebSocket temps réel ----------
 function connectWs() {
@@ -255,17 +265,17 @@ function connectWs() {
 		// ici, mais un rafraîchissement manqué est un bug silencieux difficile
 		// à repérer - autant s'en prémunir).
 		if (String(msg.gameId) === String(state.currentGameId)) {
-			mSuppressPinPromptForBackgroundRefresh = true;
+			mBackgroundRefreshDepth++;
 			try {
 				await renderGameDetail(state.currentGameId);
 			} catch (err) {
 				// Échec silencieux volontaire (voir le commentaire au-dessus de
-				// mSuppressPinPromptForBackgroundRefresh) : pas de popup, juste une
-				// trace en console pour le diagnostic. Le prochain rafraîchissement
+				// mBackgroundRefreshDepth) : pas de popup, juste une trace en
+				// console pour le diagnostic. Le prochain rafraîchissement
 				// (message WS suivant, ou action explicite de l'animateur) réessaiera.
 				console.warn("Rafraîchissement automatique impossible (partie protégée ? PIN pas encore mémorisé) :", err);
 			} finally {
-				mSuppressPinPromptForBackgroundRefresh = false;
+				mBackgroundRefreshDepth--;
 			}
 		}
 	};
