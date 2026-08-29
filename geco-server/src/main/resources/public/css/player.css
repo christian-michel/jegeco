@@ -358,6 +358,20 @@ body {
 .level-forte { --level-bg: #dcfce7; --level-fg: #166534; }
 .level-tresforte { --level-bg: #ede9fe; --level-fg: #5b21b6; }
 
+/* Couleurs par SECTEUR (indépendant du niveau, voir CatalogSeeds/cartes.json)
+   - 8 secteurs, palette distincte de celle des niveaux ci-dessus pour éviter
+   toute confusion entre les deux axes de classement. Utilisé sur "Mes
+   cartes" (mockup de référence, 28/08/2026) pour repérer les groupes d'un
+   coup d'œil, comme le fait le mockup. */
+.sector-alimentation { --sector-bg: #fef3c7; --sector-fg: #92400e; --sector-icon: "🌾"; }
+.sector-agriculture { --sector-bg: #dcfce7; --sector-fg: #166534; --sector-icon: "🐄"; }
+.sector-ressources { --sector-bg: #e0f2fe; --sector-fg: #0369a1; --sector-icon: "⛰️"; }
+.sector-artisanat { --sector-bg: #fde8d8; --sector-fg: #9a3412; --sector-icon: "🏠"; }
+.sector-culture { --sector-bg: #ede9fe; --sector-fg: #5b21b6; --sector-icon: "📷"; }
+.sector-transport { --sector-bg: #dbeafe; --sector-fg: #1e40af; --sector-icon: "🚀"; }
+.sector-industrie { --sector-bg: #f3e8ff; --sector-fg: #6b21a8; --sector-icon: "⚙️"; }
+.sector-technologie { --sector-bg: #e2e8f0; --sector-fg: #334155; --sector-icon: "💻"; }
+
 .trade-card-thumb-fallback, .trade-card-thumb { background: var(--level-bg, var(--mist)); }
 .trade-card-info { background: var(--level-bg, var(--mist)); }
 .trade-card-info-meta { color: var(--level-fg, var(--text-dim)); font-weight: 700; }
@@ -451,22 +465,29 @@ body {
    ============================================================ */
 .mycards-sector { margin-bottom: 1.4rem; }
 .mycards-sector-header {
-	display: flex; align-items: center; justify-content: space-between;
-	margin-bottom: 0.6rem; padding-bottom: 0.3rem; border-bottom: 2px solid var(--border);
+	display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;
+	margin-bottom: 0.6rem; padding: 0.55rem 0.8rem; border-radius: 12px;
+	background: var(--sector-bg, var(--mist)); color: var(--sector-fg, var(--text));
 }
-.mycards-sector-title { font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; }
+.mycards-sector-header::before { content: var(--sector-icon, "📦"); font-size: 1.1rem; }
+.mycards-sector-title { font-family: var(--font-display); font-weight: 700; font-size: 0.92rem; flex: 1; }
 .mycards-sector-count {
-	background: var(--mist); color: var(--text-dim); font-weight: 700; font-size: 0.78rem;
+	background: rgba(255,255,255,0.6); color: inherit; font-weight: 800; font-size: 0.78rem;
 	border-radius: 999px; padding: 0.15rem 0.6rem;
 }
-.mycards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; }
-.mycards-item { position: relative; }
-.mycards-item-count {
-	position: absolute; top: -6px; right: -6px; background: var(--accent); color: #fff;
-	font-family: var(--font-display); font-weight: 800; font-size: 0.75rem;
-	border-radius: 999px; padding: 0.15rem 0.45rem; border: 2px solid #fff;
-	box-shadow: 0 2px 5px rgba(23,19,57,0.2);
+.mycards-list { display: flex; flex-direction: column; gap: 0.45rem; }
+.mycards-row {
+	display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0.7rem;
+	background: var(--level-bg, var(--mist)); border-radius: 12px;
 }
+.mycards-row-icon {
+	width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background: #fff;
+	display: flex; align-items: center; justify-content: center; overflow: hidden;
+	box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+.mycards-row-icon img { width: 78%; height: 78%; object-fit: contain; }
+.mycards-row-name { flex: 1; font-weight: 700; font-size: 0.9rem; color: var(--level-fg, var(--text)); }
+.mycards-row-count { font-family: var(--font-display); font-weight: 800; color: var(--level-fg, var(--gold-dark)); }
 
 /* ============================================================
    Étape 3 : "Classement"
@@ -487,3 +508,23 @@ body {
 .leaderboard-row:nth-child(3) .leaderboard-rank { background: #cd8a4f; color: #fff; }
 .leaderboard-name { flex: 1; font-weight: 700; }
 .leaderboard-value { font-family: var(--font-display); font-weight: 800; color: var(--gold-dark); }
+
+/* ============================================================
+   Étape 3 : "Historique" - lignes avec badge de montant coloré
+   ============================================================ */
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.history-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.8rem; background: var(--mist); border-radius: 14px; }
+.history-row-icon {
+	width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; background: #fff;
+	display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
+	box-shadow: 0 1px 3px rgba(23,19,57,0.1);
+}
+.history-row-main { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.history-row-name { font-weight: 700; font-size: 0.92rem; }
+.history-row-meta { font-size: 0.78rem; color: var(--text-dim); }
+.history-row-amount {
+	font-family: var(--font-display); font-weight: 800; font-size: 0.95rem; flex-shrink: 0;
+	padding: 0.2rem 0.6rem; border-radius: 999px;
+}
+.history-row-amount.positive { background: #dcfce7; color: #166534; }
+.history-row-amount.negative { background: #fee2e2; color: #b91c1c; }

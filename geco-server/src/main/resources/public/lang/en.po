@@ -1751,8 +1751,8 @@ msgstr "Ranked by value of goods held."
 msgid "playerView.history_empty"
 msgstr "No trades yet."
 
-msgid "playerView.history_goods_amount"
-msgstr "{n} card(s) given"
+msgid "playerView.history_goods_amount_short"
+msgstr "{n} card(s)"
 
 msgid "playerView.history_sold_to"
 msgstr "Sold to {name}"

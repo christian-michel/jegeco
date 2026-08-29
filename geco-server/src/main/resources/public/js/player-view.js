@@ -146,13 +146,18 @@ async function renderMyCards() {
 					<span class="mycards-sector-title">${escapeHtmlLocal(catalogEnumLabel("sector", sector))}</span>
 					<span class="mycards-sector-count">${totalInSector}</span>
 				</div>
-				<div class="mycards-grid">
+				<div class="mycards-list">
 					${cards.map(({ entry, count }) => {
 						const visual = (state.visualsCatalog || []).find((v) => v.id === entry.visualId);
+						const label = visual ? (catalogTextValue(visual.etiquette) || catalogTextValue(entry.nom)) : catalogTextValue(entry.nom);
+						const icon = visual
+							? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" alt="">`
+							: `<span aria-hidden="true">🖼️</span>`;
 						return `
-						<div class="mycards-item">
-							${buildGameCardHtml(entry, visual, "game-card-sm")}
-							<span class="mycards-item-count">×${count}</span>
+						<div class="mycards-row level-${entry.niveau}">
+							<span class="mycards-row-icon">${icon}</span>
+							<span class="mycards-row-name">${escapeHtmlLocal(label || entry.id)}</span>
+							<span class="mycards-row-count">×${count}</span>
 						</div>`;
 					}).join("")}
 				</div>
@@ -206,20 +211,31 @@ async function renderHistory() {
 			return;
 		}
 		body.innerHTML = `
-			<ul class="events-list">
+			<ul class="history-list">
 				${txs.map((tx) => {
 					const isSale = tx.sellerPlayerId === state.player.id;
 					const entry = (state.cardsCatalog || []).find((c) => c.id === tx.cardTypeId);
 					const cardName = entry ? (catalogTextValue(entry.nom) || tx.cardTypeId) : tx.cardTypeId;
-					const amountText = tx.isGoodsTrade
-						? t("playerView.history_goods_amount", { n: tx.buyerWeakGoods + tx.buyerMediumGoods + tx.buyerStrongGoods })
-						: t("game.transactions_amount", { n: tx.totalCoinsValue });
 					const partner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;
 					const verbKey = isSale ? "playerView.history_sold_to" : "playerView.history_bought_from";
+					// Vendre = on reçoit (badge vert, +) ; acheter = on donne (badge
+					// rouge, -) - vrai pour les jetons comme pour les cartes en troc
+					// (voir Transaction.buyerWeakGoods&co, toujours donné par
+					// l'ACHETEUR).
+					const amountValue = tx.isGoodsTrade
+						? (tx.buyerWeakGoods + tx.buyerMediumGoods + tx.buyerStrongGoods)
+						: tx.totalCoinsValue;
+					const amountLabel = tx.isGoodsTrade
+						? t("playerView.history_goods_amount_short", { n: amountValue })
+						: String(amountValue);
 					return `
-					<li>
-						<strong>${isSale ? "💰" : "🛒"} ${escapeHtmlLocal(cardName)}</strong>
-						<span class="event-meta">${escapeHtmlLocal(t(verbKey, { name: partner }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))} · ${escapeHtmlLocal(amountText)}</span>
+					<li class="history-row">
+						<span class="history-row-icon">${isSale ? "💰" : "🛒"}</span>
+						<div class="history-row-main">
+							<span class="history-row-name">${escapeHtmlLocal(cardName)}</span>
+							<span class="history-row-meta">${escapeHtmlLocal(t(verbKey, { name: partner }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))}</span>
+						</div>
+						<span class="history-row-amount ${isSale ? "positive" : "negative"}">${isSale ? "+" : "−"}${escapeHtmlLocal(amountLabel)}</span>
 					</li>`;
 				}).join("")}
 			</ul>`;

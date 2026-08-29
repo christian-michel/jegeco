@@ -1753,8 +1753,8 @@ msgstr "Classement par valeur des biens détenus."
 msgid "playerView.history_empty"
 msgstr "Aucun échange pour l'instant."
 
-msgid "playerView.history_goods_amount"
-msgstr "{n} carte(s) données"
+msgid "playerView.history_goods_amount_short"
+msgstr "{n} carte(s)"
 
 msgid "playerView.history_sold_to"
 msgstr "Vendu à {name}"
