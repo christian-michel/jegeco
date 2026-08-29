@@ -147,27 +147,57 @@ contre-service), l'utilisateur est revenu sur ces deux points :
 
 Les règles définitives du troc, telles qu'elles restent après ce retour en
 arrière, sont donc les points 1, 3, 6 (biens seulement), 7, 8 et 9 de la
-section "Règles du troc" ci-dessus - les points 2, 4 et 5 (temps de vie,
-échange de service, épuisement du temps) ne s'appliquent plus.
+section "Règles du troc" ci-dessus - **à l'exception de la règle 7**, revue
+le 28/08/2026 (voir juste en dessous) - les points 2, 4 et 5 (temps de vie,
+échange de service, épuisement du temps) ne s'appliquent toujours plus.
 
-## Mise à jour (28/08/2026) : taux d'échange smartphone, distinct du calcul de richesse
+## Mise à jour (28/08/2026) : retour sur la règle 7, la richesse suit maintenant les niveaux
+
+**Correction d'une note antérieure de ce même document** (rédigée plus tôt
+dans la journée du 28/08/2026, avant cette mise à jour - gardée plus bas pour
+mémoire de la décision, mais son contenu factuel n'est plus juste) : elle
+affirmait que le taux d'échange ci-dessous ne changeait rien à la formule de
+richesse ("1 objet = 1, quel que soit son niveau"). L'utilisateur est revenu
+sur ce point : **la règle 7 ne s'applique plus telle quelle**. Sans elle, un
+carré (4 objets d'un niveau → 1 objet du niveau supérieur) n'avait aucun
+intérêt économique, seulement un intérêt de rareté/négociation - alors que
+dette et libre, eux, motivent bien le carré par un vrai gain de valeur (via
+leurs propres cartes valeur). Pour que le troc offre la même dynamique, la
+richesse suit désormais un taux ×4 par niveau, cohérent avec le taux
+d'échange déjà décidé :
+
+- **1 carte forte = 4 cartes moyennes = 16 cartes faibles** (poids 1/4/16).
+- De même, 1 carte très forte = 4 cartes fortes = 16 cartes moyennes = 64
+  cartes faibles.
+- Un carré est donc exactement neutre en richesse (4×1 = 1×4) - vérifié par
+  calcul : `weakCards + 4×mediumCards + 16×strongCards` donne la même valeur
+  avant et après un carré.
+
+Implémenté dans `StatsService.computeGain()` (formule ci-dessus, cas
+`MONEY_TROC`) et dans le suivi en direct par niveau des biens d'un joueur
+(`Player.weakGoods/mediumGoods/strongGoods`, mis à jour à chaque `GOODS_TRADE`
+- voir `Event.applyEvent()`). `Player.goodsCount` reste un simple total
+(nombre d'objets en main, toutes valeurs confondues) - utile pour
+l'affichage ("vous avez 7 objets"), mais ce n'est plus lui qui détermine la
+richesse.
+
+**Le manifeste (`plugins/troc/manifest.json`) reste à mettre à jour** pour
+refléter ce nouveau `wealthFormula` - son contenu actuel (`{ "field":
+"goodsCount" }`) est désormais stale, gardé tel quel pour l'instant car ce
+contrat n'est de toute façon pas encore interprété par le moteur (voir
+`docs/11-plugin-api-contrat.md`).
+
+### Ancienne note (28/08/2026, avant la correction ci-dessus - gardée pour mémoire)
 
 Décision prise avec l'utilisateur pour le futur échange carte-contre-carte
 par QR code (pas encore implémenté à ce jour - voir
 `docs/11-plugin-api-contrat.md`, section étape 3) : un taux d'échange entre
 niveaux, cohérent avec le reste du jeu (mêmes proportions que les jetons
-faible/moyen/fort) - **1 carte forte = 4 cartes moyennes = 16 cartes
-faibles**, et de même 1 carte très forte = 4 cartes fortes = 16 cartes
-moyennes = 64 cartes faibles.
+faible/moyen/fort) - 1 carte forte = 4 cartes moyennes = 16 cartes faibles,
+et de même 1 carte très forte = 4 cartes fortes = 16 cartes moyennes = 64
+cartes faibles.
 
-**Point important, à ne pas confondre** : ce taux d'échange sert uniquement
-de **guide de négociation** pour l'écran d'échange smartphone (aider les
-joueurs à composer une offre équilibrée entre biens de niveaux différents) -
-il ne change RIEN à la règle 7 déjà actée ci-dessus ("un objet compte pour 1
-quel que soit son niveau"), qui reste la formule de calcul de la RICHESSE
-(`wealthFormula: { field: "goodsCount" }` dans le manifeste). Un joueur qui
-échange 1 carte forte contre 4 cartes moyennes ne voit donc PAS sa richesse
-changer dans les statistiques - c'est exactement voulu : ce taux ne fait que
-faciliter des échanges perçus comme "justes" par les joueurs, sans réintroduire
-une notion de valeur monétaire que le troc a explicitement rejetée (règle 3 :
-"jamais de monnaie ni de jeton d'aucune sorte").
+~~Point important, à ne pas confondre : ce taux d'échange sert uniquement de
+guide de négociation... il ne change RIEN à la règle 7 déjà actée...~~ -
+**Corrigé ci-dessus : ce n'est plus le cas**, la règle 7 a été explicitement
+abandonnée le même jour.

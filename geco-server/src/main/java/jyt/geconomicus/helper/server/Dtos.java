@@ -26,13 +26,19 @@ public class Dtos
 {
 	public record PlayerDto(Integer id, String name, boolean active, int curDebt, int curInterest,
 			boolean visitedBank, int age, Integer declaredAge, String favoriteColor, String avatarConfigJson,
-			int goodsCount, String accessToken)
+			int goodsCount, String accessToken, int weakGoods, int mediumGoods, int strongGoods)
 	{
 		static PlayerDto from(final Player p, final int pAge)
 		{
 			return new PlayerDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), pAge, p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
-					p.getGoodsCount(), p.getAccessToken());
+					// weakGoods/mediumGoods/strongGoods : ajoutés le 28/08/2026 (voir
+					// Player.java) - manquaient jusqu'ici côté DTO, alors que le moteur
+					// les tient déjà à jour en direct à chaque GOODS_TRADE. Nécessaires
+					// pour pré-remplir l'inventaire de mort troc dans l'assistant (voir
+					// renderStepDeathTroc dans app.js), sur le même principe que le
+					// pré-remplissage déjà en place pour la monnaie libre.
+					p.getGoodsCount(), p.getAccessToken(), p.getWeakGoods(), p.getMediumGoods(), p.getStrongGoods());
 		}
 	}
 
@@ -212,7 +218,12 @@ public class Dtos
 
 	public record RecordEventRequest(String type, Integer playerId, int principal, int interest, int weakCards,
 			int mediumCards, int strongCards, Integer counterpartyPlayerId, int goodsFromPlayer,
-			int goodsFromCounterparty, int weakCoins, int mediumCoins, int strongCoins)
+			int goodsFromCounterparty, int weakCoins, int mediumCoins, int strongCoins,
+			// Troc uniquement : détail par niveau donné par la CONTREPARTIE d'un
+			// GOODS_TRADE - manquait ici jusqu'au 28/08/2026, malgré leur présence
+			// déjà effective dans GameService.recordEvent (jamais vraiment
+			// exploitable côté client faute d'un moyen de les transmettre).
+			int weakGoodsFromCounterparty, int mediumGoodsFromCounterparty, int strongGoodsFromCounterparty)
 	{
 	}
 

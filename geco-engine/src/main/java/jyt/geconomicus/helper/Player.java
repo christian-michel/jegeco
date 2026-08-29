@@ -66,7 +66,24 @@ public class Player implements Serializable
 	// utilisateur : uniquement des transactions d'échange - jamais de don sans
 	// contrepartie, jamais de monnaie ni de jeton (les échanges de service et le
 	// temps de vie ont été retirés après un premier essai).
+	//
+	// Reste un simple TOTAL affiché tel quel (nombre d'objets en main, toutes
+	// valeurs confondues) - depuis le 28/08/2026 (retour utilisateur : "il faut
+	// reprendre le système de valeur 4x pour que les joueurs cherchent encore à
+	// faire des carrés"), la RICHESSE, elle, ne se calcule plus à partir de ce
+	// total mais des trois champs par niveau ci-dessous (voir
+	// StatsService.computeGain, cas MONEY_TROC) - un carré (4 objets d'un niveau
+	// donné) reconstitué en 1 objet du niveau supérieur ne change donc plus la
+	// richesse du joueur (4×1 = 1×4), contrairement à avant où "un objet compte
+	// pour 1 quel que soit son niveau" retirait tout intérêt économique au
+	// carré. goodsCount reste maintenu en parallèle (toujours = weakGoods +
+	// mediumGoods + strongGoods) uniquement pour ne rien casser côté affichage
+	// (tableau de bord, graphique de répartition...), qui n'a besoin que du
+	// total, jamais du détail par niveau.
 	private int goodsCount;
+	private int weakGoods;
+	private int mediumGoods;
+	private int strongGoods;
 
 	// --- Étape 3, Phase B : identité et avatar choisis par le joueur lui-même
 	// lors de l'auto-inscription depuis son smartphone (écran "Créez votre avatar").
@@ -120,8 +137,11 @@ public class Player implements Serializable
 		curInterest = 0;
 		visitedBank = true;
 		// Sans effet pour la monnaie dette/libre (reste à 0, jamais lu) - voir
-		// Game.MONEY_TROC.
+		// Game.MONEY_TROC. Les cartes de départ sont toutes de niveau faible
+		// (convention identique à dette/libre, où la dotation initiale ne
+		// comporte jamais de cartes moyennes/fortes).
 		goodsCount = pGame.getStartingGoods();
+		weakGoods = pGame.getStartingGoods();
 	}
 
 	public String getAvatarConfigJson()
@@ -238,6 +258,36 @@ public class Player implements Serializable
 	public void setGoodsCount(final int pGoodsCount)
 	{
 		goodsCount = pGoodsCount;
+	}
+
+	public int getWeakGoods()
+	{
+		return weakGoods;
+	}
+
+	public void setWeakGoods(final int pWeakGoods)
+	{
+		weakGoods = pWeakGoods;
+	}
+
+	public int getMediumGoods()
+	{
+		return mediumGoods;
+	}
+
+	public void setMediumGoods(final int pMediumGoods)
+	{
+		mediumGoods = pMediumGoods;
+	}
+
+	public int getStrongGoods()
+	{
+		return strongGoods;
+	}
+
+	public void setStrongGoods(final int pStrongGoods)
+	{
+		strongGoods = pStrongGoods;
 	}
 
 	/* (non-Javadoc)

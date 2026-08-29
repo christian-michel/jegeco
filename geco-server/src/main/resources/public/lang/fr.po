@@ -830,6 +830,9 @@ msgstr "Inventaire des morts et renaissance"
 msgid "wiz.death_troc_intro"
 msgstr "Pour chaque joueur qui meurt ce tour, comptez ses biens avant qu'il ne renaisse avec la dotation de départ : {n} biens et autant de jetons de temps de vie."
 
+msgid "wiz.death_troc_prefill_note"
+msgstr "Champs pré-remplis à partir de l'inventaire suivi en direct - vérifiez avant de valider, corrigez si besoin."
+
 msgid "game.player_meta_troc"
 msgstr "biens {goods}"
 

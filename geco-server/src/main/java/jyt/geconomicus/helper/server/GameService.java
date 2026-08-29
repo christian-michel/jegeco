@@ -271,7 +271,9 @@ public class GameService
 	public Event recordEvent(final int pGameId, final String pEventTypeChar, final Integer pPlayerId,
 			final int pPrincipal, final int pInterest, final int pWeakCards, final int pMediumCards,
 			final int pStrongCards, final Integer pCounterpartyPlayerId, final int pGoodsFromPlayer,
-			final int pGoodsFromCounterparty, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins)
+			final int pGoodsFromCounterparty, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
+			final int pWeakGoodsFromCounterparty, final int pMediumGoodsFromCounterparty,
+			final int pStrongGoodsFromCounterparty)
 			throws PlayerNotFoundException
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -330,6 +332,17 @@ public class GameService
 			event.setCounterpartyPlayer(counterpartyPlayer);
 			event.setGoodsFromPlayer(pGoodsFromPlayer);
 			event.setGoodsFromCounterparty(pGoodsFromCounterparty);
+			// Détail par niveau donné par la CONTREPARTIE d'un GOODS_TRADE (troc) -
+			// remonté par un utilisateur (28/08/2026) : ces trois paramètres
+			// existaient déjà dans la signature de cette méthode, mais n'étaient
+			// encore jamais appliqués à l'objet Event avant persistance - un oubli
+			// qui, combiné à l'appel de route qui ne les transmettait pas non plus
+			// (voir GecoServer.java), rendait le suivi par niveau des biens
+			// troqués totalement silencieux (toujours 0, quoi que saisisse
+			// l'animateur).
+			event.setWeakGoodsFromCounterparty(pWeakGoodsFromCounterparty);
+			event.setMediumGoodsFromCounterparty(pMediumGoodsFromCounterparty);
+			event.setStrongGoodsFromCounterparty(pStrongGoodsFromCounterparty);
 			// applyEvent() contient toute la logique métier (calcul de la dette, de la masse
 			// monétaire, etc.) : elle est strictement identique à celle utilisée par l'app Swing,
 			// puisqu'il s'agit du même code dans geco-engine.

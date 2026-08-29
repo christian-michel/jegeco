@@ -791,15 +791,22 @@ public class StatsService
 	 */
 	private int computeGain(final Game pGame, final Event pEvent, final int pCurrentFactor)
 	{
-		// Troc (voir plugins/troc/manifest.json, wealthFormula) : aucune valeur
-		// imposée sur les objets - une carte compte pour 1, quel que soit son
-		// niveau (règle 7 de docs/10-etape-plugins-troc.md), donc pas de
-		// multiplication par un facteur ni de pondération faible/moyen/fort comme
-		// pour les deux autres systèmes. La valeur vient directement de
-		// l'inventaire saisi à la mort/sortie (goodsFromPlayer), pas d'un calcul à
-		// partir de cartes typées.
+		// Troc (voir plugins/troc/manifest.json, wealthFormula) - changement de
+		// règle le 28/08/2026, remonté par l'utilisateur : "il faut reprendre le
+		// système de valeur 4x pour que les joueurs cherchent encore à faire des
+		// carrés, comme dans les autres parties des autres plugins". Avant cette
+		// date, un objet comptait pour 1 quel que soit son niveau (règle 7 de
+		// docs/10-etape-plugins-troc.md, désormais périmée - voir la mise à jour
+		// du 28/08/2026 dans ce même document) : un carré (4 objets d'un niveau →
+		// 1 objet du niveau supérieur) n'avait alors aucun intérêt économique,
+		// seulement un intérêt de "rareté"/négociation. Désormais pondéré 1/4/16
+		// (faible/moyen/fort) - le même rapport ×4 par niveau que celui déjà
+		// utilisé pour le taux d'échange smartphone (voir Transaction.java) -
+		// pour qu'un carré soit exactement neutre en richesse (4×1 = 1×4),
+		// cohérent avec ce que dette/libre offrent déjà à travers leurs propres
+		// cartes valeur.
 		if (pGame.getMoneySystem() == Game.MONEY_TROC)
-			return pEvent.getGoodsFromPlayer();
+			return pEvent.getWeakCards() + (4 * pEvent.getMediumCards()) + (16 * pEvent.getStrongCards());
 
 		int gained;
 		if (pGame.getMoneySystem() == Game.MONEY_DEBT)

@@ -38,7 +38,10 @@
     "onRebirth": { "goodsCount": "$config.startingGoods" }
   },
 
-  "wealthFormula": { "field": "goodsCount" },
+  "wealthFormula": {
+    "note_28082026": "Mis à jour le 28/08/2026 (retour utilisateur : 'il faut reprendre le système de valeur 4x pour que les joueurs cherchent encore à faire des carrés') - un objet ne compte plus pour 1 quel que soit son niveau ; poids 1/4/16 par niveau (faible/moyen/fort), cohérent avec le taux d'échange smartphone décidé le même jour (voir docs/10-etape-plugins-troc.md). Un carré (4 objets d'un niveau -> 1 objet du niveau supérieur) est donc exactement neutre en richesse. Implémenté dans StatsService.computeGain(), cas MONEY_TROC - PAS encore reflété par ce champ 'field' à lui seul (formule pondérée, pas un simple nom de champ) : ce contrat n'étant de toute façon pas encore interprété par le moteur (voir docs/11-plugin-api-contrat.md), 'field' reste une valeur indicative en attendant un format capable d'exprimer une pondération.",
+    "field": "weakGoods+4*mediumGoods+16*strongGoods"
+  },
 
   "extraStats": [
     {

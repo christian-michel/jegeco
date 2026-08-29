@@ -1253,6 +1253,13 @@ function openTrocTradeDialog() {
 		return;
 	}
 
+	// Détail par niveau des DEUX côtés (voir Event.java/Player.java, repris le
+	// 28/08/2026) : nécessaire pour que le suivi en direct des biens par
+	// niveau (weakGoods/mediumGoods/strongGoods) reste exact - sans ce
+	// détail, seul le TOTAL (goodsCount) était juste, le détail par niveau
+	// (dont dépend maintenant le calcul de richesse, voir
+	// StatsService.computeGain) restait figé sur la dotation de départ tant
+	// qu'aucun échange ne le mettait à jour.
 	openDialog(t("game.action_troc_trade"), `
 		<label>${t("game.troc_initiator_label")}</label>
 		<select id="trocPlayerA">
@@ -1262,10 +1269,18 @@ function openTrocTradeDialog() {
 		<select id="trocPlayerB">
 			${activePlayers.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
 		</select>
-		<label>${t("game.troc_goods_from_initiator_label")}</label>
-		<input id="trocGoodsFromA" type="number" value="0" min="0">
-		<label>${t("game.troc_goods_from_counterparty_label")}</label>
-		<input id="trocGoodsFromB" type="number" value="0" min="0">
+		<p style="font-weight:600;margin:0.6rem 0 0.2rem;">${t("game.troc_initiator_label")}</p>
+		<div class="field-row">
+			<div><label>${t("game.field_weak_cards")}</label><input id="trocAWeak" type="number" value="0" min="0"></div>
+			<div><label>${t("game.field_medium_cards")}</label><input id="trocAMedium" type="number" value="0" min="0"></div>
+			<div><label>${t("game.field_strong_cards")}</label><input id="trocAStrong" type="number" value="0" min="0"></div>
+		</div>
+		<p style="font-weight:600;margin:0.6rem 0 0.2rem;">${t("game.troc_counterparty_label")}</p>
+		<div class="field-row">
+			<div><label>${t("game.field_weak_cards")}</label><input id="trocBWeak" type="number" value="0" min="0"></div>
+			<div><label>${t("game.field_medium_cards")}</label><input id="trocBMedium" type="number" value="0" min="0"></div>
+			<div><label>${t("game.field_strong_cards")}</label><input id="trocBStrong" type="number" value="0" min="0"></div>
+		</div>
 		<p id="trocValidationError" style="color:var(--danger);font-size:0.8rem;display:none;margin-top:0.4rem;"></p>
 	`, async () => {
 		const playerAId = parseInt(el("trocPlayerA").value, 10);
@@ -1274,8 +1289,14 @@ function openTrocTradeDialog() {
 			alert(t("game.troc_same_player_error"));
 			throw new Error("validation"); // empêche openDialog de fermer la boîte de dialogue
 		}
-		const goodsFromA = parseInt(el("trocGoodsFromA").value || "0", 10);
-		const goodsFromB = parseInt(el("trocGoodsFromB").value || "0", 10);
+		const aWeak = parseInt(el("trocAWeak").value || "0", 10);
+		const aMedium = parseInt(el("trocAMedium").value || "0", 10);
+		const aStrong = parseInt(el("trocAStrong").value || "0", 10);
+		const bWeak = parseInt(el("trocBWeak").value || "0", 10);
+		const bMedium = parseInt(el("trocBMedium").value || "0", 10);
+		const bStrong = parseInt(el("trocBStrong").value || "0", 10);
+		const goodsFromA = aWeak + aMedium + aStrong;
+		const goodsFromB = bWeak + bMedium + bStrong;
 		// Remonté par un utilisateur : uniquement des transactions d'échange -
 		// jamais de don sans contrepartie. Les deux joueurs doivent donner
 		// quelque chose.
@@ -1288,6 +1309,8 @@ function openTrocTradeDialog() {
 		await Api.recordEvent(state.currentGameId, {
 			type: "G", playerId: playerAId, counterpartyPlayerId: playerBId,
 			goodsFromPlayer: goodsFromA, goodsFromCounterparty: goodsFromB,
+			weakCards: aWeak, mediumCards: aMedium, strongCards: aStrong,
+			weakGoodsFromCounterparty: bWeak, mediumGoodsFromCounterparty: bMedium, strongGoodsFromCounterparty: bStrong,
 		});
 		renderGameDetail(state.currentGameId);
 	});
@@ -3583,29 +3606,37 @@ async function openEndOfTurnWizard() {
 		el("dlgTitle").textContent = t("wiz.death_troc_title");
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.death_troc_intro", { n: game.startingGoods })}</p>
+			<p class="galilee-explainer">${t("wiz.death_troc_prefill_note")}</p>
 			${dying.map((p) => `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${t("wiz.dying_this_turn", { name: escapeHtml(p.name) })}</legend>
 				<label>${t("game.field_weak_cards")}</label>
-				<input type="number" class="trocWeak" value="0" min="0">
+				<input type="number" class="trocWeak" value="${p.weakGoods}" min="0">
 				<label>${t("game.field_medium_cards")}</label>
-				<input type="number" class="trocMedium" value="0" min="0">
+				<input type="number" class="trocMedium" value="${p.mediumGoods}" min="0">
 				<label>${t("game.field_strong_cards")}</label>
-				<input type="number" class="trocStrong" value="0" min="0">
+				<input type="number" class="trocStrong" value="${p.strongGoods}" min="0">
 			</fieldset>`).join("")}
 			<button type="button" class="btn btn-primary btn-block" id="wizNextDeathTroc">${t("wiz.validate_rebirth_btn")}</button>`;
 		el("wizNextDeathTroc").onclick = async () => {
 			for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
-				// Remonté par un utilisateur : l'assistant demande le détail par
-				// niveau de carte (comme en dette/libre), pas un seul chiffre - mais
-				// une carte compte toujours pour 1 quel que soit son niveau (règle 7
-				// de docs/10-etape-plugins-troc.md), donc le total envoyé reste une
-				// simple somme, sans pondération par niveau.
+				// Détail par niveau (voir Player.java/Event.java, ajouté le
+				// 28/08/2026) : depuis la reprise du système de valeur ×4 par
+				// niveau (voir docs/10-etape-plugins-troc.md, mise à jour du même
+				// jour), la richesse d'un joueur troc à la mort se calcule
+				// désormais à partir de CES trois champs (StatsService.computeGain)
+				// - jamais un simple total pondéré également, comme c'était le cas
+				// avant cette reprise. goodsFromPlayer reste envoyé en plus, pour
+				// compatibilité avec l'affichage "nombre d'objets en main" existant
+				// (voir Player.goodsCount, qui lui reste un simple total).
 				const weak = parseInt(fieldset.querySelector(".trocWeak").value || "0", 10);
 				const medium = parseInt(fieldset.querySelector(".trocMedium").value || "0", 10);
 				const strong = parseInt(fieldset.querySelector(".trocStrong").value || "0", 10);
-				await Api.recordEvent(state.currentGameId, { type: "D", playerId, goodsFromPlayer: weak + medium + strong });
+				await Api.recordEvent(state.currentGameId, {
+					type: "D", playerId, goodsFromPlayer: weak + medium + strong,
+					weakCards: weak, mediumCards: medium, strongCards: strong,
+				});
 			}
 			state.currentGame = await Api.getGame(state.currentGameId);
 			Object.assign(game, state.currentGame);

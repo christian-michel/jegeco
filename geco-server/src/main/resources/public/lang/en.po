@@ -830,6 +830,9 @@ msgstr "Inventory of the deceased and rebirth"
 msgid "wiz.death_troc_intro"
 msgstr "For each player who dies this turn, count their goods before they're reborn with the starting allotment: {n} goods and as many time tokens."
 
+msgid "wiz.death_troc_prefill_note"
+msgstr "Fields pre-filled from the live-tracked inventory - review before validating, correct if needed."
+
 msgid "game.player_meta_troc"
 msgstr "goods {goods}"
 

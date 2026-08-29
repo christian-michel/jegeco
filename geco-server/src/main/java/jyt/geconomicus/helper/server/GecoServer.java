@@ -954,7 +954,8 @@ public class GecoServer
 			final Event event = mGameService.recordEvent(id, req.type(), req.playerId(), req.principal(),
 					req.interest(), req.weakCards(), req.mediumCards(), req.strongCards(),
 					req.counterpartyPlayerId(), req.goodsFromPlayer(), req.goodsFromCounterparty(),
-					req.weakCoins(), req.mediumCoins(), req.strongCoins());
+					req.weakCoins(), req.mediumCoins(), req.strongCoins(),
+					req.weakGoodsFromCounterparty(), req.mediumGoodsFromCounterparty(), req.strongGoodsFromCounterparty());
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
 			ctx.status(201).json(EventDto.from(event));
 		});

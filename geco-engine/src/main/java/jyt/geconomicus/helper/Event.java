@@ -154,20 +154,47 @@ public class Event implements Serializable
 	// The principal of the credit due/reimbursed by the player during this event
 	private int principal = 0;
 
-	// Troc uniquement : nombre d'objets donnés par chaque côté d'un GOODS_TRADE
-	// (un objet compte pour 1 quel que soit son niveau, voir la règle 7 de
-	// docs/10-etape-plugins-troc.md). Retour utilisateur : uniquement des
-	// transactions d'échange - jamais de don sans contrepartie, jamais de
-	// monnaie ni de jeton de temps (les échanges de service ont été retirés
-	// après un premier essai).
+	// Troc uniquement : total d'objets donnés par chaque côté d'un GOODS_TRADE,
+	// toutes valeurs confondues. Depuis le 28/08/2026 (voir Player.java pour le
+	// raisonnement complet), ce total n'est plus le seul champ retenu pour le
+	// calcul de la richesse (qui passe désormais par un barème pondéré par
+	// niveau, voir weakCards/mediumCards/strongCards ci-dessous pour le côté
+	// "initiator" et weakGoodsFromCounterparty&co juste après pour le côté
+	// "counterparty") - conservés comme simples totaux de confort/affichage
+	// (comptage rapide "combien d'objets ont changé de main"), toujours
+	// maintenus en cohérence avec le détail par niveau côté serveur
+	// (GameService.recordEvent calcule ce total à partir du détail fourni).
 	private int goodsFromPlayer = 0;
 	private int goodsFromCounterparty = 0;
+
+	// Troc uniquement, détail par niveau du côté COUNTERPARTY d'un GOODS_TRADE
+	// (le côté "initiator" réutilise weakCards/mediumCards/strongCards
+	// ci-dessous, exactement comme DEATH/QUIT le font déjà pour l'inventaire
+	// d'un joueur qui sort de la partie - un GOODS_TRADE n'est jamais combiné
+	// avec un DEATH/QUIT dans le même événement, donc aucun risque de
+	// collision d'usage sur ces champs partagés). Ajoutés le 28/08/2026 pour
+	// que le carré (4 objets d'un niveau → 1 objet du niveau supérieur)
+	// retrouve un sens économique réel, comme en dette/libre - voir
+	// StatsService.computeGain, cas MONEY_TROC.
+	private int weakGoodsFromCounterparty = 0;
+	private int mediumGoodsFromCounterparty = 0;
+	private int strongGoodsFromCounterparty = 0;
 
 	// The three next are only for the Free Currency system: the coins that are left when a player dies/quits the game
 	private int weakCoins = 0;
 	private int mediumCoins = 0;
 	private int strongCoins = 0;
 	// The cards that a player has left in his hands, or that are seized by the banker during a default.
+	//
+	// Réutilisés par le TROC (voir plugins/troc/manifest.json) pour deux
+	// usages, jamais combinés dans le même événement : (1) à DEATH/QUIT,
+	// l'inventaire par niveau des objets encore en main (exactement le même
+	// principe que dette/libre, qui les utilisent déjà pour leur propre
+	// inventaire de cartes) ; (2) à GOODS_TRADE, les objets par niveau donnés
+	// par le côté "initiator" (voir weakGoodsFromCounterparty&co ci-dessus
+	// pour le côté "counterparty"). Le nom des champs ("Cards") reste celui
+	// hérité de dette/libre par cohérence de schéma - en troc, il s'agit bien
+	// d'objets/biens, pas de "cartes" au sens propre du terme.
 	private int weakCards = 0;
 	private int mediumCards = 0;
 	private int strongCards = 0;
@@ -308,6 +335,36 @@ public class Event implements Serializable
 		goodsFromCounterparty = pGoodsFromCounterparty;
 	}
 
+	public int getWeakGoodsFromCounterparty()
+	{
+		return weakGoodsFromCounterparty;
+	}
+
+	public void setWeakGoodsFromCounterparty(final int pWeakGoodsFromCounterparty)
+	{
+		weakGoodsFromCounterparty = pWeakGoodsFromCounterparty;
+	}
+
+	public int getMediumGoodsFromCounterparty()
+	{
+		return mediumGoodsFromCounterparty;
+	}
+
+	public void setMediumGoodsFromCounterparty(final int pMediumGoodsFromCounterparty)
+	{
+		mediumGoodsFromCounterparty = pMediumGoodsFromCounterparty;
+	}
+
+	public int getStrongGoodsFromCounterparty()
+	{
+		return strongGoodsFromCounterparty;
+	}
+
+	public void setStrongGoodsFromCounterparty(final int pStrongGoodsFromCounterparty)
+	{
+		strongGoodsFromCounterparty = pStrongGoodsFromCounterparty;
+	}
+
 	// Accesseur manquant jusqu'ici (le champ game n'était utilisé qu'en interne par le
 	// constructeur) - nécessaire pour vérifier côté serveur web qu'un événement à
 	// éditer/supprimer appartient bien à la partie demandée, avant toute modification.
@@ -390,7 +447,17 @@ public class Event implements Serializable
 			// avec 4 cartes"). L'inventaire du joueur mourant (goodsFromPlayer,
 			// transmis via ce même événement DEATH) a déjà été pris en compte pour
 			// les statistiques avant ce point - voir StatsService, pas ce moteur.
+			// Toutes de niveau faible (même convention qu'à la création du joueur,
+			// voir Player.java) - remise à zéro du détail par niveau nécessaire
+			// depuis le 28/08/2026, sans quoi la richesse (désormais calculée à
+			// partir de ce détail, voir StatsService.computeGain) resterait
+			// figée sur l'ancien inventaire du joueur après sa renaissance.
+			{
 				player.setGoodsCount(game.getStartingGoods());
+				player.setWeakGoods(game.getStartingGoods());
+				player.setMediumGoods(0);
+				player.setStrongGoods(0);
+			}
 			break;
 		}
 		case INTEREST_ONLY:
@@ -470,6 +537,16 @@ public class Event implements Serializable
 			// counterparty (voir plugins/troc/manifest.json, roles).
 			player.setGoodsCount(player.getGoodsCount() - goodsFromPlayer + goodsFromCounterparty);
 			counterpartyPlayer.setGoodsCount(counterpartyPlayer.getGoodsCount() - goodsFromCounterparty + goodsFromPlayer);
+			// Détail par niveau (voir Player.java/le commentaire en tête de ce
+			// fichier pour le raisonnement complet, ajouté le 28/08/2026) :
+			// l'initiator DONNE weakCards/mediumCards/strongCards et REÇOIT
+			// weakGoodsFromCounterparty&co ; l'inverse pour le counterparty.
+			player.setWeakGoods(player.getWeakGoods() - weakCards + weakGoodsFromCounterparty);
+			player.setMediumGoods(player.getMediumGoods() - mediumCards + mediumGoodsFromCounterparty);
+			player.setStrongGoods(player.getStrongGoods() - strongCards + strongGoodsFromCounterparty);
+			counterpartyPlayer.setWeakGoods(counterpartyPlayer.getWeakGoods() - weakGoodsFromCounterparty + weakCards);
+			counterpartyPlayer.setMediumGoods(counterpartyPlayer.getMediumGoods() - mediumGoodsFromCounterparty + mediumCards);
+			counterpartyPlayer.setStrongGoods(counterpartyPlayer.getStrongGoods() - strongGoodsFromCounterparty + strongCards);
 			break;
 		default:
 			// This should not happen
@@ -578,6 +655,28 @@ public class Event implements Serializable
 			if (!found)
 				throw new PlayerNotFoundException(player.getName());
 		}
+		// Bug trouvé le 28/08/2026 (en ajoutant le détail par niveau du troc à cette
+		// même méthode) : counterpartyPlayer/goodsFromPlayer/goodsFromCounterparty
+		// n'étaient jamais recopiés ici - un GOODS_TRADE importé dans une autre
+		// partie perdait silencieusement tout son contenu. Même recherche par nom
+		// que pour "player" ci-dessus, seulement si counterpartyPlayer est renseigné
+		// (jamais le cas hors GOODS_TRADE).
+		Player otherCounterpartyPlayer = null;
+		if (counterpartyPlayer != null)
+		{
+			boolean found = false;
+			for (Player gamePlayer : pGame.getPlayers())
+			{
+				if (gamePlayer.getName().equals(counterpartyPlayer.getName()))
+				{
+					otherCounterpartyPlayer = gamePlayer;
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+				throw new PlayerNotFoundException(counterpartyPlayer.getName());
+		}
 		final Event event = new Event(pGame, evt, otherPlayer);
 		event.setInterest(interest);
 		event.setPrincipal(principal);
@@ -588,6 +687,12 @@ public class Event implements Serializable
 		event.setWeakCoins(weakCoins);
 		event.setMediumCoins(mediumCoins);
 		event.setStrongCoins(strongCoins);
+		event.setCounterpartyPlayer(otherCounterpartyPlayer);
+		event.setGoodsFromPlayer(goodsFromPlayer);
+		event.setGoodsFromCounterparty(goodsFromCounterparty);
+		event.setWeakGoodsFromCounterparty(weakGoodsFromCounterparty);
+		event.setMediumGoodsFromCounterparty(mediumGoodsFromCounterparty);
+		event.setStrongGoodsFromCounterparty(strongGoodsFromCounterparty);
 		return event;
 	}
 }
