@@ -307,4 +307,9 @@ public class Dtos
 	public record PublicGameInfoDto(Integer id, String description)
 	{
 	}
+
+	// Réponse de GET /api/games/{id}/leaderboard - voir GameService.computeLeaderboard.
+	public record LeaderboardEntryDto(Integer playerId, String playerName, int value, int rank)
+	{
+	}
 }

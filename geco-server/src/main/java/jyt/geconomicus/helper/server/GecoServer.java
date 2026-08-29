@@ -591,7 +591,13 @@ public class GecoServer
 					// Infos publiques d'une partie (nom affiché sur l'écran
 					// d'inscription, voir PublicGameInfoDto) : un joueur qui n'a
 					// pas encore rejoint la partie ne connaît jamais le PIN.
-					|| ctx.path().endsWith("/public-info")) //$NON-NLS-1$
+					|| ctx.path().endsWith("/public-info") //$NON-NLS-1$
+					// Inventaire de cartes et classement (voir "Mes cartes"/
+					// "Classement" côté espace joueur, mockup de référence du
+					// 28/08/2026) : consultés par un JOUEUR depuis son propre
+					// téléphone, jamais par l'animateur avec le PIN.
+					|| ctx.path().contains("/card-inventory") //$NON-NLS-1$
+					|| ctx.path().endsWith("/leaderboard")) //$NON-NLS-1$
 				return;
 			final int id;
 			try
@@ -881,6 +887,40 @@ public class GecoServer
 			}
 			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
 					game.getMoneySystem()));
+		});
+
+		// Inventaire de cartes d'un joueur, par SON PROPRE jeton (voir "Mes
+		// cartes", mockup de référence du 28/08/2026) - même principe
+		// d'authentification que la route by-token ci-dessus. Renvoie un objet
+		// {cardTypeId: quantité} - voir GameService.computePlayerCardInventory
+		// pour la limite assumée (dérivé des transactions smartphone
+		// seulement, rien avant leur mise en usage).
+		pApp.get("/api/games/{id}/players/by-token/{token}/card-inventory", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final String token = ctx.pathParam("token"); //$NON-NLS-1$
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final Player player = game.getPlayers().stream()
+					.filter(p -> (p.getAccessToken() != null) && p.getAccessToken().equals(token)).findFirst()
+					.orElse(null);
+			if (player == null)
+			{
+				ctx.status(404).json(java.util.Map.of("error", "Jeton inconnu.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			ctx.json(mGameService.computePlayerCardInventory(id, player.getId()));
+		});
+
+		// Classement des joueurs actifs d'une partie (voir "Classement de la
+		// partie", même mockup) - voir GameService.computeLeaderboard pour la
+		// formule et sa portée assumée.
+		pApp.get("/api/games/{id}/leaderboard", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			ctx.json(mGameService.computeLeaderboard(id));
 		});
 
 		// Suppression totale d'un joueur (et de ses événements associés), avec recalcul

@@ -539,6 +539,85 @@ public class GameService
 	}
 
 	/**
+	 * Inventaire de cartes d'un joueur, DÉRIVÉ de l'historique des transactions
+	 * smartphone (même principe que {@link #computeTradeBalance} pour les
+	 * jetons) - construit à la demande de l'utilisateur (28/08/2026, mockup de
+	 * référence "Mes cartes") : n'invente aucune donnée, un joueur qui n'a
+	 * encore rien acheté a un inventaire vide. Comme convenu explicitement
+	 * avec l'utilisateur, ne couvre QUE ce qui a été échangé par smartphone
+	 * depuis ce correctif - tout échange antérieur reste invisible, faute
+	 * d'avoir jamais été enregistré individuellement avant l'étape 3.
+	 */
+	public java.util.Map<String, Integer> computePlayerCardInventory(final int pGameId, final int pPlayerId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final List<Transaction> txs = em.createQuery(
+					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid)", //$NON-NLS-1$
+					Transaction.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.getResultList();
+			final java.util.Map<String, Integer> inventory = new java.util.LinkedHashMap<>();
+			for (final Transaction t : txs)
+			{
+				if (t.getBuyer().getId().equals(pPlayerId))
+					inventory.merge(t.getCardTypeId(), 1, Integer::sum);
+				if (t.getSeller().getId().equals(pPlayerId))
+					inventory.merge(t.getCardTypeId(), -1, Integer::sum);
+			}
+			// Ne devrait normalement jamais arriver (on ne peut pas vendre une carte
+			// qu'on n'a pas), mais on nettoie par sécurité plutôt que d'afficher un
+			// nombre négatif absurde - ex. cartes détenues avant l'usage du
+			// smartphone, vendues ensuite via lui (voir la limite assumée
+			// ci-dessus).
+			inventory.values().removeIf(v -> v <= 0);
+			return inventory;
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
+	 * Classement des joueurs actifs d'une partie par richesse - demandé par
+	 * l'utilisateur (28/08/2026, mockup de référence "Classement de la
+	 * partie"). Formule volontairement simple et cohérente avec ce que
+	 * chaque joueur voit déjà sur son propre espace : {@link #computeTradeBalance}
+	 * (jetons issus des échanges smartphone) en dette/libre, valeur pondérée
+	 * ×4 par niveau des biens en troc (voir Transaction.totalGoodsValue et
+	 * StatsService.computeGain, cas MONEY_TROC) - PAS une reconstitution
+	 * complète de la richesse totale du jeu (dotation de départ, DU perçus
+	 * au fil des tours...), qui demanderait de rejouer tout l'historique
+	 * d'événements plutôt que les seules transactions.
+	 */
+	public List<Dtos.LeaderboardEntryDto> computeLeaderboard(final int pGameId)
+	{
+		final Game game = getGame(pGameId);
+		if (game == null)
+			return List.of();
+		final List<Dtos.LeaderboardEntryDto> entries = new java.util.ArrayList<>();
+		for (final Player p : game.getPlayers())
+		{
+			if (!p.isActive())
+				continue;
+			final int value = (game.getMoneySystem() == Game.MONEY_TROC)
+					? p.getWeakGoods() + (4 * p.getMediumGoods()) + (16 * p.getStrongGoods())
+					: computeTradeBalance(pGameId, p.getId());
+			entries.add(new Dtos.LeaderboardEntryDto(p.getId(), p.getName(), value, 0));
+		}
+		entries.sort((a, b) -> Integer.compare(b.value(), a.value()));
+		final List<Dtos.LeaderboardEntryDto> ranked = new java.util.ArrayList<>();
+		for (int i = 0; i < entries.size(); i++)
+		{
+			final Dtos.LeaderboardEntryDto e = entries.get(i);
+			ranked.add(new Dtos.LeaderboardEntryDto(e.playerId(), e.playerName(), e.value(), i + 1));
+		}
+		return ranked;
+	}
+
+	/**
 	 * Supprime un événement et recalcule intégralement l'état de la partie à partir
 	 * des événements restants (dette de chaque joueur, masse monétaire, numéro de
 	 * tour...). Ce recalcul complet est nécessaire : un événement au milieu de
