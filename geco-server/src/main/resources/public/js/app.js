@@ -3326,9 +3326,21 @@ async function openEndOfTurnWizard() {
 			.filter((e) => (e.playerId === playerId)
 				&& ["WEALTH_CHECKPOINT", "DEATH", "QUIT"].includes(e.type))
 			.sort((a, b) => b.timestamp - a.timestamp);
-		if (relevant.length === 0) return { weak: 0, medium: 0, strong: 0 };
-		const latest = relevant[0];
-		return { weak: latest.weakCoins, medium: latest.mediumCoins, strong: latest.strongCoins };
+		if (relevant.length > 0) {
+			const latest = relevant[0];
+			return { weak: latest.weakCoins, medium: latest.mediumCoins, strong: latest.strongCoins };
+		}
+		// Aucun point de contrôle encore posé pour ce joueur (typiquement : tout
+		// premier tour) - remonté par l'utilisateur, avec les règles officielles
+		// à l'appui (geconomicus.glibre.org/libre_money.html) : la mise en place
+		// donne 1 jeton de CHAQUE dénomination (pas un solde de zéro), voir
+		// PlayerDto.hasStartingAllocation (posé par
+		// GameService.dealStartingHandsForLibreIfNeeded). Sans ce repli,
+		// l'assistant pré-remplissait le tout premier tour à zéro, ignorant
+		// cette dotation de départ.
+		const player = game.players.find((p) => p.id === playerId);
+		if (player && player.hasStartingAllocation) return { weak: 1, medium: 1, strong: 1 };
+		return { weak: 0, medium: 0, strong: 0 };
 	}
 
 	// Étape 3, monnaie libre : mouvement net de jetons d'un joueur pour le tour

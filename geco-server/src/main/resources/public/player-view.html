@@ -50,6 +50,10 @@
 				<button type="button" id="btnOpenSell" class="btn-primary btn-block" data-i18n="trade.btn_sell">Vendre une carte</button>
 				<button type="button" id="btnOpenScan" class="btn-secondary btn-block" data-i18n="trade.btn_scan">Scanner un achat</button>
 				<button type="button" id="btnOpenManualEntry" class="btn-secondary btn-block" data-i18n="trade.btn_manual_entry">Saisir un code</button>
+				<!-- Étape 3, monnaie dette uniquement (voir isDebtGame() dans
+				     player-view.js) : demande de crédit auprès de l'animateur/la
+				     banque, remonté par l'utilisateur (28/08/2026). -->
+				<button type="button" id="btnOpenCreditRequest" class="btn-secondary btn-block hidden" data-i18n="playerView.credit_request_btn">🏦 Demander un crédit</button>
 			</div>
 
 			<!-- Étape 3 : "Mes cartes"/"Classement"/"Historique" - mockup de
@@ -219,6 +223,15 @@
 				<h2 data-i18n="playerView.nav_history">Historique</h2>
 			</div>
 			<div id="historyBody"></div>
+		</section>
+
+		<!-- ===== Étape 3, monnaie dette : demande de crédit ===== -->
+		<section id="creditRequestScreen" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="playerView.credit_request_title">Demander un crédit</h2>
+			</div>
+			<div id="creditRequestBody"></div>
 		</section>
 	</div>
 

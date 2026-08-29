@@ -157,6 +157,42 @@ public class Game implements Serializable
 	// jamais de monnaie ni de jeton (les échanges de service et le temps de vie
 	// ont été retirés après un premier essai).
 	private int startingGoods = 4;
+
+	// Étape 3, monnaie libre, mode smartphone : nombre de joueurs actifs au
+	// moment de la mise en place (premier tour démarré) - voir
+	// GameService.captureDeckPlayerCountIfNeeded. Capturé UNE SEULE FOIS,
+	// jamais recalculé ensuite (même si des joueurs rejoignent ou quittent
+	// après coup) : sert de base au dimensionnement du paquet de cartes
+	// (nombre de modèles par niveau = ce nombre + 1, chacun en 5 exemplaires,
+	// voir le document de cadrage du 28/08/2026 et geconomicus.glibre.org/
+	// rules.html) - une vraie mise en place doit rester figée une fois faite,
+	// exactement comme dans la partie classique où l'animateur compte les
+	// joueurs UNE fois, avant de distribuer les cartes. Nullable : reste à
+	// null pour toute partie qui n'est pas en mode smartphone + monnaie
+	// libre, ou qui n'a pas encore démarré son premier tour.
+	private Integer deckPlayerCount;
+
+	// Étape 3, monnaie libre, mode smartphone : état de la pioche partagée de
+	// cartes faible valeur, une fois la mise en place effectuée (voir
+	// GameService.dealStartingHandsForLibreIfNeeded) - JSON {cardTypeId:
+	// exemplairesRestants}. Contient TOUS les modèles sélectionnés au
+	// démarrage, y compris ceux tombés à 0 exemplaire restant (jamais retirés
+	// de cette carte, seulement épuisés) - nécessaire pour le futur mécanisme
+	// de carré/pioche (remise en jeu de cartes détaussées). Nullable : reste
+	// à null tant que la mise en place n'a pas eu lieu.
+	@Lob
+	private String smartphoneCardPileJson;
+
+	public String getSmartphoneCardPileJson()
+	{
+		return smartphoneCardPileJson;
+	}
+
+	public void setSmartphoneCardPileJson(final String pSmartphoneCardPileJson)
+	{
+		smartphoneCardPileJson = pSmartphoneCardPileJson;
+	}
+
 	// Current date
 	@XmlID
 	private String curdate;
@@ -592,5 +628,15 @@ public class Game implements Serializable
 	public void setStartingGoods(final int pStartingGoods)
 	{
 		startingGoods = pStartingGoods;
+	}
+
+	public Integer getDeckPlayerCount()
+	{
+		return deckPlayerCount;
+	}
+
+	public void setDeckPlayerCount(final Integer pDeckPlayerCount)
+	{
+		deckPlayerCount = pDeckPlayerCount;
 	}
 }

@@ -61,7 +61,7 @@ const CARD_LEVELS = ["faible", "moyenne", "forte", "tresforte"];
 
 // ---------- Navigation entre écrans (un seul visible à la fois, sauf viewError) ----------
 const SCREENS = ["viewContent", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanManual", "scanConfirm",
-	"tradeResult", "myCardsScreen", "leaderboardScreen", "historyScreen"];
+	"tradeResult", "myCardsScreen", "leaderboardScreen", "historyScreen", "creditRequestScreen"];
 function showScreen(id) {
 	stopCamera(); // toujours couper la caméra en quittant scanCamera, quel que soit l'écran de destination
 	clearQrCountdown();
@@ -75,6 +75,13 @@ function showScreen(id) {
 // parlent de jetons (dette/libre) ou de cartes données en échange (troc).
 function isTrocGame() {
 	return state.player && (state.player.moneySystem === 2);
+}
+
+// Étape 3, monnaie dette : vrai si la partie courante utilise la dette (voir
+// Game.MONEY_DEBT = 1) - détermine si le bouton "Demander un crédit" est
+// proposé (voir CreditRequestService).
+function isDebtGame() {
+	return state.player && (state.player.moneySystem === 1);
 }
 
 async function refreshPlayer() {
@@ -92,6 +99,8 @@ async function refreshPlayer() {
 		// Le solde en jetons n'a de sens qu'en dette/libre - le troc n'a jamais
 		// de jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
 		el("balanceCard").classList.toggle("hidden", isTrocGame());
+		// Bouton "Demander un crédit" : monnaie dette uniquement (voir isDebtGame()).
+		el("btnOpenCreditRequest").classList.toggle("hidden", !isDebtGame());
 		if (!isTrocGame()) el("balanceCardValue").textContent = t("trade.balance_value", { n: state.player.tradeBalance });
 		const details = el("playerDetails");
 		let detailsHtml = "";
@@ -742,6 +751,7 @@ function initTradeUI() {
 	el("btnOpenMyCards").addEventListener("click", renderMyCards);
 	el("btnOpenLeaderboard").addEventListener("click", renderLeaderboard);
 	el("btnOpenHistory").addEventListener("click", renderHistory);
+	el("btnOpenCreditRequest").addEventListener("click", renderCreditRequest);
 	el("btnOpenScan").addEventListener("click", openScan);
 	el("btnOpenManualEntry").addEventListener("click", openManualEntry);
 	el("btnSwitchToManual").addEventListener("click", openManualEntry);

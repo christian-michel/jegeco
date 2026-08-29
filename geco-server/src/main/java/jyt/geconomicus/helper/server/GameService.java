@@ -517,12 +517,21 @@ public class GameService
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
 		{
+			final Player player = em.find(Player.class, pPlayerId);
+			// Dotation de départ (voir dealStartingHandsForLibreIfNeeded) : 1
+			// jeton faible + 1 moyen + 1 fort = valeur 7, une CONSTANTE fixée
+			// par les règles (geconomicus.glibre.org/libre_money.html) - jamais
+			// stockée séparément, juste ajoutée dès que ce joueur a bien reçu
+			// sa mise en place (startingCardsJson non nul, posé au même
+			// moment). Avant ce correctif (28/08/2026), tout joueur partait
+			// systématiquement de 0, ignorant cette dotation initiale.
+			final int startingValue = ((player != null) && (player.getStartingCardsJson() != null)) ? 7 : 0;
 			final List<Transaction> txs = em.createQuery(
 					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid)", //$NON-NLS-1$
 					Transaction.class)
 					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
 					.getResultList();
-			int balance = 0;
+			int balance = startingValue;
 			for (final Transaction t : txs)
 			{
 				if (t.getSeller().getId().equals(pPlayerId))
@@ -553,12 +562,34 @@ public class GameService
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
 		{
+			final java.util.Map<String, Integer> inventory = new java.util.LinkedHashMap<>();
+			// Point de départ : la dotation initiale (voir
+			// dealStartingHandsForLibreIfNeeded/Player.startingCardsJson) -
+			// avant ce correctif (28/08/2026), cet inventaire partait toujours
+			// de zéro, ignorant les 4 cartes reçues à la mise en place.
+			final Player player = em.find(Player.class, pPlayerId);
+			if ((player != null) && (player.getStartingCardsJson() != null))
+			{
+				try
+				{
+					final java.util.Map<String, Integer> startingHand = new com.fasterxml.jackson.databind.ObjectMapper()
+							.readValue(player.getStartingCardsJson(),
+									new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Integer>>()
+									{
+									});
+					inventory.putAll(startingHand);
+				}
+				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+				{
+					// Donnée corrompue (ne devrait jamais arriver) : on continue avec
+					// un inventaire vide plutôt que de faire échouer tout l'écran.
+				}
+			}
 			final List<Transaction> txs = em.createQuery(
 					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid)", //$NON-NLS-1$
 					Transaction.class)
 					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
 					.getResultList();
-			final java.util.Map<String, Integer> inventory = new java.util.LinkedHashMap<>();
 			for (final Transaction t : txs)
 			{
 				if (t.getBuyer().getId().equals(pPlayerId))
@@ -615,6 +646,144 @@ public class GameService
 			ranked.add(new Dtos.LeaderboardEntryDto(e.playerId(), e.playerName(), e.value(), i + 1));
 		}
 		return ranked;
+	}
+
+	/**
+	 * Étape 3, monnaie libre, mode smartphone : capture, UNE SEULE FOIS, le
+	 * nombre de joueurs actifs au moment de la mise en place (premier tour
+	 * démarré) - voir Game.deckPlayerCount pour le raisonnement complet
+	 * (dimensionnement du futur paquet de cartes, document de cadrage du
+	 * 28/08/2026 et geconomicus.glibre.org/rules.html). Appelée depuis la
+	 * route POST /events juste après l'enregistrement réussi d'un événement
+	 * TURN, uniquement si le mode smartphone est actif - vérifié côté
+	 * appelant, qui a accès aux réglages globaux (AppSettings), contrairement
+	 * à GameService qui n'y touche jamais directement.
+	 * <p>
+	 * Idempotent et sans effet en dehors du tout premier tour : rien ne se
+	 * passe si rappelée par erreur, si la partie n'est pas en monnaie libre,
+	 * ou si ce nombre a déjà été capturé - jamais recalculé une fois posé,
+	 * exactement comme une vraie mise en place ne se refait pas en cours de
+	 * partie.
+	 */
+	public void captureDeckPlayerCountIfNeeded(final int pGameId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				return;
+			if ((game.getMoneySystem() != Game.MONEY_LIBRE) || (game.getTurnNumber() != 1)
+					|| (game.getDeckPlayerCount() != null))
+				return;
+			final long activeCount = game.getPlayers().stream().filter(Player::isActive).count();
+			em.getTransaction().begin();
+			game.setDeckPlayerCount((int) activeCount);
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
+	 * Étape 3, monnaie libre, mode smartphone : mise en place complète, une
+	 * fois {@link #captureDeckPlayerCountIfNeeded} passée - voir le document
+	 * de cadrage du 28/08/2026 et geconomicus.glibre.org/libre_money.html.
+	 * <p>
+	 * Sélectionne N+1 modèles de cartes de niveau faible (N = {@code
+	 * Game.deckPlayerCount}, plafonné au nombre de modèles réellement
+	 * disponibles au catalogue), mint 5 exemplaires de chacun (un "sac" de
+	 * cartes mélangé), distribue 4 cartes au hasard à chaque joueur actif, et
+	 * donne à chacun sa dotation de départ en jetons - 1 faible + 1 moyen + 1
+	 * fort (valeur 7), une CONSTANTE fixée par les règles ("distribuer les
+	 * trois couleurs à chaque joueur (1 billet de chacune)"), jamais stockée
+	 * séparément : {@link #computeTradeBalance} l'ajoute simplement dès que
+	 * {@code Player.startingCardsJson} n'est plus nul (voir ce champ).
+	 * <p>
+	 * Idempotent : ne fait rien si déjà effectuée ({@code
+	 * Game.smartphoneCardPileJson} déjà renseigné) ou si les conditions ne
+	 * sont pas réunies (partie pas en monnaie libre, ou
+	 * {@code deckPlayerCount} pas encore capturé).
+	 *
+	 * @param pAvailableFaibleCardIds identifiants des cartes de niveau faible
+	 *            disponibles au catalogue - fourni par l'appelant
+	 *            (GecoServer, qui a accès au catalogue ; GameService, lui, ne
+	 *            le consulte jamais directement, voir la règle déjà en place
+	 *            pour AppSettings).
+	 */
+	public void dealStartingHandsForLibreIfNeeded(final int pGameId, final List<String> pAvailableFaibleCardIds)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				return;
+			if ((game.getMoneySystem() != Game.MONEY_LIBRE) || (game.getDeckPlayerCount() == null)
+					|| (game.getSmartphoneCardPileJson() != null) || pAvailableFaibleCardIds.isEmpty())
+				return; // déjà fait, ou conditions non réunies - jamais recalculé
+
+			final int nbPlayers = game.getDeckPlayerCount();
+			final int nbModels = Math.min(nbPlayers + 1, pAvailableFaibleCardIds.size());
+			final java.util.List<String> shuffledModels = new java.util.ArrayList<>(pAvailableFaibleCardIds);
+			java.util.Collections.shuffle(shuffledModels);
+			final java.util.List<String> selectedModels = shuffledModels.subList(0, nbModels);
+
+			// Le "sac" : 5 exemplaires de chaque modèle sélectionné, mélangés -
+			// on pioche ensuite dedans dans l'ordre, sans jamais dépasser ce
+			// stock (contrairement à l'ancien système, qui traitait le
+			// catalogue comme une ressource infinie).
+			final java.util.List<String> bag = new java.util.ArrayList<>();
+			for (final String modelId : selectedModels)
+				for (int i = 0; i < 5; i++)
+					bag.add(modelId);
+			java.util.Collections.shuffle(bag);
+
+			final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			em.getTransaction().begin();
+			final List<Player> activePlayers = game.getPlayers().stream().filter(Player::isActive).toList();
+			int bagIndex = 0;
+			for (final Player player : activePlayers)
+			{
+				final java.util.Map<String, Integer> hand = new java.util.LinkedHashMap<>();
+				for (int i = 0; (i < 4) && (bagIndex < bag.size()); i++)
+					hand.merge(bag.get(bagIndex++), 1, Integer::sum);
+				writeJsonQuietly(mapper, hand, player::setStartingCardsJson);
+			}
+			// Le reste du sac (non distribué) devient la pioche partagée - tous
+			// les modèles sélectionnés y figurent, même à 0 exemplaire restant
+			// (voir le commentaire sur Game.smartphoneCardPileJson).
+			final java.util.Map<String, Integer> pile = new java.util.LinkedHashMap<>();
+			for (final String modelId : selectedModels)
+				pile.put(modelId, 0);
+			for (int i = bagIndex; i < bag.size(); i++)
+				pile.merge(bag.get(i), 1, Integer::sum);
+			writeJsonQuietly(mapper, pile, game::setSmartphoneCardPileJson);
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	// Sérialise pValue en JSON et le passe à pSetter - ne devrait jamais
+	// échouer (structures toujours sérialisables, Map<String,Integer>), mais
+	// une exception vérifiée (JsonProcessingException) doit bien être traitée
+	// quelque part plutôt que de forcer chaque appelant à le refaire.
+	private void writeJsonQuietly(final com.fasterxml.jackson.databind.ObjectMapper pMapper,
+			final Object pValue, final java.util.function.Consumer<String> pSetter)
+	{
+		try
+		{
+			pSetter.accept(pMapper.writeValueAsString(pValue));
+		}
+		catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+		{
+			throw new RuntimeException(e); // ne devrait jamais arriver en pratique
+		}
 	}
 
 	/**

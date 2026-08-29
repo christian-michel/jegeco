@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.TableGenerator;
 import jakarta.xml.bind.annotation.XmlID;
@@ -84,6 +85,31 @@ public class Player implements Serializable
 	private int weakGoods;
 	private int mediumGoods;
 	private int strongGoods;
+
+	// Étape 3, monnaie libre, mode smartphone : cartes de valeur faible reçues
+	// à la mise en place (voir GameService.dealStartingHandsForLibreIfNeeded)
+	// - JSON {cardTypeId: quantité}, typiquement 4 cartes au total réparties
+	// sur 1 à 4 modèles différents. Sert de POINT DE DÉPART pour
+	// GameService.computePlayerCardInventory (avant, cet inventaire partait
+	// toujours de zéro, ignorant la distribution initiale - voir le document
+	// de cadrage du 28/08/2026). Nullable : reste à null tant que la mise en
+	// place n'a pas eu lieu pour ce joueur (partie classique, monnaie
+	// différente de la libre, ou joueur inscrit après le début du premier
+	// tour) - sert aussi de marqueur "a déjà reçu sa dotation de départ"
+	// pour les jetons (toujours 1 faible + 1 moyen + 1 fort, une constante,
+	// jamais stockée séparément).
+	@Lob
+	private String startingCardsJson;
+
+	public String getStartingCardsJson()
+	{
+		return startingCardsJson;
+	}
+
+	public void setStartingCardsJson(final String pStartingCardsJson)
+	{
+		startingCardsJson = pStartingCardsJson;
+	}
 
 	// --- Étape 3, Phase B : identité et avatar choisis par le joueur lui-même
 	// lors de l'auto-inscription depuis son smartphone (écran "Créez votre avatar").

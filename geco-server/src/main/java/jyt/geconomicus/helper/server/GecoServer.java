@@ -109,6 +109,9 @@ public class GecoServer
 	// durée de vie, voir TradeOfferService pour le raisonnement complet
 	// (code court, scan caméra ET saisie manuelle partagent ce même service).
 	private final TradeOfferService mTradeOfferService = new TradeOfferService();
+	// Étape 3, monnaie dette : demandes de crédit smartphone - voir
+	// CreditRequestService pour le raisonnement complet.
+	private final CreditRequestService mCreditRequestService = new CreditRequestService();
 	// Port du connecteur HTTPS (voir main()), null si indisponible - exposé
 	// via GET /api/network-info pour que le frontend puisse construire des
 	// liens joueur corrects (voir app.js, génération du lien "🔗" et écran
@@ -597,7 +600,12 @@ public class GecoServer
 					// 28/08/2026) : consultés par un JOUEUR depuis son propre
 					// téléphone, jamais par l'animateur avec le PIN.
 					|| ctx.path().contains("/card-inventory") //$NON-NLS-1$
-					|| ctx.path().endsWith("/leaderboard")) //$NON-NLS-1$
+					|| ctx.path().endsWith("/leaderboard") //$NON-NLS-1$
+					// Demande de crédit smartphone (monnaie dette) : la CRÉATION
+					// est initiée par un joueur (POST, exemptée) ; la LISTE, l'
+					// approbation et le refus restent réservés à l'animateur
+					// (PIN normal, voir les routes elles-mêmes plus bas).
+					|| (ctx.path().endsWith("/credit-requests") && (ctx.method() == io.javalin.http.HandlerType.POST))) //$NON-NLS-1$
 				return;
 			final int id;
 			try
@@ -947,6 +955,117 @@ public class GecoServer
 			ctx.json(mGameService.computeLeaderboard(id));
 		});
 
+		// ============ Étape 3, monnaie dette : demandes de crédit smartphone ============
+		// (voir CreditRequestService pour le raisonnement complet)
+
+		// Création d'une demande - initiée par un JOUEUR depuis son téléphone,
+		// authentifié par SON jeton (même principe que la vente de carte).
+		pApp.post("/api/games/{id}/credit-requests", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final Dtos.CreateCreditRequestRequest req = ctx.bodyAsClass(Dtos.CreateCreditRequestRequest.class);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final Player player = game.getPlayers().stream().filter(p -> p.getId().equals(req.playerId()))
+					.findFirst().orElse(null);
+			if (player == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			if (mAppSettings.isProtectionEnabled() && ((player.getAccessToken() == null)
+					|| !player.getAccessToken().equals(req.playerAccessToken())))
+				throw new ForbiddenResponse("Jeton de joueur requis ou incorrect."); //$NON-NLS-1$
+			if (req.requestedPrincipal() <= 0)
+				throw new BadRequestResponse("Le montant demandé doit être positif."); //$NON-NLS-1$
+			final int requestId = mCreditRequestService.create(id, player.getId(), player.getName(),
+					req.requestedPrincipal());
+			// Notifie le tableau de bord animateur en direct (même canal que les
+			// événements/transactions) - inutile d'attendre un rafraîchissement
+			// périodique pour voir apparaître une demande.
+			broadcast(id, "creditRequest", //$NON-NLS-1$
+					Dtos.CreditRequestDto.from(mCreditRequestService.get(requestId)));
+			ctx.status(201).json(Dtos.CreditRequestDto.from(mCreditRequestService.get(requestId)));
+		});
+
+		// Liste des demandes en attente - écran animateur, protégée par le PIN normalement.
+		pApp.get("/api/games/{id}/credit-requests", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			ctx.json(mCreditRequestService.listPending(id).stream().map(Dtos.CreditRequestDto::from).toList());
+		});
+
+		// Approbation - réutilise EXACTEMENT le mécanisme de crédit déjà
+		// existant (recordEvent, type "N"/NEW_CREDIT) : cette route n'ajoute
+		// qu'une couche de demande/notification par-dessus, aucun nouveau
+		// chemin d'écriture dans le moteur.
+		pApp.post("/api/games/{id}/credit-requests/{requestId}/approve", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final int requestId = Integer.parseInt(ctx.pathParam("requestId")); //$NON-NLS-1$
+			final CreditRequestService.Request request = mCreditRequestService.get(requestId);
+			if ((request == null) || (request.gameId() != id) || !"pending".equals(request.status())) //$NON-NLS-1$
+			{
+				throw new BadRequestResponse("Cette demande n'existe plus ou a déjà été traitée."); //$NON-NLS-1$
+			}
+			final Dtos.ApproveCreditRequestRequest req = ctx.bodyAsClass(Dtos.ApproveCreditRequestRequest.class);
+			try
+			{
+				mGameService.recordEvent(id, "N", request.playerId(), req.principal(), req.interest(), 0, 0, 0, //$NON-NLS-1$
+						null, 0, 0, 0, 0, 0, 0, 0, 0);
+			}
+			catch (final PlayerNotFoundException e)
+			{
+				throw new BadRequestResponse(e.getMessage());
+			}
+			mCreditRequestService.markResolved(requestId, true);
+			broadcast(id, "creditRequest", Dtos.CreditRequestDto.from(mCreditRequestService.get(requestId))); //$NON-NLS-1$
+			ctx.status(200).json(Dtos.CreditRequestDto.from(mCreditRequestService.get(requestId)));
+		});
+
+		// Refus - la demande passe simplement à "declined", rien d'autre à faire.
+		pApp.post("/api/games/{id}/credit-requests/{requestId}/decline", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final int requestId = Integer.parseInt(ctx.pathParam("requestId")); //$NON-NLS-1$
+			final CreditRequestService.Request request = mCreditRequestService.get(requestId);
+			if ((request == null) || (request.gameId() != id) || !"pending".equals(request.status())) //$NON-NLS-1$
+			{
+				throw new BadRequestResponse("Cette demande n'existe plus ou a déjà été traitée."); //$NON-NLS-1$
+			}
+			mCreditRequestService.markResolved(requestId, false);
+			broadcast(id, "creditRequest", Dtos.CreditRequestDto.from(mCreditRequestService.get(requestId))); //$NON-NLS-1$
+			ctx.status(200).json(Dtos.CreditRequestDto.from(mCreditRequestService.get(requestId)));
+		});
+
+		// Dernière demande d'UN joueur (n'importe quel statut) - pour que son
+		// téléphone affiche l'état ("en attente"/"acceptée"/"refusée").
+		pApp.get("/api/games/{id}/players/by-token/{token}/credit-requests", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final String token = ctx.pathParam("token"); //$NON-NLS-1$
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final Player player = game.getPlayers().stream()
+					.filter(p -> (p.getAccessToken() != null) && p.getAccessToken().equals(token)).findFirst()
+					.orElse(null);
+			if (player == null)
+			{
+				ctx.status(404).json(java.util.Map.of("error", "Jeton inconnu.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			final CreditRequestService.Request request = mCreditRequestService.findLatestForPlayer(id, player.getId());
+			if (request == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			ctx.json(Dtos.CreditRequestDto.from(request));
+		});
+
 		// Suppression totale d'un joueur (et de ses événements associés), avec recalcul
 		// intégral de l'état de la partie. Diffusé avec le détail complet de la partie,
 		// puisque la suppression peut affecter la masse monétaire et d'autres joueurs.
@@ -1021,6 +1140,27 @@ public class GecoServer
 					req.counterpartyPlayerId(), req.goodsFromPlayer(), req.goodsFromCounterparty(),
 					req.weakCoins(), req.mediumCoins(), req.strongCoins(),
 					req.weakGoodsFromCounterparty(), req.mediumGoodsFromCounterparty(), req.strongGoodsFromCounterparty());
+			// Étape 3, monnaie libre, mode smartphone : à chaque TOUR enregistré,
+			// on tente de capturer le nombre de joueurs de la mise en place -
+			// sans effet en dehors du tout premier tour (voir
+			// captureDeckPlayerCountIfNeeded, entièrement idempotent). Vérifié
+			// ICI (mode smartphone actif) plutôt que dans GameService, qui n'a
+			// jamais accès aux réglages globaux.
+			if ("T".equals(req.type()) //$NON-NLS-1$
+					&& AppSettings.GAME_MODE_SMARTPHONE.equals(mAppSettings.getGameMode()))
+			{
+				mGameService.captureDeckPlayerCountIfNeeded(id);
+				// Mise en place complète (distribution des cartes + dotation en
+				// jetons) - voir dealStartingHandsForLibreIfNeeded, entièrement
+				// idempotente elle aussi (ne fait rien si déjà effectuée). Le
+				// catalogue des cartes de niveau faible est résolu ICI (GecoServer
+				// a accès à mCardCatalogService, GameService jamais directement).
+				final java.util.List<String> faibleCardIds = mCardCatalogService.list().stream()
+						.filter(c -> "faible".equals(c.get("niveau"))) //$NON-NLS-1$ //$NON-NLS-2$
+						.map(c -> (String) c.get("id")) //$NON-NLS-1$
+						.toList();
+				mGameService.dealStartingHandsForLibreIfNeeded(id, faibleCardIds);
+			}
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
 			ctx.status(201).json(EventDto.from(event));
 		});

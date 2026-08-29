@@ -26,7 +26,8 @@ public class Dtos
 {
 	public record PlayerDto(Integer id, String name, boolean active, int curDebt, int curInterest,
 			boolean visitedBank, int age, Integer declaredAge, String favoriteColor, String avatarConfigJson,
-			int goodsCount, String accessToken, int weakGoods, int mediumGoods, int strongGoods)
+			int goodsCount, String accessToken, int weakGoods, int mediumGoods, int strongGoods,
+			boolean hasStartingAllocation)
 	{
 		static PlayerDto from(final Player p, final int pAge)
 		{
@@ -38,7 +39,13 @@ public class Dtos
 					// pour pré-remplir l'inventaire de mort troc dans l'assistant (voir
 					// renderStepDeathTroc dans app.js), sur le même principe que le
 					// pré-remplissage déjà en place pour la monnaie libre.
-					p.getGoodsCount(), p.getAccessToken(), p.getWeakGoods(), p.getMediumGoods(), p.getStrongGoods());
+					p.getGoodsCount(), p.getAccessToken(), p.getWeakGoods(), p.getMediumGoods(), p.getStrongGoods(),
+					// hasStartingAllocation : ajouté le même jour - vrai dès que ce
+					// joueur a reçu sa mise en place (4 cartes + 1/1/1 jetons, voir
+					// GameService.dealStartingHandsForLibreIfNeeded). Sans lui,
+					// computeLibrePrefill (app.js) ne saurait jamais que le tout
+					// premier tour d'un joueur libre part d'un solde de 7, pas de 0.
+					p.getStartingCardsJson() != null);
 		}
 	}
 
@@ -311,5 +318,26 @@ public class Dtos
 	// Réponse de GET /api/games/{id}/leaderboard - voir GameService.computeLeaderboard.
 	public record LeaderboardEntryDto(Integer playerId, String playerName, int value, int rank)
 	{
+	}
+
+	// ============ Étape 3, monnaie dette : demandes de crédit smartphone ============
+	// (voir CreditRequestService pour le raisonnement complet)
+
+	public record CreateCreditRequestRequest(Integer playerId, String playerAccessToken, int requestedPrincipal)
+	{
+	}
+
+	public record ApproveCreditRequestRequest(int principal, int interest)
+	{
+	}
+
+	public record CreditRequestDto(Integer id, Integer playerId, String playerName, int requestedPrincipal,
+			long createdAt, String status)
+	{
+		static CreditRequestDto from(final CreditRequestService.Request r)
+		{
+			return new CreditRequestDto(r.id(), r.playerId(), r.playerName(), r.requestedPrincipal(),
+					r.createdAtEpochMs(), r.status());
+		}
 	}
 }
