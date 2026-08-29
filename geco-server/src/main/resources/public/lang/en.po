@@ -1677,3 +1677,31 @@ msgstr "turn {n}"
 
 msgid "game.transactions_amount"
 msgstr "{n} tokens"
+
+# ============ Step 3, barter: card-for-card exchange via QR ============
+msgid "trade.sell_goods_title"
+msgstr "Propose an exchange"
+
+msgid "trade.goods_wanted_weak"
+msgstr "Weak cards wanted"
+
+msgid "trade.goods_wanted_medium"
+msgstr "Medium cards wanted"
+
+msgid "trade.goods_wanted_strong"
+msgstr "Strong cards wanted"
+
+msgid "trade.goods_wanted_weak_amount"
+msgstr "{n} weak card(s)"
+
+msgid "trade.goods_wanted_medium_amount"
+msgstr "{n} medium card(s)"
+
+msgid "trade.goods_wanted_strong_amount"
+msgstr "{n} strong card(s)"
+
+msgid "trade.you_will_give"
+msgstr "You will give: {goods}"
+
+msgid "trade.result_success_body_goods"
+msgstr "Trade completed: {name}."

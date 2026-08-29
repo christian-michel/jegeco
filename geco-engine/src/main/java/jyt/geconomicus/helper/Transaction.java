@@ -137,6 +137,18 @@ public class Transaction implements Serializable
 	private int mediumCoins;
 	private int strongCoins;
 
+	// Troc uniquement (voir Game.MONEY_TROC) : cartes données par l'ACHETEUR
+	// en échange, par niveau - jamais de jetons en troc (règle 3 de
+	// docs/10-etape-plugins-troc.md, "jamais de monnaie ni de jeton d'aucune
+	// sorte"), donc weakCoins/mediumCoins/strongCoins ci-dessus restent
+	// toujours à 0 pour ces transactions. Ajoutés le 28/08/2026, en même
+	// temps que la reprise du système de valeur ×4 par niveau (voir
+	// StatsService.computeGain, cas MONEY_TROC) - une transaction troc doit
+	// pouvoir alimenter le même calcul de richesse.
+	private int buyerWeakGoods;
+	private int buyerMediumGoods;
+	private int buyerStrongGoods;
+
 	// Utilisé par EclipseLink pour instancier des objets vides.
 	@SuppressWarnings("unused")
 	private Transaction()
@@ -144,9 +156,24 @@ public class Transaction implements Serializable
 		super();
 	}
 
+	/** Constructeur pour une transaction monnaie (dette/libre) : carte contre jetons. */
 	public Transaction(final Game pGame, final Player pSeller, final Player pBuyer, final String pCardTypeId,
 			final String pCardLevel, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
 			final String pNonce)
+	{
+		this(pGame, pSeller, pBuyer, pCardTypeId, pCardLevel, pWeakCoins, pMediumCoins, pStrongCoins, 0, 0, 0, pNonce);
+	}
+
+	/**
+	 * Constructeur complet - carte contre jetons (dette/libre, buyerWeak/Medium/
+	 * StrongGoods valent alors 0) OU carte contre cartes (troc, weakCoins/
+	 * mediumCoins/strongCoins valent alors 0). Jamais les deux à la fois : un
+	 * système de jeu utilise l'un ou l'autre, jamais un mélange (voir
+	 * Game.moneySystem).
+	 */
+	public Transaction(final Game pGame, final Player pSeller, final Player pBuyer, final String pCardTypeId,
+			final String pCardLevel, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
+			final int pBuyerWeakGoods, final int pBuyerMediumGoods, final int pBuyerStrongGoods, final String pNonce)
 	{
 		super();
 		uuid = UUID.randomUUID().toString();
@@ -161,6 +188,9 @@ public class Transaction implements Serializable
 		weakCoins = pWeakCoins;
 		mediumCoins = pMediumCoins;
 		strongCoins = pStrongCoins;
+		buyerWeakGoods = pBuyerWeakGoods;
+		buyerMediumGoods = pBuyerMediumGoods;
+		buyerStrongGoods = pBuyerStrongGoods;
 	}
 
 	public String getNonce()
@@ -228,9 +258,41 @@ public class Transaction implements Serializable
 		return strongCoins;
 	}
 
+	public int getBuyerWeakGoods()
+	{
+		return buyerWeakGoods;
+	}
+
+	public int getBuyerMediumGoods()
+	{
+		return buyerMediumGoods;
+	}
+
+	public int getBuyerStrongGoods()
+	{
+		return buyerStrongGoods;
+	}
+
+	/** Vrai si cette transaction est un échange troc (carte contre cartes), pas un achat en jetons. */
+	public boolean isGoodsTrade()
+	{
+		return (buyerWeakGoods > 0) || (buyerMediumGoods > 0) || (buyerStrongGoods > 0);
+	}
+
 	/** Valeur totale en jetons payée, dans la même convention que le reste du moteur (1/2/4). */
 	public int totalCoinsValue()
 	{
 		return weakCoins + 2 * mediumCoins + 4 * strongCoins;
+	}
+
+	/**
+	 * Valeur totale des cartes données par l'acheteur en troc, dans la même
+	 * convention ×4 par niveau que {@link jyt.geconomicus.helper.server.
+	 * StatsService#computeGain} (voir docs/10-etape-plugins-troc.md, mise à
+	 * jour du 28/08/2026).
+	 */
+	public int totalGoodsValue()
+	{
+		return buyerWeakGoods + (4 * buyerMediumGoods) + (16 * buyerStrongGoods);
 	}
 }

@@ -37,7 +37,8 @@ final class TradeOfferService
 	private static final SecureRandom RANDOM = new SecureRandom();
 
 	record Offer(int gameId, int sellerPlayerId, String sellerPlayerName, String cardTypeId, String cardLevel,
-			Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins, long expiresAtEpochMs)
+			Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins, int weakGoodsWanted,
+			int mediumGoodsWanted, int strongGoodsWanted, long expiresAtEpochMs)
 	{
 	}
 
@@ -46,7 +47,8 @@ final class TradeOfferService
 	/** Crée une offre et retourne son code (généré ici, jamais fourni par l'appelant). */
 	String create(final int pGameId, final int pSellerPlayerId, final String pSellerPlayerName,
 			final String pCardTypeId, final String pCardLevel, final Map<String, Object> pCardName,
-			final int pWeakCoins, final int pMediumCoins, final int pStrongCoins, final long pTtlMillis)
+			final int pWeakCoins, final int pMediumCoins, final int pStrongCoins, final int pWeakGoodsWanted,
+			final int pMediumGoodsWanted, final int pStrongGoodsWanted, final long pTtlMillis)
 	{
 		evictExpired();
 		String code;
@@ -57,7 +59,7 @@ final class TradeOfferService
 		while (mOffers.containsKey(code)); // collision extrêmement improbable (34^6 combinaisons), mais on se protège quand même
 		final Offer offer = new Offer(pGameId, pSellerPlayerId, pSellerPlayerName, pCardTypeId, pCardLevel,
 				pCardName == null ? Map.of() : new LinkedHashMap<>(pCardName), pWeakCoins, pMediumCoins, pStrongCoins,
-				System.currentTimeMillis() + pTtlMillis);
+				pWeakGoodsWanted, pMediumGoodsWanted, pStrongGoodsWanted, System.currentTimeMillis() + pTtlMillis);
 		mOffers.put(code, offer);
 		return code;
 	}

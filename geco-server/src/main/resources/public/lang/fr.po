@@ -1677,3 +1677,31 @@ msgstr "tour {n}"
 
 msgid "game.transactions_amount"
 msgstr "{n} jetons"
+
+# ============ Étape 3, troc : échange carte-contre-carte par QR ============
+msgid "trade.sell_goods_title"
+msgstr "Proposez un échange"
+
+msgid "trade.goods_wanted_weak"
+msgstr "Cartes faibles voulues"
+
+msgid "trade.goods_wanted_medium"
+msgstr "Cartes moyennes voulues"
+
+msgid "trade.goods_wanted_strong"
+msgstr "Cartes fortes voulues"
+
+msgid "trade.goods_wanted_weak_amount"
+msgstr "{n} carte(s) faible(s)"
+
+msgid "trade.goods_wanted_medium_amount"
+msgstr "{n} carte(s) moyenne(s)"
+
+msgid "trade.goods_wanted_strong_amount"
+msgstr "{n} carte(s) forte(s)"
+
+msgid "trade.you_will_give"
+msgstr "Vous donnerez : {goods}"
+
+msgid "trade.result_success_body_goods"
+msgstr "Échange effectué : {name}."

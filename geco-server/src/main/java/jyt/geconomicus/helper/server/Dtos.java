@@ -50,13 +50,15 @@ public class Dtos
 	// cette route ne renvoie jamais qu'UN seul joueur, le coût est négligeable.
 	public record PlayerSelfViewDto(Integer id, String name, boolean active, int curDebt, int curInterest,
 			boolean visitedBank, Integer declaredAge, String favoriteColor, String avatarConfigJson,
-			int goodsCount, String accessToken, int tradeBalance)
+			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
+			int moneySystem)
 	{
-		static PlayerSelfViewDto from(final Player p, final int pTradeBalance)
+		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem)
 		{
 			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
-					p.getGoodsCount(), p.getAccessToken(), pTradeBalance);
+					p.getGoodsCount(), p.getAccessToken(), pTradeBalance, p.getWeakGoods(), p.getMediumGoods(),
+					p.getStrongGoods(), pMoneySystem);
 		}
 	}
 
@@ -91,14 +93,17 @@ public class Dtos
 	// raisonnement complet et sa portée volontairement limitée à ce stade.
 	public record TransactionDto(Integer id, String uuid, Integer sellerPlayerId, String sellerPlayerName,
 			Integer buyerPlayerId, String buyerPlayerName, int turnNumber, long timestamp, String cardTypeId,
-			String cardLevel, int weakCoins, int mediumCoins, int strongCoins, int totalCoinsValue)
+			String cardLevel, int weakCoins, int mediumCoins, int strongCoins, int totalCoinsValue,
+			int buyerWeakGoods, int buyerMediumGoods, int buyerStrongGoods, boolean isGoodsTrade, int totalGoodsValue)
 	{
 		static TransactionDto from(final jyt.geconomicus.helper.Transaction t)
 		{
 			return new TransactionDto(t.getId(), t.getUuid(), t.getSeller().getId(), t.getSeller().getName(),
 					t.getBuyer().getId(), t.getBuyer().getName(), t.getTurnNumber(),
 					t.getTstamp() == null ? 0 : t.getTstamp().getTime(), t.getCardTypeId(), t.getCardLevel(),
-					t.getWeakCoins(), t.getMediumCoins(), t.getStrongCoins(), t.totalCoinsValue());
+					t.getWeakCoins(), t.getMediumCoins(), t.getStrongCoins(), t.totalCoinsValue(),
+					t.getBuyerWeakGoods(), t.getBuyerMediumGoods(), t.getBuyerStrongGoods(), t.isGoodsTrade(),
+					t.totalGoodsValue());
 		}
 	}
 
@@ -234,7 +239,7 @@ public class Dtos
 	// AppSettings.protectionEnabled), exactement comme pour le PIN de partie.
 	public record RecordTransactionRequest(String buyerAccessToken, Integer sellerPlayerId, Integer buyerPlayerId,
 			String cardTypeId, String cardLevel, int weakCoins, int mediumCoins, int strongCoins, String nonce,
-			long expiresAt)
+			long expiresAt, int buyerWeakGoods, int buyerMediumGoods, int buyerStrongGoods)
 	{
 	}
 
@@ -258,7 +263,8 @@ public class Dtos
 	// du catalogue "Cartes" (voir CatalogService), embarquée telle quelle pour
 	// que l'acheteur affiche le nom dans SA PROPRE langue (voir player-view.js).
 	public record CreateTradeOfferRequest(Integer sellerPlayerId, String sellerAccessToken, String cardTypeId,
-			String cardLevel, java.util.Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins)
+			String cardLevel, java.util.Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins,
+			int weakGoodsWanted, int mediumGoodsWanted, int strongGoodsWanted)
 	{
 	}
 
@@ -266,13 +272,14 @@ public class Dtos
 	// GET /api/games/{id}/trade-offers/{code} (avant confirmation d'achat).
 	public record TradeOfferDto(String code, Integer sellerPlayerId, String sellerPlayerName, String cardTypeId,
 			String cardLevel, java.util.Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins,
-			long expiresAt)
+			int weakGoodsWanted, int mediumGoodsWanted, int strongGoodsWanted, long expiresAt)
 	{
 		static TradeOfferDto from(final String pCode, final TradeOfferService.Offer pOffer)
 		{
 			return new TradeOfferDto(pCode, pOffer.sellerPlayerId(), pOffer.sellerPlayerName(), pOffer.cardTypeId(),
 					pOffer.cardLevel(), pOffer.cardName(), pOffer.weakCoins(), pOffer.mediumCoins(),
-					pOffer.strongCoins(), pOffer.expiresAtEpochMs());
+					pOffer.strongCoins(), pOffer.weakGoodsWanted(), pOffer.mediumGoodsWanted(),
+					pOffer.strongGoodsWanted(), pOffer.expiresAtEpochMs());
 		}
 	}
 

@@ -374,7 +374,9 @@ public class GameService
 	 */
 	public Transaction recordTransaction(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
 			final String pCardTypeId, final String pCardLevel, final int pWeakCoins, final int pMediumCoins,
-			final int pStrongCoins, final String pNonce, final long pExpiresAtEpochMs) throws PlayerNotFoundException
+			final int pStrongCoins, final int pBuyerWeakGoods, final int pBuyerMediumGoods,
+			final int pBuyerStrongGoods, final String pNonce, final long pExpiresAtEpochMs)
+			throws PlayerNotFoundException
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -408,8 +410,33 @@ public class GameService
 				throw new IllegalArgumentException("Ce QR code a expiré, demandez-en un nouveau au vendeur."); //$NON-NLS-1$
 			em.getTransaction().begin();
 			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, pCardLevel, pWeakCoins,
-					pMediumCoins, pStrongCoins, pNonce);
+					pMediumCoins, pStrongCoins, pBuyerWeakGoods, pBuyerMediumGoods, pBuyerStrongGoods, pNonce);
 			em.persist(transaction);
+			// Troc uniquement (voir Transaction.isGoodsTrade()) : contrairement aux
+			// jetons (dette/libre - jamais un solde stocké sur Player, toujours
+			// recalculé depuis l'historique, voir GameService.computeTradeBalance),
+			// les biens troc SONT suivis en direct sur Player.weakGoods/
+			// mediumGoods/strongGoods (voir Event.applyEvent(), cas GOODS_TRADE,
+			// et le correctif du 28/08/2026 qui a comblé ce même suivi pour
+			// l'échange classique). Une transaction smartphone doit donc mettre à
+			// jour ces champs elle aussi, sous peine du même bug déjà corrigé pour
+			// le dialogue animateur : un suivi par niveau qui ne bouge jamais.
+			// Le vendeur perd la carte de niveau pCardLevel (représentée comme un
+			// bien de CE niveau) et reçoit les biens donnés par l'acheteur ;
+			// l'inverse pour l'acheteur.
+			if (game.getMoneySystem() == Game.MONEY_TROC)
+			{
+				applyGoodsLevelDelta(seller, pCardLevel, -1);
+				applyGoodsLevelDelta(seller, "faible", pBuyerWeakGoods); //$NON-NLS-1$
+				applyGoodsLevelDelta(seller, "moyenne", pBuyerMediumGoods); //$NON-NLS-1$
+				applyGoodsLevelDelta(seller, "forte", pBuyerStrongGoods); //$NON-NLS-1$
+				applyGoodsLevelDelta(buyer, pCardLevel, 1);
+				applyGoodsLevelDelta(buyer, "faible", -pBuyerWeakGoods); //$NON-NLS-1$
+				applyGoodsLevelDelta(buyer, "moyenne", -pBuyerMediumGoods); //$NON-NLS-1$
+				applyGoodsLevelDelta(buyer, "forte", -pBuyerStrongGoods); //$NON-NLS-1$
+				seller.setGoodsCount(seller.getGoodsCount() - 1 + pBuyerWeakGoods + pBuyerMediumGoods + pBuyerStrongGoods);
+				buyer.setGoodsCount(buyer.getGoodsCount() + 1 - pBuyerWeakGoods - pBuyerMediumGoods - pBuyerStrongGoods);
+			}
 			em.getTransaction().commit();
 			return transaction;
 		}
@@ -419,10 +446,40 @@ public class GameService
 		}
 	}
 
+	// Applique un delta (positif ou négatif) au champ de biens correspondant
+	// au niveau donné - voir recordTransaction ci-dessus (troc uniquement).
+	// "tresforte" volontairement absent : aucune carte de ce niveau ne peut
+	// aujourd'hui être échangée par smartphone (le sélecteur de prix ne
+	// propose que faible/moyenne/forte, voir player-view.js) - à réviser si
+	// ça change un jour.
+	private void applyGoodsLevelDelta(final Player pPlayer, final String pLevel, final int pDelta)
+	{
+		if (pDelta == 0)
+			return;
+		switch (pLevel)
+		{
+			case "faible": //$NON-NLS-1$
+				pPlayer.setWeakGoods(pPlayer.getWeakGoods() + pDelta);
+				break;
+			case "moyenne": //$NON-NLS-1$
+				pPlayer.setMediumGoods(pPlayer.getMediumGoods() + pDelta);
+				break;
+			case "forte": //$NON-NLS-1$
+				pPlayer.setStrongGoods(pPlayer.getStrongGoods() + pDelta);
+				break;
+			default:
+				// Niveau inconnu/non pris en charge (ex. "tresforte") : ignoré
+				// plutôt que de faire échouer toute la transaction pour un champ
+				// d'affichage secondaire (le suivi par niveau resterait alors
+				// simplement légèrement imprécis pour ce cas rare).
+				break;
+		}
+	}
+
 	/**
 	 * Liste les transactions individuelles d'une partie, plus récentes en
-	 * premier - utilisé pour l'instant par un futur écran de statistiques/
-	 * historique (pas encore construit) et par l'historique joueur du mode
+	 * premier - utilisé par l'écran de statistiques/historique (voir
+	 * renderTransactionsPanel côté web) et par l'historique joueur du mode
 	 * smartphone (§5.1, écran "Historique").
 	 */
 	public List<Transaction> listTransactions(final int pGameId)

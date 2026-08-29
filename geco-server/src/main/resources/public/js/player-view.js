@@ -68,6 +68,14 @@ function showScreen(id) {
 }
 
 // ---------- Consultation (ex-refresh() de l'ancienne version de cette page) ----------
+// Étape 3, troc : vrai si la partie courante utilise le troc (voir
+// Game.MONEY_TROC = 2, déjà exposé au client via PlayerSelfViewDto.
+// moneySystem, ajouté le 28/08/2026) - détermine si les écrans de vente/achat
+// parlent de jetons (dette/libre) ou de cartes données en échange (troc).
+function isTrocGame() {
+	return state.player && (state.player.moneySystem === 2);
+}
+
 async function refreshPlayer() {
 	if (!state.gameId || !state.token) {
 		el("viewError").classList.remove("hidden");
@@ -80,7 +88,10 @@ async function refreshPlayer() {
 		el("viewError").classList.add("hidden");
 		el("playerName").textContent = state.player.name;
 		el("playerStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
-		el("balanceCardValue").textContent = t("trade.balance_value", { n: state.player.tradeBalance });
+		// Le solde en jetons n'a de sens qu'en dette/libre - le troc n'a jamais
+		// de jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
+		el("balanceCard").classList.toggle("hidden", isTrocGame());
+		if (!isTrocGame()) el("balanceCardValue").textContent = t("trade.balance_value", { n: state.player.tradeBalance });
 		const details = el("playerDetails");
 		let detailsHtml = "";
 		if (state.player.goodsCount > 0) detailsHtml += `<p>${t("playerView.goods_count", { n: state.player.goodsCount })}</p>`;
@@ -163,6 +174,24 @@ function openSellPrice(entry, visual) {
 	state.sellPrice = { weak: 0, medium: 0, strong: 0 };
 	renderSellPriceCardInfo();
 	renderPriceSteppers();
+	// Étape 3, troc : relabelle l'écran pour demander des cartes voulues en
+	// retour plutôt qu'un prix en jetons (voir isTrocGame() ; même trio de
+	// compteurs weak/medium/strong dans les deux cas, juste une signification
+	// différente - évite de dupliquer tout l'écran pour ça).
+	const weakLabel = document.querySelector('[data-coin="weak"] .price-stepper-label');
+	const mediumLabel = document.querySelector('[data-coin="medium"] .price-stepper-label');
+	const strongLabel = document.querySelector('[data-coin="strong"] .price-stepper-label');
+	if (isTrocGame()) {
+		el("sellPriceTitle").textContent = t("trade.sell_goods_title");
+		weakLabel.textContent = t("trade.goods_wanted_weak");
+		mediumLabel.textContent = t("trade.goods_wanted_medium");
+		strongLabel.textContent = t("trade.goods_wanted_strong");
+	} else {
+		el("sellPriceTitle").textContent = t("trade.sell_price_title");
+		weakLabel.textContent = t("trade.coin_weak");
+		mediumLabel.textContent = t("trade.coin_medium");
+		strongLabel.textContent = t("trade.coin_strong");
+	}
 	showScreen("sellPrice");
 }
 
@@ -214,6 +243,13 @@ async function createOfferAndShowQr() {
 	const btn = el("btnGenerateQr");
 	btn.disabled = true;
 	try {
+		// Étape 3, troc : la partie de l'offre change selon le système -
+		// jetons demandés (dette/libre) ou cartes voulues en retour (troc,
+		// voir isTrocGame()) - même trio de compteurs (state.sellPrice) dans
+		// les deux cas, juste envoyés sous des noms de champs différents.
+		const priceFields = isTrocGame()
+			? { weakGoodsWanted: state.sellPrice.weak, mediumGoodsWanted: state.sellPrice.medium, strongGoodsWanted: state.sellPrice.strong }
+			: { weakCoins: state.sellPrice.weak, mediumCoins: state.sellPrice.medium, strongCoins: state.sellPrice.strong };
 		const res = await fetch(`/api/games/${state.gameId}/trade-offers`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -223,9 +259,7 @@ async function createOfferAndShowQr() {
 				cardTypeId: entry.id,
 				cardLevel: entry.niveau,
 				cardName: entry.nom, // table {langue: texte} - l'acheteur affichera dans SA propre langue
-				weakCoins: state.sellPrice.weak,
-				mediumCoins: state.sellPrice.medium,
-				strongCoins: state.sellPrice.strong,
+				...priceFields,
 			}),
 		});
 		if (!res.ok) throw new Error(t("join.generic_error", { status: res.status }));
@@ -430,14 +464,39 @@ async function resolveCode(code, pFromCamera) {
 
 function renderScanConfirm(offer) {
 	const name = catalogTextValue(offer.cardName) || offer.cardTypeId;
+	const infoEl = el("scanConfirmInfo");
+	infoEl.className = `trade-card-info level-${offer.cardLevel}`;
+
+	if (isTrocGame()) {
+		// Troc : le "prix" est ce que L'ACHETEUR va donner en échange (des
+		// cartes, pas des jetons) - voir offer.weakGoodsWanted&co, posés par
+		// le vendeur à la création de l'offre.
+		const goodsParts = [];
+		if (offer.weakGoodsWanted > 0) goodsParts.push(t("trade.goods_wanted_weak_amount", { n: offer.weakGoodsWanted }));
+		if (offer.mediumGoodsWanted > 0) goodsParts.push(t("trade.goods_wanted_medium_amount", { n: offer.mediumGoodsWanted }));
+		if (offer.strongGoodsWanted > 0) goodsParts.push(t("trade.goods_wanted_strong_amount", { n: offer.strongGoodsWanted }));
+		const goodsText = goodsParts.length > 0 ? goodsParts.join(" + ") : t("trade.price_free");
+		infoEl.innerHTML = `
+			<div class="trade-card-thumb-fallback">🖼️</div>
+			<div class="trade-card-info-main">
+				<span class="trade-card-info-name">${escapeHtmlLocal(name)}</span>
+				<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>
+				<span class="trade-card-info-price">${escapeHtmlLocal(t("trade.you_will_give", { goods: goodsText }))}</span>
+			</div>`;
+		// Pas de lignes de solde en troc : il n'y a pas de jetons à suivre
+		// (voir docs/10-etape-plugins-troc.md, règle 3) - seulement des cartes,
+		// déjà résumées ci-dessus.
+		el("scanConfirmBalanceRows").innerHTML = "";
+		el("scanConfirmError").classList.add("hidden");
+		return;
+	}
+
 	const priceParts = [];
 	if (offer.weakCoins > 0) priceParts.push(t("trade.price_weak", { n: offer.weakCoins }));
 	if (offer.mediumCoins > 0) priceParts.push(t("trade.price_medium", { n: offer.mediumCoins }));
 	if (offer.strongCoins > 0) priceParts.push(t("trade.price_strong", { n: offer.strongCoins }));
 	const priceText = priceParts.length > 0 ? priceParts.join(" + ") : t("trade.price_free");
 
-	const infoEl = el("scanConfirmInfo");
-	infoEl.className = `trade-card-info level-${offer.cardLevel}`;
 	infoEl.innerHTML = `
 		<div class="trade-card-thumb-fallback">🖼️</div>
 		<div class="trade-card-info-main">
@@ -489,11 +548,17 @@ async function confirmPurchase() {
 		// totalCoinsValue), pas une estimation côté client - même s'ils
 		// coïncident presque toujours en pratique.
 		const transaction = await res.json();
-		const newBalance = (state.player.tradeBalance || 0) - transaction.totalCoinsValue;
-		showTradeResult(true, t("trade.result_success_title"),
-			t("trade.result_success_body_balance", {
-				name: catalogTextValue(offer.cardName) || offer.cardTypeId, balance: newBalance,
-			}));
+		const cardName = catalogTextValue(offer.cardName) || offer.cardTypeId;
+		if (isTrocGame()) {
+			// Pas de solde en jetons à annoncer en troc - juste la confirmation
+			// de l'échange (le nouvel inventaire sera visible au rafraîchissement
+			// du hub, voir refreshPlayer()).
+			showTradeResult(true, t("trade.result_success_title"), t("trade.result_success_body_goods", { name: cardName }));
+		} else {
+			const newBalance = (state.player.tradeBalance || 0) - transaction.totalCoinsValue;
+			showTradeResult(true, t("trade.result_success_title"),
+				t("trade.result_success_body_balance", { name: cardName, balance: newBalance }));
+		}
 		refreshPlayer();
 	} catch (err) {
 		el("scanConfirmError").textContent = err.message;

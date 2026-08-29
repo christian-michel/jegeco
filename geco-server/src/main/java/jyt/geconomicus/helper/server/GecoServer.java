@@ -879,7 +879,8 @@ public class GecoServer
 				ctx.status(404).json(java.util.Map.of("error", "Jeton inconnu.")); //$NON-NLS-1$ //$NON-NLS-2$
 				return;
 			}
-			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId())));
+			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
+					game.getMoneySystem()));
 		});
 
 		// Suppression totale d'un joueur (et de ses événements associés), avec recalcul
@@ -994,7 +995,8 @@ public class GecoServer
 			{
 				final Transaction transaction = mGameService.recordTransaction(id, req.sellerPlayerId(),
 						req.buyerPlayerId(), req.cardTypeId(), req.cardLevel(), req.weakCoins(), req.mediumCoins(),
-						req.strongCoins(), req.nonce(), req.expiresAt());
+						req.strongCoins(), req.buyerWeakGoods(), req.buyerMediumGoods(), req.buyerStrongGoods(),
+						req.nonce(), req.expiresAt());
 				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
 				ctx.status(201).json(Dtos.TransactionDto.from(transaction));
 			}
@@ -1039,7 +1041,8 @@ public class GecoServer
 				throw new ForbiddenResponse("Jeton de vendeur requis ou incorrect."); //$NON-NLS-1$
 			final String code = mTradeOfferService.create(id, req.sellerPlayerId(), seller.getName(),
 					req.cardTypeId(), req.cardLevel(), req.cardName(), req.weakCoins(), req.mediumCoins(),
-					req.strongCoins(), TRADE_OFFER_TTL_MS);
+					req.strongCoins(), req.weakGoodsWanted(), req.mediumGoodsWanted(), req.strongGoodsWanted(),
+					TRADE_OFFER_TTL_MS);
 			ctx.status(201).json(Dtos.TradeOfferDto.from(code, mTradeOfferService.peek(code)));
 		});
 
@@ -1090,7 +1093,8 @@ public class GecoServer
 			{
 				final Transaction transaction = mGameService.recordTransaction(id, offer.sellerPlayerId(),
 						req.buyerPlayerId(), offer.cardTypeId(), offer.cardLevel(), offer.weakCoins(),
-						offer.mediumCoins(), offer.strongCoins(), code, offer.expiresAtEpochMs());
+						offer.mediumCoins(), offer.strongCoins(), offer.weakGoodsWanted(), offer.mediumGoodsWanted(),
+						offer.strongGoodsWanted(), code, offer.expiresAtEpochMs());
 				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
 				ctx.status(201).json(Dtos.TransactionDto.from(transaction));
 			}

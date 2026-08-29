@@ -38,7 +38,7 @@
 
 			<!-- Solde en jetons, dérivé de l'historique des échanges par QR (voir
 			     GameService.computeTradeBalance) - rempli par refreshPlayer(). -->
-			<div class="balance-card">
+			<div class="balance-card" id="balanceCard">
 				<span class="balance-card-icon" aria-hidden="true">🪙</span>
 				<div>
 					<div class="balance-card-label" data-i18n="trade.balance_label">Solde jetons (échanges)</div>
@@ -70,7 +70,7 @@
 		<section id="sellPrice" class="join-card hidden">
 			<div class="trade-header">
 				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
-				<h2 data-i18n="trade.sell_price_title">Fixez le prix</h2>
+				<h2 id="sellPriceTitle" data-i18n="trade.sell_price_title">Fixez le prix</h2>
 			</div>
 			<div id="sellPriceCardInfo" class="trade-card-info"></div>
 			<div class="price-steppers">
