@@ -283,14 +283,14 @@ body {
 .trade-card-name { font-weight: 700; text-align: left; }
 
 /* Récapitulatif carte choisie (étape prix) / carte scannée (confirmation achat) */
-.trade-card-info {
-	display: flex; align-items: center; gap: 0.85rem; background: var(--mist); border-radius: 16px;
-	padding: 1rem; margin-bottom: 1.1rem;
-}
-.trade-card-info img, .trade-card-info .trade-card-thumb-fallback { width: 58px; height: 58px; border-radius: 12px; }
-.trade-card-info-main { display: flex; flex-direction: column; gap: 0.2rem; }
-.trade-card-info-name { font-family: var(--font-display); font-weight: 700; font-size: 1.08rem; }
-.trade-card-info-meta { font-size: 0.82rem; color: var(--text-dim); }
+/* Bloc d'info carte - contient désormais la carte composite (fond+illustration
+   +étiquette, voir .game-card plus bas) plutôt qu'une simple vignette+texte.
+   Mise à jour le 28/08/2026 : disposition verticale centrée, la carte
+   elle-même porte déjà son nom (étiquette du visuel) - plus besoin de le
+   répéter en texte à côté. */
+.trade-card-info { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 1rem; border-radius: 16px; margin-bottom: 1.1rem; }
+.trade-card-info .game-card-lg { max-width: 170px; }
+.trade-card-info-meta { font-size: 0.82rem; color: var(--text-dim); font-weight: 700; }
 .trade-card-info-price { font-weight: 700; color: var(--gold-dark); }
 
 /* Steppers de prix (jetons faibles/moyens/forts) - couleur or : ce sont les
@@ -408,3 +408,40 @@ body {
 }
 .balance-card-label { font-size: 0.78rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
 .balance-card-value { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; color: var(--ink); }
+
+/* ============================================================
+   Carte de jeu composite (fond + illustration + étiquette)
+   ============================================================
+   Remonté par l'utilisateur (28/08/2026) : une "carte" telle que le joueur
+   la voit est en réalité l'assemblage de PLUSIEURS informations superposées
+   - le fond propre au niveau (voir catalog-seeds/fonds.json,
+   fond_carte_<niveau>.png, coins arrondis déjà transparents dans le PNG
+   lui-même), l'illustration du visuel assigné (fond blanc réellement
+   transparent, vérifié par extraction du canal alpha), et l'étiquette du
+   VISUEL (voir visuels.json, champ "etiquette" - distinct du "nom" de la
+   carte, bien que les deux coïncident dans les données actuelles) affichée
+   en dessous de l'illustration, sur le fond. Un seul composant réutilisé
+   partout où une carte doit s'afficher (sélection, prix, QR, confirmation
+   d'achat, "Mes cartes") plutôt que de dupliquer cet assemblage à chaque
+   endroit. */
+.game-card {
+	position: relative; aspect-ratio: 1149 / 1894; border-radius: 14px; overflow: hidden;
+	background: var(--mist);
+}
+.game-card-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+.game-card-illustration {
+	position: absolute; top: 9%; left: 12%; width: 76%; height: 58%; object-fit: contain;
+	filter: drop-shadow(0 3px 5px rgba(0,0,0,0.15));
+}
+.game-card-label {
+	position: absolute; left: 6%; right: 6%; bottom: 9%; text-align: center;
+	font-family: var(--font-display); font-weight: 700; color: var(--ink);
+	font-size: 0.85em; line-height: 1.15; word-break: break-word;
+}
+/* Taille "vignette" (listes, sélection) - texte proportionnellement plus
+   petit (cqw = % de la largeur du conteneur, s'adapte à la taille réelle
+   sans avoir à multiplier les règles par contexte). */
+.game-card-sm { width: 100%; container-type: inline-size; }
+.game-card-sm .game-card-label { font-size: 9cqw; bottom: 7%; }
+.game-card-lg { width: 100%; max-width: 220px; margin: 0 auto; container-type: inline-size; }
+.game-card-lg .game-card-label { font-size: 6.5cqw; }

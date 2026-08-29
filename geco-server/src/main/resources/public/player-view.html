@@ -52,6 +52,23 @@
 				<button type="button" id="btnOpenManualEntry" class="btn-secondary btn-block" data-i18n="trade.btn_manual_entry">Saisir un code</button>
 			</div>
 
+			<!-- Étape 3 : "Mes cartes"/"Classement"/"Historique" - mockup de
+			     référence fourni par l'utilisateur (28/08/2026). -->
+			<div class="hub-nav-row">
+				<button type="button" id="btnOpenMyCards" class="hub-nav-btn">
+					<span aria-hidden="true">📦</span>
+					<span data-i18n="playerView.nav_my_cards">Mes cartes</span>
+				</button>
+				<button type="button" id="btnOpenLeaderboard" class="hub-nav-btn">
+					<span aria-hidden="true">🏆</span>
+					<span data-i18n="playerView.nav_leaderboard">Classement</span>
+				</button>
+				<button type="button" id="btnOpenHistory" class="hub-nav-btn">
+					<span aria-hidden="true">📜</span>
+					<span data-i18n="playerView.nav_history">Historique</span>
+				</button>
+			</div>
+
 			<p style="font-size:0.78rem;color:var(--text-dim);margin-top:1.5rem;" data-i18n="playerView.footnote">
 				Cette page se rafraîchit automatiquement. Gardez ce lien pour toute la partie.
 			</p>
@@ -174,6 +191,34 @@
 			<h2 id="tradeResultTitle"></h2>
 			<p id="tradeResultBody"></p>
 			<button type="button" id="btnTradeResultBack" class="btn-primary btn-block" data-i18n="trade.btn_back_to_hub">Retour</button>
+		</section>
+
+		<!-- ===== Étape 3 : "Mes cartes" - inventaire par secteur ===== -->
+		<section id="myCardsScreen" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="playerView.nav_my_cards">Mes cartes</h2>
+			</div>
+			<p class="galilee-explainer" data-i18n="playerView.my_cards_note">Cartes acquises par échange smartphone depuis cette partie.</p>
+			<div id="myCardsBody"></div>
+		</section>
+
+		<!-- ===== Étape 3 : "Classement" ===== -->
+		<section id="leaderboardScreen" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="playerView.nav_leaderboard">Classement</h2>
+			</div>
+			<div id="leaderboardBody"></div>
+		</section>
+
+		<!-- ===== Étape 3 : "Historique" personnel ===== -->
+		<section id="historyScreen" class="join-card hidden">
+			<div class="trade-header">
+				<button type="button" class="btn-back" data-i18n="trade.btn_back">← Retour</button>
+				<h2 data-i18n="playerView.nav_history">Historique</h2>
+			</div>
+			<div id="historyBody"></div>
 		</section>
 	</div>
 

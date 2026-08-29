@@ -60,7 +60,8 @@ function catalogTextValue(value) {
 const CARD_LEVELS = ["faible", "moyenne", "forte", "tresforte"];
 
 // ---------- Navigation entre écrans (un seul visible à la fois, sauf viewError) ----------
-const SCREENS = ["viewContent", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanManual", "scanConfirm", "tradeResult"];
+const SCREENS = ["viewContent", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanManual", "scanConfirm",
+	"tradeResult", "myCardsScreen", "leaderboardScreen", "historyScreen"];
 function showScreen(id) {
 	stopCamera(); // toujours couper la caméra en quittant scanCamera, quel que soit l'écran de destination
 	clearQrCountdown();
@@ -166,6 +167,30 @@ function escapeHtmlLocal(s) {
 	return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// Assemble le fond de carte (propre au niveau) + l'illustration du visuel +
+// son étiquette (voir player.css, .game-card - raisonnement complet là-bas).
+// pSizeClass : "game-card-sm" (vignette, listes) ou "game-card-lg" (détail).
+// pVisual peut être absent (catalogue incohérent, visuel supprimé...) - repli
+// sur un simple encadré, jamais un écran cassé pour si peu.
+function buildGameCardHtml(pEntry, pVisual, pSizeClass) {
+	const niveau = pEntry.niveau;
+	const bgSrc = `/cartes/fond_carte_${niveau}.png`;
+	if (!pVisual) {
+		return `
+			<div class="game-card ${pSizeClass}">
+				<img class="game-card-bg" src="${bgSrc}" alt="">
+				<span class="game-card-label">${escapeHtmlLocal(catalogTextValue(pEntry.nom) || pEntry.id)}</span>
+			</div>`;
+	}
+	const label = catalogTextValue(pVisual.etiquette) || catalogTextValue(pEntry.nom) || pEntry.id;
+	return `
+		<div class="game-card ${pSizeClass}">
+			<img class="game-card-bg" src="${bgSrc}" alt="">
+			<img class="game-card-illustration" src="/cartes/${escapeHtmlLocal(pVisual.filename)}" alt="">
+			<span class="game-card-label">${escapeHtmlLocal(label)}</span>
+		</div>`;
+}
+
 // ============================================================
 // VENTE : étape 2 - fixer le prix
 // ============================================================
@@ -197,15 +222,9 @@ function openSellPrice(entry, visual) {
 
 function renderSellPriceCardInfo() {
 	const { entry, visual } = state.sellSelection;
-	const thumb = visual
-		? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" onerror="this.outerHTML='<div class=&quot;trade-card-thumb-fallback&quot;>🖼️</div>'">`
-		: `<div class="trade-card-thumb-fallback">🖼️</div>`;
 	const html = `
-		${thumb}
-		<div class="trade-card-info-main">
-			<span class="trade-card-info-name">${escapeHtmlLocal(catalogTextValue(entry.nom) || entry.id)}</span>
-			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", entry.niveau))}</span>
-		</div>`;
+		${buildGameCardHtml(entry, visual, "game-card-lg")}
+		<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", entry.niveau))}</span>`;
 	const infoEl = el("sellPriceCardInfo");
 	infoEl.className = `trade-card-info level-${entry.niveau}`;
 	infoEl.innerHTML = html;
@@ -463,9 +482,20 @@ async function resolveCode(code, pFromCamera) {
 
 
 function renderScanConfirm(offer) {
-	const name = catalogTextValue(offer.cardName) || offer.cardTypeId;
 	const infoEl = el("scanConfirmInfo");
 	infoEl.className = `trade-card-info level-${offer.cardLevel}`;
+	// Reconstitue une "entrée catalogue" à partir de l'offre (elle ne porte
+	// que cardTypeId/cardLevel/cardName, pas l'entrée complète) pour pouvoir
+	// réutiliser buildGameCardHtml comme partout ailleurs - on retrouve
+	// l'entrée réelle si le catalogue est disponible (résout le bon
+	// visualId), sinon on retombe sur un objet minimal (nom/niveau connus
+	// via l'offre elle-même, pas de visuel - buildGameCardHtml gère ce cas).
+	const catalogEntry = (state.cardsCatalog || []).find((c) => c.id === offer.cardTypeId);
+	const entry = catalogEntry || { id: offer.cardTypeId, niveau: offer.cardLevel, nom: offer.cardName };
+	const visual = catalogEntry
+		? (state.visualsCatalog || []).find((v) => v.id === catalogEntry.visualId)
+		: null;
+	const cardHtml = buildGameCardHtml(entry, visual, "game-card-lg");
 
 	if (isTrocGame()) {
 		// Troc : le "prix" est ce que L'ACHETEUR va donner en échange (des
@@ -477,12 +507,9 @@ function renderScanConfirm(offer) {
 		if (offer.strongGoodsWanted > 0) goodsParts.push(t("trade.goods_wanted_strong_amount", { n: offer.strongGoodsWanted }));
 		const goodsText = goodsParts.length > 0 ? goodsParts.join(" + ") : t("trade.price_free");
 		infoEl.innerHTML = `
-			<div class="trade-card-thumb-fallback">🖼️</div>
-			<div class="trade-card-info-main">
-				<span class="trade-card-info-name">${escapeHtmlLocal(name)}</span>
-				<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>
-				<span class="trade-card-info-price">${escapeHtmlLocal(t("trade.you_will_give", { goods: goodsText }))}</span>
-			</div>`;
+			${cardHtml}
+			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>
+			<span class="trade-card-info-price">${escapeHtmlLocal(t("trade.you_will_give", { goods: goodsText }))}</span>`;
 		// Pas de lignes de solde en troc : il n'y a pas de jetons à suivre
 		// (voir docs/10-etape-plugins-troc.md, règle 3) - seulement des cartes,
 		// déjà résumées ci-dessus.
@@ -498,12 +525,9 @@ function renderScanConfirm(offer) {
 	const priceText = priceParts.length > 0 ? priceParts.join(" + ") : t("trade.price_free");
 
 	infoEl.innerHTML = `
-		<div class="trade-card-thumb-fallback">🖼️</div>
-		<div class="trade-card-info-main">
-			<span class="trade-card-info-name">${escapeHtmlLocal(name)}</span>
-			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>
-			<span class="trade-card-info-price">${escapeHtmlLocal(priceText)}</span>
-		</div>`;
+		${cardHtml}
+		<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>
+		<span class="trade-card-info-price">${escapeHtmlLocal(priceText)}</span>`;
 	el("scanConfirmError").classList.add("hidden");
 
 	// Solde avant/après (voir GameService.computeTradeBalance) - jamais
@@ -612,9 +636,20 @@ function initTradeUI() {
 // effective avant le premier refresh(), pour ne jamais afficher une clé brute
 // le temps que la langue se charge (voir player.js pour la même logique).
 let started = false;
-function startOnce() {
+async function startOnce() {
 	if (started) return;
 	started = true;
+	// Catalogues cartes/visuels préchargés ici (pas seulement à l'ouverture de
+	// "Vendre une carte") : un ACHETEUR arrivant directement sur l'écran de
+	// confirmation (scan/saisie manuelle) en a besoin lui aussi pour assembler
+	// la carte composite (voir buildGameCardHtml/renderScanConfirm).
+	try {
+		state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
+		state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
+	} catch (err) {
+		// Pas bloquant : buildGameCardHtml sait se replier sur un encadré simple
+		// si le visuel/catalogue attendu n'est pas disponible.
+	}
 	initTradeUI();
 	refreshPlayer();
 	setInterval(refreshPlayer, 5000);

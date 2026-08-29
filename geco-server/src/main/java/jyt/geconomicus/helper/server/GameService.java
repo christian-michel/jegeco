@@ -618,6 +618,31 @@ public class GameService
 	}
 
 	/**
+	 * Historique des transactions d'UN joueur précis (achats et ventes), plus
+	 * récentes en premier - voir "Historique" côté espace joueur (mockup de
+	 * référence du 28/08/2026). Distinct de {@link #listTransactions}
+	 * (l'historique COMPLET d'une partie, réservé à l'animateur/protégé par
+	 * le PIN) : un joueur sur son téléphone ne connaît jamais ce PIN, cette
+	 * méthode ne renvoie donc que SES propres transactions.
+	 */
+	public List<Transaction> listPlayerTransactions(final int pGameId, final int pPlayerId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			return em.createQuery(
+					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid) ORDER BY t.tstamp DESC", //$NON-NLS-1$
+					Transaction.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.getResultList();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
 	 * Supprime un événement et recalcule intégralement l'état de la partie à partir
 	 * des événements restants (dette de chaque joueur, masse monétaire, numéro de
 	 * tour...). Ce recalcul complet est nécessaire : un événement au milieu de
