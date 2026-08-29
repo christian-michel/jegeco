@@ -1547,6 +1547,9 @@ msgstr "Quelle carte vendez-vous ?"
 msgid "trade.sell_price_title"
 msgstr "Fixez le prix"
 
+msgid "trade.sell_no_owned_cards"
+msgstr "Vous n'avez plus aucune carte à vendre pour le moment."
+
 msgid "trade.coin_weak"
 msgstr "Jetons faibles"
 

@@ -77,6 +77,13 @@ function isTrocGame() {
 	return state.player && (state.player.moneySystem === 2);
 }
 
+// Étape 3, monnaie libre : symétrique de isTrocGame()/isDebtGame() - voir
+// Game.MONEY_LIBRE = 0. Détermine si le stock de cartes proposé à la vente
+// doit être contraint par l'inventaire réel du joueur (voir openSellPicker).
+function isLibreGame() {
+	return state.player && (state.player.moneySystem === 0);
+}
+
 // Étape 3, monnaie dette : vrai si la partie courante utilise la dette (voir
 // Game.MONEY_DEBT = 1) - détermine si le bouton "Demander un crédit" est
 // proposé (voir CreditRequestService).
@@ -263,8 +270,27 @@ async function openSellPicker() {
 	if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
 	if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
 
+	// Étape 3, monnaie libre : contrairement à dette/troc (pas encore de vrai
+	// inventaire suivi), le stock de cartes est ici RÉEL et fini (voir le
+	// document de cadrage du 28/08/2026 et GameService.
+	// dealStartingHandsForLibreIfNeeded) - un joueur ne doit donc pouvoir
+	// proposer à la vente QUE ce qu'il possède réellement, jamais l'intégralité
+	// du catalogue comme c'était le cas jusqu'ici (un vrai trou : rien
+	// n'empêchait de "vendre" une carte jamais possédée, créant une carte
+	// fantôme et cassant le stock fixe qu'on vient tout juste de construire).
+	let ownedCounts = null;
+	if (isLibreGame()) {
+		try {
+			ownedCounts = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`)
+				.then((r) => r.json());
+		} catch (err) {
+			ownedCounts = {}; // repli prudent : mieux vaut ne rien proposer que de casser l'écran
+		}
+	}
+
 	container.innerHTML = CARD_LEVELS.map((level) => {
-		const entries = state.cardsCatalog.filter((c) => c.niveau === level);
+		let entries = state.cardsCatalog.filter((c) => c.niveau === level);
+		if (ownedCounts) entries = entries.filter((c) => (ownedCounts[c.id] || 0) > 0);
 		if (entries.length === 0) return "";
 		const isOpen = state.sellExpandedGroups.has(level);
 		return `
@@ -275,10 +301,17 @@ async function openSellPicker() {
 				<span class="trade-group-count">${entries.length}</span>
 			</button>
 			<div class="trade-group-body ${isOpen ? "" : "hidden"}">
-				${entries.map((entry) => sellCardRowHtml(entry)).join("")}
+				${entries.map((entry) => sellCardRowHtml(entry, ownedCounts ? ownedCounts[entry.id] : null)).join("")}
 			</div>
 		</div>`;
 	}).join("");
+
+	// Monnaie libre, aucune carte possédée du tout (rare : chacun démarre avec
+	// 4 cartes - n'arrive que si tout a déjà été vendu) - message explicite
+	// plutôt qu'un écran vide sans explication.
+	if (ownedCounts && (container.innerHTML.trim() === "")) {
+		container.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("trade.sell_no_owned_cards")}</p>`;
+	}
 
 	container.querySelectorAll(".trade-group-header").forEach((header) => {
 		header.addEventListener("click", () => {
@@ -296,7 +329,7 @@ async function openSellPicker() {
 	});
 }
 
-function sellCardRowHtml(entry) {
+function sellCardRowHtml(entry, pOwnedCount) {
 	const visual = state.visualsCatalog.find((v) => v.id === entry.visualId);
 	const thumb = visual
 		? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" class="trade-card-thumb level-${entry.niveau}" onerror="this.outerHTML='<div class=&quot;trade-card-thumb-fallback level-${entry.niveau}&quot;>🖼️</div>'">`
@@ -305,6 +338,7 @@ function sellCardRowHtml(entry) {
 	<button type="button" class="trade-card-row" data-id="${escapeHtmlLocal(entry.id)}">
 		${thumb}
 		<span class="trade-card-name">${escapeHtmlLocal(catalogTextValue(entry.nom) || entry.id)}</span>
+		${(pOwnedCount != null) ? `<span class="trade-card-owned-count">×${pOwnedCount}</span>` : ""}
 	</button>`;
 }
 

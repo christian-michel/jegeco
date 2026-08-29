@@ -1545,6 +1545,9 @@ msgstr "Which card are you selling?"
 msgid "trade.sell_price_title"
 msgstr "Set the price"
 
+msgid "trade.sell_no_owned_cards"
+msgstr "You have no cards left to sell right now."
+
 msgid "trade.coin_weak"
 msgstr "Weak coins"
 
