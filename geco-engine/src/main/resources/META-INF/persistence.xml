@@ -8,6 +8,7 @@
 		<class>jyt.geconomicus.helper.Player</class>
 		<class>jyt.geconomicus.helper.Event</class>
 		<class>jyt.geconomicus.helper.Transaction</class>
+		<class>jyt.geconomicus.helper.CardSquareEvent</class>
 		<properties>
 			<property name="jakarta.persistence.jdbc.driver" value="org.h2.Driver" />
 			<property name="jakarta.persistence.jdbc.url" value="jdbc:h2:~/geco.h2" />

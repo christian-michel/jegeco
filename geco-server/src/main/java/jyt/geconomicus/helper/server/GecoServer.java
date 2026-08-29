@@ -1150,16 +1150,19 @@ public class GecoServer
 					&& AppSettings.GAME_MODE_SMARTPHONE.equals(mAppSettings.getGameMode()))
 			{
 				mGameService.captureDeckPlayerCountIfNeeded(id);
-				// Mise en place complète (distribution des cartes + dotation en
-				// jetons) - voir dealStartingHandsForLibreIfNeeded, entièrement
-				// idempotente elle aussi (ne fait rien si déjà effectuée). Le
-				// catalogue des cartes de niveau faible est résolu ICI (GecoServer
-				// a accès à mCardCatalogService, GameService jamais directement).
-				final java.util.List<String> faibleCardIds = mCardCatalogService.list().stream()
-						.filter(c -> "faible".equals(c.get("niveau"))) //$NON-NLS-1$ //$NON-NLS-2$
-						.map(c -> (String) c.get("id")) //$NON-NLS-1$
-						.toList();
-				mGameService.dealStartingHandsForLibreIfNeeded(id, faibleCardIds);
+				// Mise en place complète (4 pioches préparées, distribution des
+				// cartes faible + dotation en jetons) - voir
+				// dealStartingHandsForLibreIfNeeded, entièrement idempotente
+				// (ne fait rien si déjà effectuée). Le catalogue est résolu ICI
+				// (GecoServer a accès à mCardCatalogService, GameService jamais
+				// directement) - regroupé par niveau, les 4 pioches (faible/
+				// moyenne/forte/tresforte) étant TOUTES préparées dès le départ
+				// (modèle simplifié, voir docs/04-etape3-catalogue-cartes.md).
+				final java.util.Map<String, List<String>> cardIdsByLevel = mCardCatalogService.list().stream()
+						.collect(java.util.stream.Collectors.groupingBy(c -> (String) c.get("niveau"), //$NON-NLS-1$
+								java.util.stream.Collectors.mapping(c -> (String) c.get("id"), //$NON-NLS-1$
+										java.util.stream.Collectors.toList())));
+				mGameService.dealStartingHandsForLibreIfNeeded(id, cardIdsByLevel);
 			}
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
 			ctx.status(201).json(EventDto.from(event));

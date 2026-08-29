@@ -5,6 +5,7 @@ import java.util.List;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 
+import jyt.geconomicus.helper.CardSquareEvent;
 import jyt.geconomicus.helper.Event;
 import jyt.geconomicus.helper.Event.EventType;
 import jyt.geconomicus.helper.EventTypeConverter;
@@ -437,7 +438,24 @@ public class GameService
 				seller.setGoodsCount(seller.getGoodsCount() - 1 + pBuyerWeakGoods + pBuyerMediumGoods + pBuyerStrongGoods);
 				buyer.setGoodsCount(buyer.getGoodsCount() + 1 - pBuyerWeakGoods - pBuyerMediumGoods - pBuyerStrongGoods);
 			}
+			final boolean isLibre = game.getMoneySystem() == Game.MONEY_LIBRE;
+			final int sellerId = seller.getId();
+			final int buyerId = buyer.getId();
 			em.getTransaction().commit();
+			// Encaissement automatique des carrés (voir checkAndCashInSquares) -
+			// APRÈS le commit ci-dessus et EN DEHORS de cette transaction/cet
+			// EntityManager (checkAndCashInSquares gère les siens, une seule
+			// EntityManager ne pouvant pas imbriquer plusieurs transactions
+			// actives) - monnaie libre uniquement pour l'instant (voir la
+			// question posée à l'utilisateur le 28/08/2026 : troc/dette pas
+			// encore concernés par un vrai inventaire suivi). Le vendeur ET
+			// l'acheteur sont vérifiés : l'un des deux peut avoir complété un
+			// carré par cet échange précis.
+			if (isLibre)
+			{
+				checkAndCashInSquares(pGameId, sellerId);
+				checkAndCashInSquares(pGameId, buyerId);
+			}
 			return transaction;
 		}
 		finally
@@ -597,6 +615,37 @@ public class GameService
 				if (t.getSeller().getId().equals(pPlayerId))
 					inventory.merge(t.getCardTypeId(), -1, Integer::sum);
 			}
+			// Historique des carrés déjà encaissés (voir CardSquareEvent,
+			// checkAndCashInSquares) : les 4 cartes défaussées quittent
+			// l'inventaire, la carte promue et les 4 cartes de remplacement y
+			// entrent - un carré n'est PAS une Transaction (pas d'échange entre
+			// deux joueurs, une interaction avec la pioche partagée), d'où ce
+			// second journal, rejoué séparément ici.
+			final List<CardSquareEvent> squareEvents = em.createQuery(
+					"SELECT s FROM CardSquareEvent s WHERE s.game.id = :gameId AND s.player.id = :pid", //$NON-NLS-1$
+					CardSquareEvent.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.getResultList();
+			for (final CardSquareEvent square : squareEvents)
+			{
+				inventory.merge(square.getCashedCardTypeId(), -4, Integer::sum);
+				inventory.merge(square.getPromotedCardTypeId(), 1, Integer::sum);
+				try
+				{
+					final java.util.List<String> replenished = new com.fasterxml.jackson.databind.ObjectMapper()
+							.readValue(square.getReplenishedCardIdsJson(),
+									new com.fasterxml.jackson.core.type.TypeReference<java.util.ArrayList<String>>()
+									{
+									});
+					for (final String cardId : replenished)
+						inventory.merge(cardId, 1, Integer::sum);
+				}
+				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+				{
+					// Donnée corrompue (ne devrait jamais arriver) : on ignore ce
+					// carré précis plutôt que de faire échouer tout l'inventaire.
+				}
+			}
 			// Ne devrait normalement jamais arriver (on ne peut pas vendre une carte
 			// qu'on n'a pas), mais on nettoie par sécurité plutôt que d'afficher un
 			// nombre négatif absurde - ex. cartes détenues avant l'usage du
@@ -690,30 +739,38 @@ public class GameService
 	/**
 	 * Étape 3, monnaie libre, mode smartphone : mise en place complète, une
 	 * fois {@link #captureDeckPlayerCountIfNeeded} passée - voir le document
-	 * de cadrage du 28/08/2026 et geconomicus.glibre.org/libre_money.html.
+	 * de cadrage du 28/08/2026, geconomicus.glibre.org/libre_money.html et
+	 * docs/04-etape3-catalogue-cartes.md (modèle SIMPLIFIÉ, confirmé par
+	 * l'utilisateur : pas de rotation complexe des 4 niveaux - les 4 pioches
+	 * (faible/moyenne/forte/tresforte) sont TOUTES préparées dès le départ,
+	 * même si seule "faible" est distribuée aux joueurs à cet instant. Les
+	 * trois autres attendent sur la table, prêtes à être piochées lors d'un
+	 * futur "carré" (voir {@link #checkAndCashInSquares}).
 	 * <p>
-	 * Sélectionne N+1 modèles de cartes de niveau faible (N = {@code
-	 * Game.deckPlayerCount}, plafonné au nombre de modèles réellement
-	 * disponibles au catalogue), mint 5 exemplaires de chacun (un "sac" de
-	 * cartes mélangé), distribue 4 cartes au hasard à chaque joueur actif, et
-	 * donne à chacun sa dotation de départ en jetons - 1 faible + 1 moyen + 1
-	 * fort (valeur 7), une CONSTANTE fixée par les règles ("distribuer les
-	 * trois couleurs à chaque joueur (1 billet de chacune)"), jamais stockée
-	 * séparément : {@link #computeTradeBalance} l'ajoute simplement dès que
-	 * {@code Player.startingCardsJson} n'est plus nul (voir ce champ).
+	 * Sélectionne N+1 modèles PAR NIVEAU (N = {@code Game.deckPlayerCount},
+	 * plafonné au nombre de modèles réellement disponibles au catalogue pour
+	 * ce niveau), mint 5 exemplaires de chacun, distribue 4 cartes de niveau
+	 * faible au hasard à chaque joueur actif, et donne à chacun sa dotation
+	 * de départ en jetons - 1 faible + 1 moyen + 1 fort (valeur 7), une
+	 * CONSTANTE fixée par les règles ("distribuer les trois couleurs à
+	 * chaque joueur (1 billet de chacune)"), jamais stockée séparément :
+	 * {@link #computeTradeBalance} l'ajoute simplement dès que {@code
+	 * Player.startingCardsJson} n'est plus nul (voir ce champ).
 	 * <p>
 	 * Idempotent : ne fait rien si déjà effectuée ({@code
 	 * Game.smartphoneCardPileJson} déjà renseigné) ou si les conditions ne
 	 * sont pas réunies (partie pas en monnaie libre, ou
 	 * {@code deckPlayerCount} pas encore capturé).
 	 *
-	 * @param pAvailableFaibleCardIds identifiants des cartes de niveau faible
+	 * @param pAvailableCardIdsByLevel pour chaque niveau ("faible", "moyenne",
+	 *            "forte", "tresforte"), les identifiants de cartes
 	 *            disponibles au catalogue - fourni par l'appelant
 	 *            (GecoServer, qui a accès au catalogue ; GameService, lui, ne
 	 *            le consulte jamais directement, voir la règle déjà en place
 	 *            pour AppSettings).
 	 */
-	public void dealStartingHandsForLibreIfNeeded(final int pGameId, final List<String> pAvailableFaibleCardIds)
+	public void dealStartingHandsForLibreIfNeeded(final int pGameId,
+			final java.util.Map<String, List<String>> pAvailableCardIdsByLevel)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -722,50 +779,270 @@ public class GameService
 			if (game == null)
 				return;
 			if ((game.getMoneySystem() != Game.MONEY_LIBRE) || (game.getDeckPlayerCount() == null)
-					|| (game.getSmartphoneCardPileJson() != null) || pAvailableFaibleCardIds.isEmpty())
+					|| (game.getSmartphoneCardPileJson() != null))
 				return; // déjà fait, ou conditions non réunies - jamais recalculé
 
 			final int nbPlayers = game.getDeckPlayerCount();
-			final int nbModels = Math.min(nbPlayers + 1, pAvailableFaibleCardIds.size());
-			final java.util.List<String> shuffledModels = new java.util.ArrayList<>(pAvailableFaibleCardIds);
-			java.util.Collections.shuffle(shuffledModels);
-			final java.util.List<String> selectedModels = shuffledModels.subList(0, nbModels);
-
-			// Le "sac" : 5 exemplaires de chaque modèle sélectionné, mélangés -
-			// on pioche ensuite dedans dans l'ordre, sans jamais dépasser ce
-			// stock (contrairement à l'ancien système, qui traitait le
-			// catalogue comme une ressource infinie).
-			final java.util.List<String> bag = new java.util.ArrayList<>();
-			for (final String modelId : selectedModels)
-				for (int i = 0; i < 5; i++)
-					bag.add(modelId);
-			java.util.Collections.shuffle(bag);
-
 			final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			// Une pioche par niveau, toutes préparées maintenant (voir le
+			// commentaire de tête de méthode - modèle simplifié).
+			final java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel = new java.util.LinkedHashMap<>();
+			java.util.List<String> faibleBag = null; // conservé à part : c'est le seul qu'on distribue tout de suite
+			for (final String level : java.util.List.of("faible", "moyenne", "forte", "tresforte")) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+			{
+				final List<String> available = pAvailableCardIdsByLevel.getOrDefault(level, List.of());
+				if (available.isEmpty())
+				{
+					pilesByLevel.put(level, new java.util.LinkedHashMap<>());
+					continue;
+				}
+				final int nbModels = Math.min(nbPlayers + 1, available.size());
+				final java.util.List<String> shuffledModels = new java.util.ArrayList<>(available);
+				java.util.Collections.shuffle(shuffledModels);
+				final java.util.List<String> selectedModels = shuffledModels.subList(0, nbModels);
+				final java.util.List<String> bag = new java.util.ArrayList<>();
+				for (final String modelId : selectedModels)
+					for (int i = 0; i < 5; i++)
+						bag.add(modelId);
+				java.util.Collections.shuffle(bag);
+				if ("faible".equals(level)) //$NON-NLS-1$
+					faibleBag = bag; // distribué juste après, voir plus bas
+				final java.util.Map<String, Integer> pile = new java.util.LinkedHashMap<>();
+				for (final String modelId : selectedModels)
+					pile.put(modelId, 0); // tous les modèles sélectionnés apparaissent, même à 0
+				for (final String cardId : bag)
+					pile.merge(cardId, 1, Integer::sum);
+				pilesByLevel.put(level, pile);
+			}
+
 			em.getTransaction().begin();
 			final List<Player> activePlayers = game.getPlayers().stream().filter(Player::isActive).toList();
-			int bagIndex = 0;
-			for (final Player player : activePlayers)
+			if (faibleBag != null)
 			{
-				final java.util.Map<String, Integer> hand = new java.util.LinkedHashMap<>();
-				for (int i = 0; (i < 4) && (bagIndex < bag.size()); i++)
-					hand.merge(bag.get(bagIndex++), 1, Integer::sum);
-				writeJsonQuietly(mapper, hand, player::setStartingCardsJson);
+				// Distribue 4 cartes de niveau faible par joueur, en les retirant
+				// de la pioche "faible" déjà préparée ci-dessus (pilesByLevel).
+				final java.util.Map<String, Integer> faiblePile = pilesByLevel.get("faible"); //$NON-NLS-1$
+				int bagIndex = 0;
+				for (final Player player : activePlayers)
+				{
+					final java.util.Map<String, Integer> hand = new java.util.LinkedHashMap<>();
+					for (int i = 0; (i < 4) && (bagIndex < faibleBag.size()); i++)
+					{
+						final String cardId = faibleBag.get(bagIndex++);
+						hand.merge(cardId, 1, Integer::sum);
+						faiblePile.merge(cardId, -1, Integer::sum); // retiré de la pioche, remis en main du joueur
+					}
+					writeJsonQuietly(mapper, hand, player::setStartingCardsJson);
+				}
 			}
-			// Le reste du sac (non distribué) devient la pioche partagée - tous
-			// les modèles sélectionnés y figurent, même à 0 exemplaire restant
-			// (voir le commentaire sur Game.smartphoneCardPileJson).
-			final java.util.Map<String, Integer> pile = new java.util.LinkedHashMap<>();
-			for (final String modelId : selectedModels)
-				pile.put(modelId, 0);
-			for (int i = bagIndex; i < bag.size(); i++)
-				pile.merge(bag.get(i), 1, Integer::sum);
-			writeJsonQuietly(mapper, pile, game::setSmartphoneCardPileJson);
+			writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
 			em.getTransaction().commit();
 		}
 		finally
 		{
 			em.close();
+		}
+	}
+
+	// Ordre fixe des niveaux (modèle SIMPLIFIÉ confirmé par l'utilisateur, voir
+	// docs/04-etape3-catalogue-cartes.md : pas de rotation des 4 niveaux - un
+	// carré fait toujours progresser vers le niveau immédiatement supérieur
+	// dans CET ordre fixe, jusqu'à "tresforte" qui reste le sommet).
+	private static final java.util.List<String> LEVEL_ORDER = java.util.List.of("faible", "moyenne", "forte", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+			"tresforte"); //$NON-NLS-1$
+
+	/**
+	 * Étape 3, monnaie libre, mode smartphone : détecte et encaisse
+	 * AUTOMATIQUEMENT tous les "carrés" (4 cartes identiques) actuellement
+	 * réunis par un joueur - confirmé explicitement par l'utilisateur
+	 * (encaissement automatique, sans action du joueur). Appelée après
+	 * chaque transaction smartphone (voir {@link #recordTransaction}), pour
+	 * le vendeur ET l'acheteur : l'un des deux peut avoir complété un carré.
+	 * <p>
+	 * Reproduit "il pioche une carte de valeur supérieure, se défausse de son
+	 * carré dans la pioche du paquet correspondant et pioche quatre nouvelles
+	 * cartes de ce même paquet" (rules.html) : les 4 cartes retournent dans
+	 * LEUR pioche de niveau, 1 carte est piochée dans la pioche du niveau
+	 * supérieur, et 4 nouvelles cartes sont piochées dans la pioche du niveau
+	 * d'origine pour reconstituer la main - jamais depuis le catalogue
+	 * complet (GameService n'y touche jamais directement), toujours depuis
+	 * {@code Game.smartphoneCardPileJson}, qui encode déjà à quel niveau
+	 * appartient chaque modèle "en jeu" pour CETTE partie précise (les clés
+	 * de chaque sous-pioche).
+	 * <p>
+	 * Rupture technologique (voir docs/04-etape3-catalogue-cartes.md, modèle
+	 * simplifié confirmé par l'utilisateur - PAS de réordonnancement des 4
+	 * niveaux) : la toute première fois qu'un carré fait entrer une carte de
+	 * niveau "tresforte" en jeu pour cette partie (peu importe quel joueur),
+	 * un événement XTECHNOLOGICAL_BREAKTHROUGH est enregistré en plus, pour
+	 * que le calcul de richesse déjà existant (StatsService, currentFactor
+	 * *= 2) en tienne compte - réutilise TEL QUEL ce mécanisme déjà présent
+	 * dans le moteur (confirmé par l'utilisateur comme suffisant), plutôt que
+	 * d'implémenter un réordonnancement complexe des couleurs.
+	 * <p>
+	 * Boucle tant qu'un carré existe : un joueur pourrait, en théorie, réunir
+	 * plusieurs carrés d'un coup (les 4 cartes de remplacement d'un premier
+	 * carré pourraient elles-mêmes compléter un second, si le hasard fait
+	 * qu'il les tirait déjà identiques à 3 cartes déjà en main) - la boucle
+	 * protège contre ce cas, même rare.
+	 */
+	public void checkAndCashInSquares(final int pGameId, final int pPlayerId)
+	{
+		while (true)
+		{
+			final EntityManager em = mEntityManagerFactory.createEntityManager();
+			try
+			{
+				final Game game = em.find(Game.class, pGameId);
+				if ((game == null) || (game.getSmartphoneCardPileJson() == null))
+					return; // pas (encore) de mise en place - rien à faire
+
+				final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+				final java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel;
+				try
+				{
+					pilesByLevel = mapper.readValue(game.getSmartphoneCardPileJson(),
+							new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, java.util.LinkedHashMap<String, Integer>>>()
+							{
+							});
+				}
+				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+				{
+					return; // donnée corrompue : on abandonne silencieusement plutôt que de planter
+				}
+
+				// Cherche un modèle réuni en 4 exemplaires ou plus dans
+				// l'inventaire ACTUEL (déjà rejoué : dotation + transactions +
+				// carrés précédents) - le premier trouvé, peu importe l'ordre.
+				final java.util.Map<String, Integer> inventory = computePlayerCardInventory(pGameId, pPlayerId);
+				String squareCardId = null;
+				String squareLevel = null;
+				for (final java.util.Map.Entry<String, Integer> e : inventory.entrySet())
+				{
+					final String level = findLevelOfCard(pilesByLevel, e.getKey());
+					if ((e.getValue() >= 4) && (level != null))
+					{
+						squareCardId = e.getKey();
+						squareLevel = level;
+						break;
+					}
+				}
+				if (squareCardId == null)
+					return; // rien à encaisser, on s'arrête là
+
+				final int levelIndex = LEVEL_ORDER.indexOf(squareLevel);
+				if ((levelIndex < 0) || (levelIndex >= LEVEL_ORDER.size() - 1))
+					return; // déjà au niveau le plus haut (tresforte) - pas de niveau supérieur dans ce modèle simplifié
+
+				final String nextLevel = LEVEL_ORDER.get(levelIndex + 1);
+				final java.util.Map<String, Integer> samePile = pilesByLevel.get(squareLevel);
+				final java.util.Map<String, Integer> nextPile = pilesByLevel.get(nextLevel);
+				if ((samePile == null) || (nextPile == null) || samePile.isEmpty() || nextPile.isEmpty())
+					return; // pioche absente/vide (ne devrait pas arriver si la mise en place a bien eu lieu)
+
+				// Remet les 4 cartes défaussées dans LEUR pioche.
+				samePile.merge(squareCardId, 4, Integer::sum);
+
+				// Pioche 1 carte au hasard dans le niveau supérieur.
+				final String promotedCardId = pickRandomAvailable(nextPile);
+				if (promotedCardId == null)
+					return; // pioche supérieure épuisée (cas limite, ne devrait pas arriver avec 5×(N+1) exemplaires)
+				nextPile.merge(promotedCardId, -1, Integer::sum);
+
+				// Pioche 4 nouvelles cartes dans LE MÊME niveau que celui
+				// défaussé (peut inclure à nouveau le modèle qu'on vient de
+				// rendre, ou d'autres - un vrai tirage au hasard).
+				final java.util.List<String> replenished = new java.util.ArrayList<>();
+				for (int i = 0; i < 4; i++)
+				{
+					final String cardId = pickRandomAvailable(samePile);
+					if (cardId == null)
+						break; // pioche épuisée en cours de route - on s'arrête là plutôt que de planter
+					samePile.merge(cardId, -1, Integer::sum);
+					replenished.add(cardId);
+				}
+
+				// Rupture technologique : la toute première fois qu'une carte
+				// "tresforte" entre en jeu pour CETTE partie (voir le
+				// raisonnement complet ci-dessus).
+				final boolean isFirstBreakthrough = "tresforte".equals(nextLevel) //$NON-NLS-1$
+						&& (em.createQuery(
+								"SELECT COUNT(s) FROM CardSquareEvent s WHERE s.game.id = :gameId AND s.promotedLevel = :lvl", //$NON-NLS-1$
+								Long.class)
+								.setParameter("gameId", pGameId).setParameter("lvl", "tresforte") //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+								.getSingleResult() == 0);
+
+				final Player player = em.find(Player.class, pPlayerId);
+				em.getTransaction().begin();
+				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
+				final CardSquareEvent squareEvent = new CardSquareEvent(game, player, squareCardId, squareLevel,
+						promotedCardId, nextLevel, toJsonQuietly(mapper, replenished), isFirstBreakthrough);
+				em.persist(squareEvent);
+				em.getTransaction().commit();
+
+				if (isFirstBreakthrough)
+				{
+					// recordEvent() gère sa propre transaction séparément, d'où cet
+					// appel après le commit ci-dessus plutôt que dans la même
+					// transaction (une seule EntityManager ne peut pas imbriquer
+					// deux transactions actives à la fois).
+					try
+					{
+						recordEvent(pGameId, "X", pPlayerId, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+					}
+					catch (final PlayerNotFoundException ignored)
+					{
+						// Ne devrait jamais arriver : ce joueur vient d'être résolu
+						// avec succès juste au-dessus.
+					}
+				}
+			}
+			finally
+			{
+				em.close();
+			}
+			// On reboucle : les 4 cartes de remplacement pourraient, en théorie,
+			// compléter immédiatement un second carré (voir le commentaire de
+			// tête de méthode) - la boucle s'arrêtera d'elle-même dès que
+			// computePlayerCardInventory ne trouve plus aucun modèle à 4+.
+		}
+	}
+
+	// Dans quel niveau (clé de pPilesByLevel) ce modèle de carte apparaît-il -
+	// null si aucun (carte hors du sous-ensemble "en jeu" pour cette partie,
+	// ne devrait normalement pas arriver pour une carte réellement possédée).
+	private String findLevelOfCard(final java.util.Map<String, java.util.Map<String, Integer>> pPilesByLevel,
+			final String pCardTypeId)
+	{
+		for (final java.util.Map.Entry<String, java.util.Map<String, Integer>> e : pPilesByLevel.entrySet())
+			if (e.getValue().containsKey(pCardTypeId))
+				return e.getKey();
+		return null;
+	}
+
+	// Tire un modèle au hasard parmi ceux ENCORE disponibles (count > 0) dans
+	// cette pioche - null si la pioche est entièrement épuisée.
+	private String pickRandomAvailable(final java.util.Map<String, Integer> pPile)
+	{
+		final java.util.List<String> available = pPile.entrySet().stream().filter(e -> e.getValue() > 0)
+				.map(java.util.Map.Entry::getKey).toList();
+		if (available.isEmpty())
+			return null;
+		return available.get(new java.util.Random().nextInt(available.size()));
+	}
+
+	// Comme writeJsonQuietly, mais renvoie la chaîne au lieu de l'appliquer à
+	// un setter - nécessaire ici car CardSquareEvent construit sa chaîne JSON
+	// dans son CONSTRUCTEUR (pas de setter à appeler après coup).
+	private String toJsonQuietly(final com.fasterxml.jackson.databind.ObjectMapper pMapper, final Object pValue)
+	{
+		try
+		{
+			return pMapper.writeValueAsString(pValue);
+		}
+		catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+		{
+			throw new RuntimeException(e); // ne devrait jamais arriver en pratique
 		}
 	}
 
