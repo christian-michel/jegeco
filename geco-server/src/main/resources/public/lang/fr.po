@@ -1724,3 +1724,40 @@ msgstr "Vous donnerez : {goods}"
 
 msgid "trade.result_success_body_goods"
 msgstr "Échange effectué : {name}."
+
+# ============ Étape 3 : navigation hub (Mes cartes/Classement/Historique) ============
+msgid "playerView.nav_my_cards"
+msgstr "Mes cartes"
+
+msgid "playerView.nav_leaderboard"
+msgstr "Classement"
+
+msgid "playerView.nav_history"
+msgstr "Historique"
+
+msgid "playerView.my_cards_note"
+msgstr "Cartes acquises par échange smartphone depuis cette partie."
+
+msgid "playerView.my_cards_empty"
+msgstr "Vous n'avez encore acquis aucune carte par échange."
+
+msgid "playerView.leaderboard_empty"
+msgstr "Aucun joueur actif pour l'instant."
+
+msgid "playerView.leaderboard_value_coins"
+msgstr "Classement par jetons issus des échanges smartphone."
+
+msgid "playerView.leaderboard_value_goods"
+msgstr "Classement par valeur des biens détenus."
+
+msgid "playerView.history_empty"
+msgstr "Aucun échange pour l'instant."
+
+msgid "playerView.history_goods_amount"
+msgstr "{n} carte(s) données"
+
+msgid "playerView.history_sold_to"
+msgstr "Vendu à {name}"
+
+msgid "playerView.history_bought_from"
+msgstr "Acheté à {name}"

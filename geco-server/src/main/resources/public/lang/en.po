@@ -1722,3 +1722,40 @@ msgstr "You will give: {goods}"
 
 msgid "trade.result_success_body_goods"
 msgstr "Trade completed: {name}."
+
+# ============ Step 3: hub navigation (My cards/Leaderboard/History) ============
+msgid "playerView.nav_my_cards"
+msgstr "My cards"
+
+msgid "playerView.nav_leaderboard"
+msgstr "Leaderboard"
+
+msgid "playerView.nav_history"
+msgstr "History"
+
+msgid "playerView.my_cards_note"
+msgstr "Cards acquired through smartphone trading in this game."
+
+msgid "playerView.my_cards_empty"
+msgstr "You haven't acquired any cards through trading yet."
+
+msgid "playerView.leaderboard_empty"
+msgstr "No active players yet."
+
+msgid "playerView.leaderboard_value_coins"
+msgstr "Ranked by tokens from smartphone trades."
+
+msgid "playerView.leaderboard_value_goods"
+msgstr "Ranked by value of goods held."
+
+msgid "playerView.history_empty"
+msgstr "No trades yet."
+
+msgid "playerView.history_goods_amount"
+msgstr "{n} card(s) given"
+
+msgid "playerView.history_sold_to"
+msgstr "Sold to {name}"
+
+msgid "playerView.history_bought_from"
+msgstr "Bought from {name}"

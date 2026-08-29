@@ -109,6 +109,126 @@ async function refreshPlayer() {
 }
 
 // ============================================================
+// ÉTAPE 3 : "Mes cartes" - inventaire par secteur (mockup de référence,
+// 28/08/2026) - voir GameService.computePlayerCardInventory : dérivé des
+// transactions smartphone, rien avant leur mise en usage (limite assumée,
+// voir la note d'explication affichée à l'écran).
+// ============================================================
+async function renderMyCards() {
+	showScreen("myCardsScreen");
+	const body = el("myCardsBody");
+	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+	try {
+		if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
+		if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
+		const inventory = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`).then((r) => r.json());
+		const cardIds = Object.keys(inventory);
+		if (cardIds.length === 0) {
+			body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("playerView.my_cards_empty")}</p>`;
+			return;
+		}
+		// Regroupe par secteur (voir CatalogSeeds/cartes.json, champ "secteur",
+		// désormais indépendant du niveau) - un groupe par secteur possédé
+		// uniquement, dans l'ordre où ils apparaissent en premier.
+		const bySector = new Map();
+		for (const cardId of cardIds) {
+			const entry = (state.cardsCatalog || []).find((c) => c.id === cardId);
+			if (!entry) continue; // carte retirée du catalogue depuis - on ignore plutôt que de casser l'écran
+			const sector = entry.secteur || "ressources";
+			if (!bySector.has(sector)) bySector.set(sector, []);
+			bySector.get(sector).push({ entry, count: inventory[cardId] });
+		}
+		body.innerHTML = [...bySector.entries()].map(([sector, cards]) => {
+			const totalInSector = cards.reduce((sum, c) => sum + c.count, 0);
+			return `
+			<div class="mycards-sector">
+				<div class="mycards-sector-header">
+					<span class="mycards-sector-title">${escapeHtmlLocal(catalogEnumLabel("sector", sector))}</span>
+					<span class="mycards-sector-count">${totalInSector}</span>
+				</div>
+				<div class="mycards-grid">
+					${cards.map(({ entry, count }) => {
+						const visual = (state.visualsCatalog || []).find((v) => v.id === entry.visualId);
+						return `
+						<div class="mycards-item">
+							${buildGameCardHtml(entry, visual, "game-card-sm")}
+							<span class="mycards-item-count">×${count}</span>
+						</div>`;
+					}).join("")}
+				</div>
+			</div>`;
+		}).join("");
+	} catch (err) {
+		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
+	}
+}
+
+// ============================================================
+// ÉTAPE 3 : "Classement" - voir GameService.computeLeaderboard.
+// ============================================================
+async function renderLeaderboard() {
+	showScreen("leaderboardScreen");
+	const body = el("leaderboardBody");
+	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+	try {
+		const entries = await fetch(`/api/games/${state.gameId}/leaderboard`).then((r) => r.json());
+		if (entries.length === 0) {
+			body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("playerView.leaderboard_empty")}</p>`;
+			return;
+		}
+		const valueLabel = isTrocGame() ? t("playerView.leaderboard_value_goods") : t("playerView.leaderboard_value_coins");
+		body.innerHTML = `
+			<p class="galilee-explainer">${escapeHtmlLocal(valueLabel)}</p>
+			<ul class="leaderboard-list">
+				${entries.map((e) => `
+				<li class="leaderboard-row ${e.playerId === state.player.id ? "leaderboard-row-me" : ""}">
+					<span class="leaderboard-rank">${e.rank}</span>
+					<span class="leaderboard-name">${escapeHtmlLocal(e.playerName)}</span>
+					<span class="leaderboard-value">${e.value}</span>
+				</li>`).join("")}
+			</ul>`;
+	} catch (err) {
+		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
+	}
+}
+
+// ============================================================
+// ÉTAPE 3 : "Historique" personnel - voir GameService.listPlayerTransactions.
+// ============================================================
+async function renderHistory() {
+	showScreen("historyScreen");
+	const body = el("historyBody");
+	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+	try {
+		const txs = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/transactions`).then((r) => r.json());
+		if (txs.length === 0) {
+			body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("playerView.history_empty")}</p>`;
+			return;
+		}
+		body.innerHTML = `
+			<ul class="events-list">
+				${txs.map((tx) => {
+					const isSale = tx.sellerPlayerId === state.player.id;
+					const entry = (state.cardsCatalog || []).find((c) => c.id === tx.cardTypeId);
+					const cardName = entry ? (catalogTextValue(entry.nom) || tx.cardTypeId) : tx.cardTypeId;
+					const amountText = tx.isGoodsTrade
+						? t("playerView.history_goods_amount", { n: tx.buyerWeakGoods + tx.buyerMediumGoods + tx.buyerStrongGoods })
+						: t("game.transactions_amount", { n: tx.totalCoinsValue });
+					const partner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;
+					const verbKey = isSale ? "playerView.history_sold_to" : "playerView.history_bought_from";
+					return `
+					<li>
+						<strong>${isSale ? "💰" : "🛒"} ${escapeHtmlLocal(cardName)}</strong>
+						<span class="event-meta">${escapeHtmlLocal(t(verbKey, { name: partner }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))} · ${escapeHtmlLocal(amountText)}</span>
+					</li>`;
+				}).join("")}
+			</ul>`;
+	} catch (err) {
+		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
+	}
+}
+
+// ============================================================
 // VENTE : étape 1 - choisir la carte
 // ============================================================
 async function openSellPicker() {
@@ -603,6 +723,9 @@ function showTradeResult(success, title, body) {
 // ---------- Câblage des boutons (une fois, au chargement) ----------
 function initTradeUI() {
 	el("btnOpenSell").addEventListener("click", openSellPicker);
+	el("btnOpenMyCards").addEventListener("click", renderMyCards);
+	el("btnOpenLeaderboard").addEventListener("click", renderLeaderboard);
+	el("btnOpenHistory").addEventListener("click", renderHistory);
 	el("btnOpenScan").addEventListener("click", openScan);
 	el("btnOpenManualEntry").addEventListener("click", openManualEntry);
 	el("btnSwitchToManual").addEventListener("click", openManualEntry);
