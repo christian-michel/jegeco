@@ -2,7 +2,7 @@
   {
     "id": "carte_001",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "agriculture",
     "nom": {
       "fr": "Abeilles",
       "en": "Bees"
@@ -13,7 +13,7 @@
   {
     "id": "carte_002",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Blé",
       "en": "Wheat"
@@ -24,7 +24,7 @@
   {
     "id": "carte_003",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Canard",
       "en": "Duck"
@@ -35,7 +35,7 @@
   {
     "id": "carte_004",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Canne à sucre",
       "en": "Sugar cane"
@@ -46,7 +46,7 @@
   {
     "id": "carte_005",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Carottes",
       "en": "Carrots"
@@ -57,7 +57,7 @@
   {
     "id": "carte_006",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "agriculture",
     "nom": {
       "fr": "Cheval",
       "en": "Horse"
@@ -68,7 +68,7 @@
   {
     "id": "carte_007",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Chataigne",
       "en": "Chestnut"
@@ -79,7 +79,7 @@
   {
     "id": "carte_008",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "agriculture",
     "nom": {
       "fr": "Chèvre",
       "en": "Goat"
@@ -90,7 +90,7 @@
   {
     "id": "carte_009",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Cochon",
       "en": "Pig"
@@ -101,7 +101,7 @@
   {
     "id": "carte_010",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "agriculture",
     "nom": {
       "fr": "Coton",
       "en": "Cotton"
@@ -112,7 +112,7 @@
   {
     "id": "carte_011",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Maïs",
       "en": "Corn"
@@ -123,7 +123,7 @@
   {
     "id": "carte_012",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Mouton",
       "en": "Sheep"
@@ -134,7 +134,7 @@
   {
     "id": "carte_013",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Oeufs",
       "en": "Eggs"
@@ -145,7 +145,7 @@
   {
     "id": "carte_014",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Oie",
       "en": "Goose"
@@ -156,7 +156,7 @@
   {
     "id": "carte_015",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Olives",
       "en": "Olives"
@@ -167,7 +167,7 @@
   {
     "id": "carte_016",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Poissons",
       "en": "Fish"
@@ -178,7 +178,7 @@
   {
     "id": "carte_017",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Pomme",
       "en": "Apple"
@@ -189,7 +189,7 @@
   {
     "id": "carte_018",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Pomme de terre",
       "en": "Potato"
@@ -200,7 +200,7 @@
   {
     "id": "carte_019",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Poules",
       "en": "Chickens"
@@ -211,7 +211,7 @@
   {
     "id": "carte_020",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Raisins",
       "en": "Grapes"
@@ -222,7 +222,7 @@
   {
     "id": "carte_021",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Riz",
       "en": "Rice"
@@ -233,7 +233,7 @@
   {
     "id": "carte_022",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Vache",
       "en": "Cow"
@@ -244,7 +244,7 @@
   {
     "id": "carte_023",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "ressources",
     "nom": {
       "fr": "Granite",
       "en": "Granite"
@@ -255,7 +255,7 @@
   {
     "id": "carte_024",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "ressources",
     "nom": {
       "fr": "Forêt",
       "en": "Forest"
@@ -266,7 +266,7 @@
   {
     "id": "carte_025",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Lait",
       "en": "Milk"
@@ -277,7 +277,7 @@
   {
     "id": "carte_026",
     "niveau": "faible",
-    "secteur": "faible",
+    "secteur": "ressources",
     "nom": {
       "fr": "Sable",
       "en": "Sand"
@@ -288,7 +288,7 @@
   {
     "id": "carte_027",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Aqueduc",
       "en": "Aqueduct"
@@ -299,7 +299,7 @@
   {
     "id": "carte_028",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "ressources",
     "nom": {
       "fr": "Bois",
       "en": "Wood"
@@ -310,7 +310,7 @@
   {
     "id": "carte_029",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Clou",
       "en": "Nail"
@@ -321,7 +321,7 @@
   {
     "id": "carte_030",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Chocolat",
       "en": "Chocolate"
@@ -332,7 +332,7 @@
   {
     "id": "carte_031",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Bougie",
       "en": "Candle"
@@ -343,7 +343,7 @@
   {
     "id": "carte_032",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Briques",
       "en": "Bricks"
@@ -354,7 +354,7 @@
   {
     "id": "carte_033",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Meuble en bois",
       "en": "Wooden furniture"
@@ -365,7 +365,7 @@
   {
     "id": "carte_034",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Café",
       "en": "Coffee"
@@ -376,7 +376,7 @@
   {
     "id": "carte_035",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Cuisine français 1970",
       "en": "French cuisine 1970"
@@ -387,7 +387,7 @@
   {
     "id": "carte_036",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "culture",
     "nom": {
       "fr": "Plume",
       "en": "Feather"
@@ -398,7 +398,7 @@
   {
     "id": "carte_037",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "culture",
     "nom": {
       "fr": "Parchemin",
       "en": "Parchment"
@@ -409,7 +409,7 @@
   {
     "id": "carte_038",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Poterie",
       "en": "Pottery"
@@ -420,7 +420,7 @@
   {
     "id": "carte_039",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "transport",
     "nom": {
       "fr": "Diligence",
       "en": "Stagecoach"
@@ -431,7 +431,7 @@
   {
     "id": "carte_040",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Panier tressé",
       "en": "Woven basket"
@@ -442,7 +442,7 @@
   {
     "id": "carte_041",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "culture",
     "nom": {
       "fr": "Papier",
       "en": "Paper"
@@ -453,7 +453,7 @@
   {
     "id": "carte_042",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Tranche de pain",
       "en": "Slice of bread"
@@ -464,7 +464,7 @@
   {
     "id": "carte_043",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "transport",
     "nom": {
       "fr": "Caravelle",
       "en": "Caravel"
@@ -475,7 +475,7 @@
   {
     "id": "carte_044",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "ressources",
     "nom": {
       "fr": "Four solaire",
       "en": "Solar furnace"
@@ -486,7 +486,7 @@
   {
     "id": "carte_045",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Métier à tisser",
       "en": "Weaving loom"
@@ -497,7 +497,7 @@
   {
     "id": "carte_046",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "agriculture",
     "nom": {
       "fr": "Moulin mécanique",
       "en": "Mechanical mill"
@@ -508,7 +508,7 @@
   {
     "id": "carte_047",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "transport",
     "nom": {
       "fr": "Roues",
       "en": "Wheels"
@@ -519,7 +519,7 @@
   {
     "id": "carte_048",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "agriculture",
     "nom": {
       "fr": "Moulin à vent",
       "en": "Windmill"
@@ -530,7 +530,7 @@
   {
     "id": "carte_049",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Vin",
       "en": "Wine"
@@ -541,7 +541,7 @@
   {
     "id": "carte_050",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Thé",
       "en": "Tea"
@@ -552,7 +552,7 @@
   {
     "id": "carte_051",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Fromage",
       "en": "Cheese"
@@ -563,7 +563,7 @@
   {
     "id": "carte_052",
     "niveau": "moyenne",
-    "secteur": "moyenne",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Savon végétal",
       "en": "Vegetable soap"
@@ -574,7 +574,7 @@
   {
     "id": "carte_053",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Ampoule électrique",
       "en": "Electric light bulb"
@@ -585,7 +585,7 @@
   {
     "id": "carte_054",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "ressources",
     "nom": {
       "fr": "Centrale électrique",
       "en": "Power plant"
@@ -596,7 +596,7 @@
   {
     "id": "carte_055",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "ressources",
     "nom": {
       "fr": "Éolienne",
       "en": "Wind turbine"
@@ -607,7 +607,7 @@
   {
     "id": "carte_056",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "ressources",
     "nom": {
       "fr": "Pilonne haute-tension",
       "en": "High-voltage pylon"
@@ -618,7 +618,7 @@
   {
     "id": "carte_057",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "alimentation",
     "nom": {
       "fr": "Cuisine gastronomique française",
       "en": "French gastronomic cuisine"
@@ -629,7 +629,7 @@
   {
     "id": "carte_058",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Appareil photo argentique",
       "en": "Film camera"
@@ -640,7 +640,7 @@
   {
     "id": "carte_059",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "transport",
     "nom": {
       "fr": "Ascenseur",
       "en": "Elevator"
@@ -651,7 +651,7 @@
   {
     "id": "carte_060",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "industrie",
     "nom": {
       "fr": "Marteau pilon",
       "en": "Steam hammer"
@@ -662,7 +662,7 @@
   {
     "id": "carte_061",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Machine à écrire",
       "en": "Typewriter"
@@ -673,7 +673,7 @@
   {
     "id": "carte_062",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "transport",
     "nom": {
       "fr": "Locomotive à vapeur",
       "en": "Steam locomotive"
@@ -684,7 +684,7 @@
   {
     "id": "carte_063",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "transport",
     "nom": {
       "fr": "Première automobile",
       "en": "First automobile"
@@ -695,7 +695,7 @@
   {
     "id": "carte_064",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Poste radio",
       "en": "Radio set"
@@ -706,7 +706,7 @@
   {
     "id": "carte_065",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "ressources",
     "nom": {
       "fr": "Pétrole",
       "en": "Petroleum"
@@ -717,7 +717,7 @@
   {
     "id": "carte_066",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "industrie",
     "nom": {
       "fr": "Moteur à combustion",
       "en": "Combustion engine"
@@ -728,7 +728,7 @@
   {
     "id": "carte_067",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "transport",
     "nom": {
       "fr": "Moto",
       "en": "Motorcycle"
@@ -739,7 +739,7 @@
   {
     "id": "carte_068",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Stylos",
       "en": "Pens"
@@ -750,7 +750,7 @@
   {
     "id": "carte_069",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Réfrigérateur",
       "en": "Refrigerator"
@@ -761,7 +761,7 @@
   {
     "id": "carte_070",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "transport",
     "nom": {
       "fr": "Avion",
       "en": "Airplane"
@@ -772,7 +772,7 @@
   {
     "id": "carte_071",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Cinématographe",
       "en": "Cinematograph"
@@ -783,7 +783,7 @@
   {
     "id": "carte_072",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Carte routière",
       "en": "Road map"
@@ -794,7 +794,7 @@
   {
     "id": "carte_073",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "transport",
     "nom": {
       "fr": "Bicyclette",
       "en": "Bicycle"
@@ -805,7 +805,7 @@
   {
     "id": "carte_074",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "industrie",
     "nom": {
       "fr": "Montre mécanique",
       "en": "Mechanical watch"
@@ -816,7 +816,7 @@
   {
     "id": "carte_075",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Presse d’imprimerie",
       "en": "Printing press"
@@ -827,7 +827,7 @@
   {
     "id": "carte_076",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "culture",
     "nom": {
       "fr": "Cassette audio",
       "en": "Audio cassette"
@@ -838,7 +838,7 @@
   {
     "id": "carte_077",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Machine à laver",
       "en": "Washing machine"
@@ -849,7 +849,7 @@
   {
     "id": "carte_078",
     "niveau": "forte",
-    "secteur": "forte",
+    "secteur": "agriculture",
     "nom": {
       "fr": "Moissonneuse batteuse",
       "en": "Combine harvester"
@@ -860,7 +860,7 @@
   {
     "id": "carte_079",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "PC portable",
       "en": "Laptop"
@@ -871,7 +871,7 @@
   {
     "id": "carte_080",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "culture",
     "nom": {
       "fr": "Appareil photo numérique",
       "en": "Digital camera"
@@ -882,7 +882,7 @@
   {
     "id": "carte_081",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Boutique en ligne",
       "en": "Online store"
@@ -893,7 +893,7 @@
   {
     "id": "carte_082",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "culture",
     "nom": {
       "fr": "Casque audio",
       "en": "Headphones"
@@ -904,7 +904,7 @@
   {
     "id": "carte_083",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "culture",
     "nom": {
       "fr": "Casque de réalité virtuelle",
       "en": "VR headset"
@@ -915,7 +915,7 @@
   {
     "id": "carte_084",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "culture",
     "nom": {
       "fr": "CD",
       "en": "CD"
@@ -926,7 +926,7 @@
   {
     "id": "carte_085",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "culture",
     "nom": {
       "fr": "Console de jeux vidéos",
       "en": "Video game console"
@@ -937,7 +937,7 @@
   {
     "id": "carte_086",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "CPU",
       "en": "CPU"
@@ -948,7 +948,7 @@
   {
     "id": "carte_087",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "transport",
     "nom": {
       "fr": "Drone",
       "en": "Drone"
@@ -959,7 +959,7 @@
   {
     "id": "carte_088",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "culture",
     "nom": {
       "fr": "Enceinte connectée",
       "en": "Smart speaker"
@@ -970,7 +970,7 @@
   {
     "id": "carte_089",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "transport",
     "nom": {
       "fr": "GPS",
       "en": "GPS"
@@ -981,7 +981,7 @@
   {
     "id": "carte_090",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "industrie",
     "nom": {
       "fr": "Montre connectée",
       "en": "Smartwatch"
@@ -992,7 +992,7 @@
   {
     "id": "carte_091",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Smartphone",
       "en": "Smartphone"
@@ -1003,7 +1003,7 @@
   {
     "id": "carte_092",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "industrie",
     "nom": {
       "fr": "Moteur électrique",
       "en": "Electric motor"
@@ -1014,7 +1014,7 @@
   {
     "id": "carte_093",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "transport",
     "nom": {
       "fr": "Fusée",
       "en": "Rocket"
@@ -1025,7 +1025,7 @@
   {
     "id": "carte_094",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Imprimante 3D",
       "en": "3D printer"
@@ -1036,7 +1036,7 @@
   {
     "id": "carte_095",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Intelligence artificielle",
       "en": "Artificial intelligence"
@@ -1047,7 +1047,7 @@
   {
     "id": "carte_096",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Blockchain décentralisée",
       "en": "Decentralized blockchain"
@@ -1058,7 +1058,7 @@
   {
     "id": "carte_097",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "transport",
     "nom": {
       "fr": "Satellite",
       "en": "Satellite"
@@ -1069,7 +1069,7 @@
   {
     "id": "carte_098",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "culture",
     "nom": {
       "fr": "TV moderne",
       "en": "Modern TV"
@@ -1080,7 +1080,7 @@
   {
     "id": "carte_099",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Serveur informatique",
       "en": "Computer server"
@@ -1091,7 +1091,7 @@
   {
     "id": "carte_100",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Robot",
       "en": "Robot"
@@ -1102,7 +1102,7 @@
   {
     "id": "carte_101",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "Génétique",
       "en": "Genetics"
@@ -1113,7 +1113,7 @@
   {
     "id": "carte_102",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "artisanat",
     "nom": {
       "fr": "Maison connectée",
       "en": "Smart home"
@@ -1124,7 +1124,7 @@
   {
     "id": "carte_103",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "ressources",
     "nom": {
       "fr": "Panneau solaire",
       "en": "Solar panel"
@@ -1135,7 +1135,7 @@
   {
     "id": "carte_104",
     "niveau": "tresforte",
-    "secteur": "tresforte",
+    "secteur": "technologie",
     "nom": {
       "fr": "LED",
       "en": "LED"

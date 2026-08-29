@@ -1339,6 +1339,25 @@ msgstr "Agriculture"
 msgid "catalog.sector.ressources"
 msgstr "Ressources"
 
+# ---- Valeurs fixes (secteur, suite - ajoutées le 28/08/2026 pour couvrir
+# l'intégralité des 104 cartes du catalogue, les 3 ci-dessus ne suffisant
+# qu'à une partie ; voir docs/13-*, taxonomie transversale indépendante du
+# niveau/de l'époque) ----
+msgid "catalog.sector.artisanat"
+msgstr "Artisanat & Habitat"
+
+msgid "catalog.sector.culture"
+msgstr "Culture & Communication"
+
+msgid "catalog.sector.transport"
+msgstr "Transport"
+
+msgid "catalog.sector.industrie"
+msgstr "Industrie & Mécanique"
+
+msgid "catalog.sector.technologie"
+msgstr "Technologie & Numérique"
+
 # ---- Valeurs fixes (règle - MDBC, "aucune" pour toutes les cartes aujourd'hui) ----
 msgid "catalog.rule.aucune"
 msgstr "Aucune"

@@ -1339,6 +1339,23 @@ msgstr "Agriculture"
 msgid "catalog.sector.ressources"
 msgstr "Resources"
 
+# ---- Fixed values (sector, continued - added 28/08/2026 to cover all 104
+# catalog cards, the 3 above only covering part of it) ----
+msgid "catalog.sector.artisanat"
+msgstr "Crafts & Home"
+
+msgid "catalog.sector.culture"
+msgstr "Culture & Communication"
+
+msgid "catalog.sector.transport"
+msgstr "Transport"
+
+msgid "catalog.sector.industrie"
+msgstr "Industry & Machinery"
+
+msgid "catalog.sector.technologie"
+msgstr "Technology & Digital"
+
 # ---- Fixed values (rule - CBDC, "none" for every card today) ----
 msgid "catalog.rule.aucune"
 msgstr "None"
