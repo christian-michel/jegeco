@@ -54,6 +54,64 @@ function iconSvg(name) {
 	return ICONS_SVG[name] || "";
 }
 
+// Avatar choisi par le joueur à l'inscription (voir player.js,
+// buildAvatarConfigForSubmit/avatarConfigJson - même structure, portée ici
+// telle quelle) - remonté par l'utilisateur (30/08/2026) : l'écran "Mon
+// profil" doit reprendre cette même image, pas un simple emoji générique.
+// Deux formes possibles : {type:"gallery", filename} - une vraie image du
+// catalogue d'avatars - ou {type:"custom", ...} - un portrait paramétrique,
+// généré ici en SVG (fonction dupliquée depuis player.js : les deux pages
+// sont chargées séparément, pas de module partagé dans ce projet).
+function buildAvatarSVG(cfg) {
+	const skin = cfg.skinColor;
+	const hairColor = cfg.hairColor;
+	let hair = "";
+	if (cfg.hairStyle === "short") {
+		hair = `<path d="M14 42 Q50 2 86 42 L86 26 Q50 10 14 26 Z" fill="${hairColor}"/>`;
+	} else if (cfg.hairStyle === "long") {
+		hair = `<path d="M12 46 Q50 -2 88 46 L91 92 L79 92 L76 52 Q50 22 24 52 L21 92 L9 92 Z" fill="${hairColor}"/>`;
+	} else if (cfg.hairStyle === "curly") {
+		hair = `<circle cx="23" cy="36" r="13" fill="${hairColor}"/><circle cx="40" cy="20" r="14" fill="${hairColor}"/>`
+			+ `<circle cx="60" cy="20" r="14" fill="${hairColor}"/><circle cx="77" cy="36" r="13" fill="${hairColor}"/>`;
+	}
+	let accessory = "";
+	if (cfg.accessory === "glasses") {
+		accessory = `<g stroke="#1f2430" stroke-width="3" fill="none">`
+			+ `<circle cx="37" cy="53" r="11"/><circle cx="63" cy="53" r="11"/><line x1="48" y1="53" x2="52" y2="53"/></g>`;
+	} else if (cfg.accessory === "hat") {
+		accessory = `<rect x="22" y="8" width="56" height="11" rx="3" fill="#1f2430"/>`
+			+ `<rect x="33" y="-4" width="34" height="18" rx="5" fill="#1f2430"/>`;
+	}
+	return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+		<circle cx="50" cy="56" r="38" fill="${skin}"/>
+		<circle cx="38" cy="53" r="4" fill="#1f2430"/>
+		<circle cx="62" cy="53" r="4" fill="#1f2430"/>
+		<path d="M40 69 Q50 77 60 69" stroke="#1f2430" stroke-width="3" fill="none" stroke-linecap="round"/>
+		${hair}
+		${accessory}
+	</svg>`;
+}
+
+// Construit le HTML à injecter dans .avatar-wrapper (voir renderProfile) -
+// image réelle si l'avatar vient de la galerie, SVG généré si personnalisé,
+// repli sur l'emoji générique si la configuration est absente/corrompue
+// (ex. joueur ajouté manuellement par l'animateur, sans jamais passer par
+// l'auto-inscription smartphone).
+function buildProfileAvatarHtml(pAvatarConfigJson) {
+	if (!pAvatarConfigJson) return `<span aria-hidden="true">🧑</span>`;
+	try {
+		const cfg = JSON.parse(pAvatarConfigJson);
+		if (cfg.type === "gallery" && cfg.filename) {
+			return `<img src="/avatars/${escapeHtmlLocal(cfg.filename)}" class="avatar-img" alt=""
+				onerror="this.outerHTML='<span aria-hidden=&quot;true&quot;>🧑</span>'">`;
+		}
+		if (cfg.type === "custom") return buildAvatarSVG(cfg);
+	} catch (err) {
+		// Configuration corrompue (ne devrait jamais arriver) : repli silencieux.
+	}
+	return `<span aria-hidden="true">🧑</span>`;
+}
+
 const params = new URLSearchParams(window.location.search);
 const state = {
 	gameId: params.get("gameId"),
@@ -322,6 +380,7 @@ async function resolveCardName(cardTypeId) {
 async function renderProfile() {
 	el("profileName").textContent = state.player.name;
 	el("profileStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
+	el("profileAvatarWrapper").innerHTML = buildProfileAvatarHtml(state.player.avatarConfigJson);
 	el("statCoins").textContent = isTrocGame() ? "—" : state.player.tradeBalance;
 	el("statCards").textContent = state.player.goodsCount || 0;
 
