@@ -1845,3 +1845,7 @@ msgstr "You sold {card} to {name} for {amount}."
 
 msgid "playerView.activity_bought_from"
 msgstr "You bought {card} from {name} for {amount}."
+
+# ============ Modal carte agrandie + retournement 3D (30/08/2026) ============
+msgid "playerView.card_modal_swipe_hint"
+msgstr "Swipe horizontally to flip the card"

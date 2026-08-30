@@ -405,7 +405,9 @@ function cardThumbInner(item) {
 }
 
 // Vue grille : groupée par secteur, une rangée défilante par groupe (voir
-// .category-section/.cards-scroll-container/.game-card).
+// .category-section/.cards-scroll-container/.game-card). data-card-id sur
+// chaque tuile (voir openCardModal) : le clic ouvre la carte en grand plutôt
+// que de scraper le texte affiché, on a déjà toute la donnée structurée ici.
 function renderMyCardsGrid(body, items) {
 	const bySector = new Map();
 	for (const item of items) {
@@ -421,13 +423,14 @@ function renderMyCardsGrid(body, items) {
 			</div>
 			<div class="cards-scroll-container">
 				${cards.map((item) => `
-				<div class="game-card card-${item.tileColor}">
+				<div class="game-card card-${item.tileColor}" data-card-id="${escapeHtmlLocal(item.entry.id)}">
 					<span class="card-name">${escapeHtmlLocal(item.label)}</span>
 					<div class="card-image-wrapper">${cardThumbInner(item)}</div>
 					<div class="card-quantity-badge">×${item.count}</div>
 				</div>`).join("")}
 			</div>
 		</section>`).join("");
+	wireCardModalClicks(body, items);
 }
 
 // Vue liste : triable par catégorie/valeur/quantité (voir
@@ -444,7 +447,7 @@ function renderMyCardsList(body, items) {
 	body.innerHTML = `
 		<ul class="cards-list-view">
 			${sorted.map((item) => `
-			<li class="card-list-item">
+			<li class="card-list-item" data-card-id="${escapeHtmlLocal(item.entry.id)}">
 				<div class="item-left">
 					<div class="item-thumb card-${item.tileColor}">${cardThumbInner(item)}</div>
 					<span class="item-name">${escapeHtmlLocal(item.label)}</span>
@@ -455,6 +458,166 @@ function renderMyCardsList(body, items) {
 				</div>
 			</li>`).join("")}
 		</ul>`;
+	wireCardModalClicks(body, sorted);
+}
+
+// ============================================================
+// Modal carte agrandie + retournement 3D (30/08/2026) - comportement fourni
+// par l'utilisateur en référence exacte (voir player-view.html/player.css) :
+// clic sur une carte -> agrandissement + fond assombri ; glissement
+// horizontal -> retournement animé façon dessin animé, présentant le dos
+// avec le QR code. Différence assumée par rapport à la référence : notre
+// jeu impose un PRIX librement fixé par le vendeur (pas de QR "déjà prêt"),
+// donc le dos affiche d'abord une petite étape prix, puis le VRAI QR d'une
+// VRAIE offre TradeOfferService une fois généré - jamais un QR de
+// démonstration externe.
+// ============================================================
+function wireCardModalClicks(container, items) {
+	container.querySelectorAll(".game-card, .card-list-item").forEach((cardEl) => {
+		cardEl.addEventListener("click", () => {
+			const item = items.find((i) => i.entry.id === cardEl.dataset.cardId);
+			if (item) openCardModal(item);
+		});
+	});
+}
+
+function openCardModal(item) {
+	state.cardModalItem = item;
+	state.cardModalPrice = { weak: 0, medium: 0, strong: 0 };
+	state.cardModalOffer = null;
+	clearCardModalCountdown();
+
+	const flip = el("cardModalFlip");
+	flip.className = `flip-card card-${item.tileColor}`; // réinitialise aussi is-flipped (retiré, pas dans la liste de classes)
+
+	el("cardModalTitle").textContent = item.label;
+	el("cardModalBackTitle").textContent = item.label;
+	el("cardModalCount").textContent = `×${item.count}`;
+	el("cardModalLevel").textContent = catalogEnumLabel("level", item.entry.niveau);
+	el("cardModalValue").textContent = item.value;
+	el("cardModalArt").innerHTML = buildGameCardHtml(item.entry, item.visual, "geco-card-lg");
+
+	renderCardModalPriceStep(item);
+	el("cardModalOverlay").classList.add("active");
+}
+
+function closeCardModal() {
+	el("cardModalOverlay").classList.remove("active");
+	clearCardModalCountdown();
+	// Laisse le temps à l'animation de fermeture de se jouer avant de
+	// réinitialiser le retournement - même principe que le reste de l'app
+	// (voir .stepDone-exit dans player.css).
+	setTimeout(() => { el("cardModalFlip").classList.remove("is-flipped"); }, 300);
+}
+
+// Étape "prix" au dos de la carte, avant de générer le QR - steppers
+// compacts (voir .modal-price-steppers). Troc : demande des cartes en
+// retour plutôt qu'un prix en jetons, même logique que openSellPrice.
+function renderCardModalPriceStep(item) {
+	const isTroc = isTrocGame();
+	const labels = isTroc
+		? [t("trade.goods_wanted_weak"), t("trade.goods_wanted_medium"), t("trade.goods_wanted_strong")]
+		: [t("trade.coin_weak"), t("trade.coin_medium"), t("trade.coin_strong")];
+	const coins = ["weak", "medium", "strong"];
+	el("cardModalBackBody").innerHTML = `
+		<div class="modal-price-steppers">
+			${coins.map((coin, i) => `
+			<div class="modal-price-stepper" data-modal-coin="${coin}">
+				<span>${escapeHtmlLocal(labels[i])}</span>
+				<div class="modal-price-stepper-controls">
+					<button type="button" class="modal-stepper-btn" data-modal-delta="-1">−</button>
+					<span class="modal-stepper-value" data-modal-value="${coin}">0</span>
+					<button type="button" class="modal-stepper-btn" data-modal-delta="1">+</button>
+				</div>
+			</div>`).join("")}
+		</div>
+		<button type="button" class="modal-generate-qr-btn" id="cardModalGenerateBtn">${escapeHtmlLocal(t("trade.btn_generate_qr"))}</button>`;
+
+	el("cardModalBackBody").querySelectorAll(".modal-stepper-btn").forEach((btn) => {
+		btn.addEventListener("click", (e) => {
+			e.stopPropagation(); // ne doit jamais déclencher le retournement de la carte
+			const coin = btn.closest("[data-modal-coin]").dataset.modalCoin;
+			const delta = parseInt(btn.dataset.modalDelta, 10);
+			state.cardModalPrice[coin] = Math.max(0, state.cardModalPrice[coin] + delta);
+			el("cardModalBackBody").querySelector(`[data-modal-value="${coin}"]`).textContent = state.cardModalPrice[coin];
+		});
+	});
+	el("cardModalGenerateBtn").addEventListener("click", (e) => {
+		e.stopPropagation();
+		generateCardModalQr(item);
+	});
+}
+
+async function generateCardModalQr(item) {
+	const btn = el("cardModalGenerateBtn");
+	if (btn) btn.disabled = true;
+	try {
+		const priceFields = isTrocGame()
+			? { weakGoodsWanted: state.cardModalPrice.weak, mediumGoodsWanted: state.cardModalPrice.medium, strongGoodsWanted: state.cardModalPrice.strong }
+			: { weakCoins: state.cardModalPrice.weak, mediumCoins: state.cardModalPrice.medium, strongCoins: state.cardModalPrice.strong };
+		const offer = await createTradeOffer(item.entry, priceFields);
+		state.cardModalOffer = offer;
+		el("cardModalBackBody").innerHTML = `
+			<div class="qr-container"><div id="cardModalQrBox"></div></div>
+			<p class="qr-instruction">${escapeHtmlLocal(t("trade.qr_instructions"))}</p>
+			<div class="qr-timer"><span aria-hidden="true">⏱️</span><span id="cardModalCountdownValue">01:30</span></div>
+			<button type="button" class="btn-cancel-link" id="cardModalCancelBtn" style="color:#fff;">${escapeHtmlLocal(t("trade.btn_cancel_sell"))}</button>`;
+		// eslint-disable-next-line no-undef
+		new QRCode(el("cardModalQrBox"), { text: offer.code, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
+		el("cardModalCancelBtn").addEventListener("click", (e) => { e.stopPropagation(); closeCardModal(); });
+		startCardModalCountdown(offer.expiresAt);
+	} catch (err) {
+		el("cardModalBackBody").innerHTML = `<p class="qr-instruction" style="color:#fff;">${escapeHtmlLocal(err.message)}</p>`;
+	} finally {
+		if (btn) btn.disabled = false;
+	}
+}
+
+function startCardModalCountdown(expiresAt) {
+	clearCardModalCountdown();
+	const tick = () => {
+		const remainingMs = expiresAt - Date.now();
+		if (remainingMs <= 0) {
+			clearCardModalCountdown();
+			el("cardModalCountdownValue").textContent = t("trade.qr_expired");
+			return;
+		}
+		const totalSec = Math.ceil(remainingMs / 1000);
+		el("cardModalCountdownValue").textContent = `${Math.floor(totalSec / 60)}:${String(totalSec % 60).padStart(2, "0")}`;
+	};
+	tick();
+	state.cardModalCountdownInterval = setInterval(tick, 1000);
+}
+
+function clearCardModalCountdown() {
+	if (state.cardModalCountdownInterval) {
+		clearInterval(state.cardModalCountdownInterval);
+		state.cardModalCountdownInterval = null;
+	}
+}
+
+// Glissement horizontal -> retournement (voir le comportement fourni par
+// l'utilisateur) : tactile ET souris (pour tester sur ordinateur). Un simple
+// clic (sans déplacement significatif) NE retourne PAS la carte, seul un
+// vrai glissement le fait - évite un retournement accidentel au moindre tap.
+function initCardModalGestures() {
+	const flip = el("cardModalFlip");
+	let startX = 0;
+	let dragging = false;
+	const threshold = 40;
+
+	function handleSwipeEnd(endX) {
+		if (Math.abs(endX - startX) > threshold) flip.classList.toggle("is-flipped");
+	}
+	flip.addEventListener("touchstart", (e) => { startX = e.touches[0].clientX; }, { passive: true });
+	flip.addEventListener("touchend", (e) => { handleSwipeEnd(e.changedTouches[0].clientX); });
+	flip.addEventListener("mousedown", (e) => { dragging = true; startX = e.clientX; });
+	flip.addEventListener("mouseup", (e) => { if (dragging) { dragging = false; handleSwipeEnd(e.clientX); } });
+
+	el("cardModalCloseBtn").addEventListener("click", closeCardModal);
+	el("cardModalOverlay").addEventListener("click", (e) => {
+		if (e.target === el("cardModalOverlay")) closeCardModal();
+	});
 }
 
 // ============================================================
@@ -726,6 +889,23 @@ function initPriceSteppers() {
 // qu'un texte de 6 caractères (scan plus rapide et plus fiable qu'un gros
 // JSON), et ce même code peut être tapé à la main par l'acheteur (voir
 // openScanManualEntry ci-dessous) : un seul mécanisme pour les deux usages.
+async function createTradeOffer(entry, priceFields) {
+	const res = await fetch(`/api/games/${state.gameId}/trade-offers`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			sellerPlayerId: state.player.id,
+			sellerAccessToken: state.token,
+			cardTypeId: entry.id,
+			cardLevel: entry.niveau,
+			cardName: entry.nom, // table {langue: texte} - l'acheteur affichera dans SA propre langue
+			...priceFields,
+		}),
+	});
+	if (!res.ok) throw new Error(t("join.generic_error", { status: res.status }));
+	return res.json();
+}
+
 async function createOfferAndShowQr() {
 	const { entry } = state.sellSelection;
 	const btn = el("btnGenerateQr");
@@ -738,20 +918,7 @@ async function createOfferAndShowQr() {
 		const priceFields = isTrocGame()
 			? { weakGoodsWanted: state.sellPrice.weak, mediumGoodsWanted: state.sellPrice.medium, strongGoodsWanted: state.sellPrice.strong }
 			: { weakCoins: state.sellPrice.weak, mediumCoins: state.sellPrice.medium, strongCoins: state.sellPrice.strong };
-		const res = await fetch(`/api/games/${state.gameId}/trade-offers`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				sellerPlayerId: state.player.id,
-				sellerAccessToken: state.token,
-				cardTypeId: entry.id,
-				cardLevel: entry.niveau,
-				cardName: entry.nom, // table {langue: texte} - l'acheteur affichera dans SA propre langue
-				...priceFields,
-			}),
-		});
-		if (!res.ok) throw new Error(t("join.generic_error", { status: res.status }));
-		const offer = await res.json();
+		const offer = await createTradeOffer(entry, priceFields);
 		renderQrAndCountdown(offer.code, offer.expiresAt);
 	} catch (err) {
 		showTradeResult(false, t("trade.result_error_title"), err.message);
@@ -1071,6 +1238,7 @@ function showTradeResult(success, title, body) {
 
 // ---------- Câblage des boutons (une fois, au chargement) ----------
 function initTradeUI() {
+	initCardModalGestures();
 	el("btnOpenSell").addEventListener("click", openSellPicker);
 	// Barre de navigation basse persistante (voir le raisonnement en tête de
 	// player-view.html) - 5 emplacements : Accueil/Cartes/[scan]/Stats/Profil,
