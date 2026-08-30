@@ -356,7 +356,7 @@ async function buildPlayerViewUrl(player) {
 // (aucune action côté client ne peut l'accélérer, voir SelfSignedCertService
 // côté serveur) - c'est uniquement pour donner le temps de lire la note
 // ci-dessus avant d'agir, pas une astuce technique pour le certificat.
-const PLAYER_SPACE_BUTTON_DELAY_SECONDS = 30;
+const PLAYER_SPACE_BUTTON_DELAY_SECONDS = 10;
 
 async function goToPlayerSpace(player, pName) {
 	el("step1").classList.add("hidden");

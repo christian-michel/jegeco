@@ -539,7 +539,7 @@ body {
 .player-score { font-size: 0.92rem; font-weight: 700; color: var(--text-dark); }
 
 /* ============ Écran : Mes cartes (grille + liste) ============ */
-.cards-filter-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 0 0.6rem; }
+.cards-filter-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.1rem 0.6rem; }
 .filter-label { font-size: 0.82rem; font-weight: 600; color: var(--text-dark); margin-right: 8px; }
 .view-toggle { display: flex; align-items: center; }
 .toggle-buttons { display: flex; background-color: #fff; border-radius: 10px; padding: 2px; border: 1px solid #e2e8f0; }
