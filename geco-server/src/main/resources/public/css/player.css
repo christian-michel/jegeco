@@ -293,7 +293,7 @@ body {
    elle-même porte déjà son nom (étiquette du visuel) - plus besoin de le
    répéter en texte à côté. */
 .trade-card-info { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 1rem; border-radius: 16px; margin-bottom: 1.1rem; }
-.trade-card-info .game-card-lg { max-width: 170px; }
+.trade-card-info .geco-card-lg { max-width: 170px; }
 .trade-card-info-meta { font-size: 0.82rem; color: var(--text-dim); font-weight: 700; }
 .trade-card-info-price { font-weight: 700; color: var(--gold-dark); }
 
@@ -442,16 +442,16 @@ body {
    partout où une carte doit s'afficher (sélection, prix, QR, confirmation
    d'achat, "Mes cartes") plutôt que de dupliquer cet assemblage à chaque
    endroit. */
-.game-card {
+.geco-card {
 	position: relative; aspect-ratio: 1149 / 1894; border-radius: 14px; overflow: hidden;
 	background: var(--mist);
 }
-.game-card-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
-.game-card-illustration {
+.geco-card-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+.geco-card-illustration {
 	position: absolute; top: 9%; left: 12%; width: 76%; height: 58%; object-fit: contain;
 	filter: drop-shadow(0 3px 5px rgba(0,0,0,0.15));
 }
-.game-card-label {
+.geco-card-label {
 	position: absolute; left: 6%; right: 6%; bottom: 9%; text-align: center;
 	font-family: var(--font-display); font-weight: 700; color: var(--ink);
 	font-size: 0.85em; line-height: 1.15; word-break: break-word;
@@ -459,144 +459,216 @@ body {
 /* Taille "vignette" (listes, sélection) - texte proportionnellement plus
    petit (cqw = % de la largeur du conteneur, s'adapte à la taille réelle
    sans avoir à multiplier les règles par contexte). */
-.game-card-sm { width: 100%; container-type: inline-size; }
-.game-card-sm .game-card-label { font-size: 9cqw; bottom: 7%; }
-.game-card-lg { width: 100%; max-width: 220px; margin: 0 auto; container-type: inline-size; }
-.game-card-lg .game-card-label { font-size: 6.5cqw; }
+.geco-card-sm { width: 100%; container-type: inline-size; }
+.geco-card-sm .geco-card-label { font-size: 9cqw; bottom: 7%; }
+.geco-card-lg { width: 100%; max-width: 220px; margin: 0 auto; container-type: inline-size; }
+.geco-card-lg .geco-card-label { font-size: 6.5cqw; }
+
 
 /* ============================================================
-   Étape 3 : "Mes cartes" (inventaire par secteur)
+   Refonte du 30/08/2026 (v2) : CSS/HTML fourni intégralement par
+   l'utilisateur en référence exacte pour "Mon profil", "Tableau de bord" et
+   "Mes cartes" (grille + liste), avec sa propre barre de navigation basse
+   (bouton central "scanner" en relief). Repris ici QUASI VERBATIM (mêmes
+   noms de classes, mêmes valeurs) pour que le résultat corresponde
+   exactement à ce qui a été demandé - seule différence assumée : les icônes
+   Lucide (chargées par CDN dans l'exemple fourni) sont remplacées par des
+   SVG identiques mais intégrés localement (voir js/player-view.js,
+   ICONS_SVG) - l'app doit rester utilisable sans accès internet réel
+   pendant un atelier, un principe déjà établi ailleurs dans ce projet
+   (polices, bibliothèque de QR code).
    ============================================================ */
-.mycards-sector { margin-bottom: 1.4rem; }
-.mycards-sector-header {
-	display: flex; align-items: center; gap: 0.5rem; justify-content: space-between;
-	margin-bottom: 0.6rem; padding: 0.55rem 0.8rem; border-radius: 12px;
-	background: var(--sector-bg, var(--mist)); color: var(--sector-fg, var(--text));
+:root {
+	--primary-purple: #6c5ce7;
+	--primary-purple-dark: #5849c4;
+	--text-dark: #1e2022;
+	--text-muted: #8c939e;
+	--bg-app: #f4f6fa;
+	--bg-card: #ffffff;
+	--border-color-v2: #f0f2f5;
+	--green-positive: #2ed573;
+	--card-yellow-bg: #fff8e7; --card-yellow-border: #fce1a8;
+	--card-green-bg: #f2f9f1; --card-green-border: #d4edd2;
+	--card-blue-bg: #f0f5fa; --card-blue-border: #d2e3f3;
+	--card-purple-bg: #f6f4fc; --card-purple-border: #e2daf8;
 }
-.mycards-sector-header::before { content: var(--sector-icon, "📦"); font-size: 1.1rem; }
-.mycards-sector-title { font-family: var(--font-display); font-weight: 700; font-size: 0.92rem; flex: 1; }
-.mycards-sector-count {
-	background: rgba(255,255,255,0.6); color: inherit; font-weight: 800; font-size: 0.78rem;
-	border-radius: 999px; padding: 0.15rem 0.6rem;
-}
-.mycards-list { display: flex; flex-direction: column; gap: 0.45rem; }
-.mycards-row {
-	display: flex; align-items: center; gap: 0.7rem; padding: 0.55rem 0.7rem;
-	background: var(--level-bg, var(--mist)); border-radius: 12px;
-}
-.mycards-row-icon {
-	width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background: #fff;
-	display: flex; align-items: center; justify-content: center; overflow: hidden;
-	box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
-}
-.mycards-row-icon img { width: 78%; height: 78%; object-fit: contain; }
-.mycards-row-name { flex: 1; font-weight: 700; font-size: 0.9rem; color: var(--level-fg, var(--text)); }
-.mycards-row-count { font-family: var(--font-display); font-weight: 800; color: var(--level-fg, var(--gold-dark)); }
 
-/* ============================================================
-   Étape 3 : "Classement"
-   ============================================================ */
-.leaderboard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.leaderboard-row {
-	display: flex; align-items: center; gap: 0.8rem; padding: 0.75rem 0.9rem;
-	background: var(--mist); border-radius: 14px; border: 1.5px solid transparent;
+/* Conteneur mobile (remplace .join-shell pour les écrans du tableau de bord
+   joueur - le fond de page devient clair, comme demandé explicitement
+   ("les couleurs ne sont pas bonnes") plutôt que le dégradé indigo sombre
+   utilisé jusqu'ici). */
+.mobile-container {
+	width: 100%; max-width: 460px; margin: 0 auto; background-color: var(--bg-app);
+	min-height: 100vh; display: flex; flex-direction: column; position: relative;
+	color: var(--text-dark); font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
 }
-.leaderboard-row-me { background: #efecfe; border-color: var(--accent); }
-.leaderboard-rank {
-	width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; background: #fff;
-	display: flex; align-items: center; justify-content: center;
-	font-family: var(--font-display); font-weight: 800; font-size: 0.85rem; color: var(--text-dim);
+.mobile-container * { box-sizing: border-box; }
+
+.app-header {
+	display: flex; align-items: center; justify-content: space-between;
+	padding: 1.1rem 1.1rem 0.5rem;
 }
-.leaderboard-row:nth-child(1) .leaderboard-rank { background: var(--gold); color: #fff; }
-.leaderboard-row:nth-child(2) .leaderboard-rank { background: #c7c7d1; color: #fff; }
-.leaderboard-row:nth-child(3) .leaderboard-rank { background: #cd8a4f; color: #fff; }
-.leaderboard-name { flex: 1; font-weight: 700; }
-.leaderboard-value { font-family: var(--font-display); font-weight: 800; color: var(--gold-dark); }
-
-/* ============================================================
-   Étape 3 : "Historique" - lignes avec badge de montant coloré
-   ============================================================ */
-.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.history-row { display: flex; align-items: center; gap: 0.7rem; padding: 0.7rem 0.8rem; background: var(--mist); border-radius: 14px; }
-.history-row-icon {
-	width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; background: #fff;
-	display: flex; align-items: center; justify-content: center; font-size: 1.05rem;
-	box-shadow: 0 1px 3px rgba(23,19,57,0.1);
+.page-title { font-size: 1.05rem; font-weight: 700; color: var(--text-dark); }
+.icon-btn {
+	background: none; border: none; cursor: pointer; color: var(--text-dark);
+	display: flex; align-items: center; justify-content: center; padding: 4px;
 }
-.history-row-main { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
-.history-row-name { font-weight: 700; font-size: 0.92rem; }
-.history-row-meta { font-size: 0.78rem; color: var(--text-dim); }
-.history-row-amount {
-	font-family: var(--font-display); font-weight: 800; font-size: 0.95rem; flex-shrink: 0;
-	padding: 0.2rem 0.6rem; border-radius: 999px;
+.icon-btn svg { width: 22px; height: 22px; }
+
+.main-content {
+	flex: 1; padding: 0.5rem 1.1rem 6rem; display: flex; flex-direction: column; gap: 1rem;
 }
-.history-row-amount.positive { background: #dcfce7; color: #166534; }
-.history-row-amount.negative { background: #fee2e2; color: #b91c1c; }
 
-/* ============================================================
-   Refonte du hub (30/08/2026) - mockup de référence fourni par
-   l'utilisateur : "les cartes de jeu doivent être immédiatement visibles et
-   mises en avant... intuitive et fluide". Remplace l'ancienne pile de
-   boutons par un vrai tableau de bord (stats en grille, cartes en vedette
-   dans un bandeau défilant) + une barre de navigation basse persistante.
-   ============================================================ */
-
-/* Le hub n'est plus un simple .join-card : fond transparent (le dégradé du
-   body reste visible autour), pas de grande carte blanche unique - suit de
-   plus près la structure du mockup (topbar sur fond sombre, contenu en
-   petites cartes blanches distinctes). */
-.dash-screen { padding: 0; }
-.dash-topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 0 1rem; }
-.dash-topbar-who { display: flex; align-items: center; gap: 0.7rem; }
-.dash-avatar {
-	width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff;
-	display: flex; align-items: center; justify-content: center; font-family: var(--font-display);
-	font-weight: 800; font-size: 1.05rem; flex-shrink: 0;
+.card {
+	background-color: var(--bg-card); border-radius: 18px; padding: 1.1rem;
+	box-shadow: 0 4px 12px rgba(0,0,0,0.02);
 }
-.dash-name { font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; color: var(--ink); }
-.dash-status { font-size: 0.78rem; color: var(--text-dim); }
-.dash-turn-badge { background: #fff; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.78rem; font-weight: 700; color: var(--accent-dark); box-shadow: 0 1px 4px rgba(23,19,57,0.1); }
+.card-subtitle { font-size: 0.85rem; font-weight: 600; color: var(--text-dark); display: block; }
+.mb-12 { margin-bottom: 12px; }
 
-.dash-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.7rem; margin-bottom: 1rem; }
-.dash-stat-card { background: #fff; border-radius: 16px; padding: 0.85rem 0.95rem; }
-.dash-stat-card.gold { background: linear-gradient(135deg, #fff7e6, #fff); border: 1.5px solid #fde8b8; }
-.dash-stat-value { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; color: var(--ink); display: flex; align-items: baseline; gap: 4px; }
-.dash-stat-unit { font-size: 0.7rem; font-weight: 700; color: var(--text-dim); }
-.dash-stat-label { font-size: 0.72rem; color: var(--text-dim); font-weight: 700; margin-top: 3px; }
-
-.dash-section-title { font-size: 0.78rem; font-weight: 800; color: rgba(255,255,255,0.75); text-transform: uppercase; letter-spacing: 0.03em; margin: 0.2rem 0 0.6rem; }
-/* Bandeau de cartes en vedette - vraies vignettes de carte (voir .game-card),
-   pas des icônes rondes : répond directement à la remarque de l'utilisateur
-   ("les cartes de jeu doivent être immédiatement visibles et mises en
-   avant"). Défilement horizontal, largeur fixe par carte. */
-.dash-cards-scroll { display: flex; gap: 0.7rem; overflow-x: auto; padding: 0.1rem 0.1rem 1.2rem; margin: 0 -0.1rem; -webkit-overflow-scrolling: touch; }
-.dash-mini-card { flex-shrink: 0; width: 84px; position: relative; }
-.dash-mini-card .game-card-sm { box-shadow: 0 2px 8px rgba(23,19,57,0.25); border-radius: 12px; }
-.dash-mini-card-count {
-	position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,0.92); color: var(--ink);
-	font-family: var(--font-display); font-size: 0.68rem; font-weight: 800; border-radius: 999px; padding: 1px 6px;
-	box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+/* ============ Écran : Mon profil ============ */
+.profile-section { display: flex; flex-direction: column; align-items: center; margin: 0.4rem 0 0.6rem; }
+.avatar-wrapper {
+	width: 130px; height: 130px; border-radius: 50%; background: #fff; padding: 4px;
+	box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 12px; display: flex;
+	align-items: center; justify-content: center; font-size: 3.4rem;
 }
-.dash-mini-card-label { font-size: 0.68rem; font-weight: 700; text-align: center; margin-top: 5px; color: #fff; }
-
-.dash-action-row { display: flex; gap: 0.6rem; margin-bottom: 0.8rem; }
-.dash-action-btn {
-	flex: 1; background: #fff; border: none; border-radius: 14px; padding: 0.75rem 0.4rem; text-align: center;
-	font-size: 0.8rem; font-weight: 700; color: var(--text); font-family: inherit; cursor: pointer;
+.avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.user-name-container { display: flex; align-items: center; gap: 8px; }
+.user-name { font-size: 1.3rem; font-weight: 700; color: var(--text-dark); }
+.edit-btn {
+	background-color: #fff; border: 1px solid #e2e8f0; border-radius: 50%; width: 28px; height: 28px;
+	display: flex; align-items: center; justify-content: center; color: var(--text-dark);
+	box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
-.dash-action-btn.primary { background: linear-gradient(150deg, var(--accent), var(--accent-dark)); color: #fff; }
-.dash-action-ic { font-size: 1.2rem; display: block; margin-bottom: 3px; }
+.edit-btn svg { width: 14px; height: 14px; }
 
-/* ============ Barre de navigation basse persistante ============ */
+.stats-section { background-color: var(--bg-card); border-radius: 20px; padding: 1.2rem; }
+.section-title {
+	font-size: 0.72rem; font-weight: 700; color: var(--text-dark); letter-spacing: 0.5px;
+	margin-bottom: 1rem; text-transform: uppercase;
+}
+.stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 24px; position: relative; }
+.stats-grid::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background-color: var(--border-color-v2); }
+.stat-card { display: flex; flex-direction: column; padding: 4px 0; }
+.stat-header { display: flex; align-items: center; gap: 8px; }
+.stat-icon { font-size: 1.15rem; }
+.stat-value { font-size: 1.25rem; font-weight: 800; color: var(--text-dark); }
+.stat-label { font-size: 0.82rem; color: var(--text-muted); padding-left: 28px; }
+
+/* ============ Écran : Tableau de bord ============ */
+.balance-card, .evolution-card { display: flex; justify-content: space-between; align-items: center; }
+.balance-amount { font-size: 1.9rem; font-weight: 800; color: var(--text-dark); line-height: 1.1; margin-top: 4px; }
+.balance-unit { font-size: 0.82rem; color: var(--text-muted); }
+.coin-icon-wrapper { font-size: 2.3rem; filter: drop-shadow(0 4px 8px rgba(243,156,18,0.3)); }
+.evolution-amount { font-size: 1.7rem; font-weight: 800; color: var(--green-positive); line-height: 1.1; margin-top: 4px; }
+.evolution-amount.negative { color: var(--danger, #dc2626); }
+.evolution-period { font-size: 0.78rem; color: var(--text-muted); }
+.chart-container { width: 105px; height: 52px; }
+.sparkline-chart { width: 100%; height: 100%; overflow: visible; }
+
+.activity-body { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 10px; gap: 12px; }
+.activity-text { font-size: 0.86rem; color: #333; line-height: 1.4; flex: 1; }
+.activity-icon-badge {
+	background-color: #f8f9fa; border-radius: 12px; width: 38px; height: 38px;
+	display: flex; align-items: center; justify-content: center; color: #888; flex-shrink: 0;
+}
+.activity-icon-badge svg { width: 18px; height: 18px; }
+.activity-footer { display: flex; justify-content: flex-end; margin-top: 4px; }
+.activity-time { font-size: 0.74rem; color: var(--text-muted); }
+
+.leaderboard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.leaderboard-item { display: flex; align-items: center; justify-content: space-between; }
+.player-info { display: flex; align-items: center; gap: 12px; }
+.player-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.avatar-badge {
+	width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center;
+	justify-content: center; color: #fff; font-weight: 700; font-size: 0.85rem;
+}
+.avatar-badge.me { box-shadow: 0 0 0 2px var(--primary-purple); }
+.bg-teal { background-color: #00838f; }
+.bg-pink { background-color: #a87994; }
+.bg-purple { background-color: #6c5ce7; }
+.player-name { font-size: 0.88rem; font-weight: 600; color: var(--text-dark); }
+.player-score { font-size: 0.92rem; font-weight: 700; color: var(--text-dark); }
+
+/* ============ Écran : Mes cartes (grille + liste) ============ */
+.cards-filter-bar { display: flex; justify-content: space-between; align-items: center; padding: 0 0 0.6rem; }
+.filter-label { font-size: 0.82rem; font-weight: 600; color: var(--text-dark); margin-right: 8px; }
+.view-toggle { display: flex; align-items: center; }
+.toggle-buttons { display: flex; background-color: #fff; border-radius: 10px; padding: 2px; border: 1px solid #e2e8f0; }
+.toggle-btn { background: none; border: none; padding: 6px; border-radius: 8px; cursor: pointer; color: var(--text-dark); display: flex; align-items: center; justify-content: center; }
+.toggle-btn svg { width: 16px; height: 16px; }
+.toggle-btn.active { background-color: var(--primary-purple); color: #fff; }
+.sort-selector, .sort-selector-full { display: flex; align-items: center; }
+.sort-selector-full { width: 100%; justify-content: flex-end; }
+.select-wrapper { position: relative; display: flex; align-items: center; }
+.custom-select {
+	appearance: none; background-color: #fff; border: 1px solid #dcdfe6; border-radius: 10px;
+	padding: 8px 32px 8px 12px; font-size: 0.82rem; font-weight: 600; color: var(--text-dark);
+	outline: none; cursor: pointer; font-family: inherit;
+}
+.select-icon { position: absolute; right: 10px; width: 16px; height: 16px; color: var(--text-dark); pointer-events: none; }
+
+.category-section { display: flex; flex-direction: column; gap: 8px; }
+.category-header { display: flex; justify-content: space-between; align-items: center; }
+.category-title { font-size: 0.92rem; font-weight: 700; color: var(--text-dark); }
+.category-count { font-size: 0.82rem; font-weight: 600; color: var(--text-dark); }
+.cards-scroll-container { display: flex; gap: 12px; overflow-x: auto; padding: 4px 0 10px; margin: 0 -1.1rem; padding-left: 1.1rem; padding-right: 1.1rem; }
+
+.game-card {
+	min-width: 100px; width: 100px; height: 135px; border-radius: 12px; padding: 8px;
+	display: flex; flex-direction: column; justify-content: space-between; position: relative;
+	border: 1px solid transparent; box-shadow: 0 3px 8px rgba(0,0,0,0.04); flex-shrink: 0;
+}
+.card-yellow { background-color: var(--card-yellow-bg); border-color: var(--card-yellow-border); }
+.card-green { background-color: var(--card-green-bg); border-color: var(--card-green-border); }
+.card-blue { background-color: var(--card-blue-bg); border-color: var(--card-blue-border); }
+.card-purple { background-color: var(--card-purple-bg); border-color: var(--card-purple-border); }
+.card-name { font-size: 0.72rem; font-weight: 600; color: var(--text-dark); }
+.card-image-wrapper { display: flex; justify-content: center; align-items: center; flex: 1; }
+.card-emoji { font-size: 2.1rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+.card-image-wrapper img { max-width: 90%; max-height: 90%; object-fit: contain; }
+.card-quantity-badge {
+	position: absolute; bottom: 8px; right: 8px; background-color: var(--primary-purple); color: #fff;
+	font-size: 0.62rem; font-weight: 700; padding: 2px 6px; border-radius: 10px;
+}
+
+.cards-list-view { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.card-list-item {
+	background-color: var(--bg-card); border-radius: 16px; padding: 10px 14px; display: flex;
+	align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+.item-left { display: flex; align-items: center; gap: 14px; }
+.item-thumb {
+	width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center;
+	justify-content: center; font-size: 1.4rem; flex-shrink: 0; overflow: hidden;
+}
+.item-thumb img { width: 82%; height: 82%; object-fit: contain; }
+.item-name { font-size: 0.92rem; font-weight: 600; color: var(--text-dark); }
+.item-right { display: flex; align-items: center; gap: 16px; }
+.item-value { font-size: 1.02rem; font-weight: 700; color: var(--text-dark); }
+.item-quantity-badge { background-color: var(--primary-purple); color: #fff; font-size: 0.72rem; font-weight: 700; padding: 4px 8px; border-radius: 8px; display: inline-block; }
+
+.empty-state-v2 { text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 2rem 1rem; }
+
+/* ============ Barre de navigation inférieure (bouton scan central) ============ */
 .bottom-nav {
-	display: flex; gap: 0.2rem; margin-top: 1rem; background: #fff; border-radius: 20px;
-	padding: 0.5rem 0.4rem; box-shadow: 0 2px 8px rgba(23,19,57,0.15), 0 -2px 12px -6px rgba(23,19,57,0.1);
-	position: sticky; bottom: 0.6rem;
+	position: fixed; bottom: 0; left: 0; right: 0; max-width: 460px; margin: 0 auto;
+	height: 70px; background-color: var(--bg-card); display: flex; justify-content: space-around;
+	align-items: center; border-top: 1px solid var(--border-color-v2); padding: 0 10px; z-index: 10;
 }
-.bottom-nav-item {
-	flex: 1; background: none; border: none; border-radius: 14px; padding: 0.5rem 0.2rem; text-align: center;
-	font-size: 0.68rem; font-weight: 700; color: var(--text-dim); font-family: inherit; cursor: pointer;
-	transition: background 0.15s ease, color 0.15s ease;
+.nav-item {
+	display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none;
+	color: var(--text-muted); font-size: 0.68rem; font-weight: 500; flex: 1; background: none;
+	border: none; cursor: pointer; font-family: inherit;
 }
-.bottom-nav-ic { font-size: 1.3rem; display: block; margin-bottom: 2px; }
-.bottom-nav-item-active { color: var(--accent-dark); background: #efecfe; }
+.nav-item svg { width: 20px; height: 20px; }
+.nav-item.active { color: var(--primary-purple); }
+.scan-btn-wrapper { position: relative; top: -12px; }
+.scan-btn {
+	width: 52px; height: 52px; background-color: var(--primary-purple); border-radius: 50%;
+	display: flex; align-items: center; justify-content: center; color: #fff;
+	box-shadow: 0 4px 10px rgba(108,92,231,0.4);
+}
+.scan-btn svg { width: 24px; height: 24px; }

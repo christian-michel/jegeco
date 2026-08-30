@@ -25,6 +25,32 @@
 const t = (key, vars) => (window.GecoI18n ? window.GecoI18n.t(key, vars) : key);
 const el = (id) => document.getElementById(id);
 
+// Étape 3 (30/08/2026) : icônes reprises du design de référence fourni par
+// l'utilisateur (bibliothèque Lucide, https://lucide.dev, licence ISC) -
+// SVG intégrés ICI plutôt que chargés depuis unpkg.com par CDN comme dans
+// l'exemple fourni : l'app doit rester utilisable sans accès internet réel
+// pendant un atelier (même principe déjà appliqué aux polices et à la
+// bibliothèque de QR code, voir js/vendor/). currentColor hérite la couleur
+// du texte de l'élément parent, exactement comme le ferait la police d'icônes.
+const ICONS_SVG = {
+	home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><path d="M9 22V12h6v10"></path></svg>',
+	inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>',
+	"bar-chart-2": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>',
+	user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+	scan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path></svg>',
+	"chevron-left": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>',
+	"chevron-down": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+	"chevron-right": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>',
+	"edit-2": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>',
+	"refresh-cw": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>',
+	"sliders-horizontal": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"></line><line x1="10" y1="4" x2="3" y2="4"></line><line x1="21" y1="12" x2="12" y2="12"></line><line x1="8" y1="12" x2="3" y2="12"></line><line x1="21" y1="20" x2="16" y2="20"></line><line x1="12" y1="20" x2="3" y2="20"></line><line x1="14" y1="2" x2="14" y2="6"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="16" y1="18" x2="16" y2="22"></line></svg>',
+	"layout-grid": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>',
+	list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>',
+};
+function iconSvg(name) {
+	return ICONS_SVG[name] || "";
+}
+
 const params = new URLSearchParams(window.location.search);
 const state = {
 	gameId: params.get("gameId"),
@@ -60,22 +86,59 @@ function catalogTextValue(value) {
 const CARD_LEVELS = ["faible", "moyenne", "forte", "tresforte"];
 
 // ---------- Navigation entre écrans (un seul visible à la fois, sauf viewError) ----------
-const SCREENS = ["viewContent", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanManual", "scanConfirm",
-	"tradeResult", "myCardsScreen", "leaderboardScreen", "historyScreen", "creditRequestScreen"];
+const SCREENS = ["viewContent", "profileScreen", "sellPicker", "sellPrice", "sellQr", "scanCamera", "scanManual",
+	"scanConfirm", "tradeResult", "myCardsScreen", "leaderboardScreen", "historyScreen", "creditRequestScreen"];
+
+// Étape 3 (30/08/2026) : titre + bouton retour de l'en-tête (voir
+// .app-header) selon l'écran affiché - les 4 onglets principaux
+// (Accueil/Cartes/Stats/Profil) n'ont pas de bouton retour (on y accède par
+// la barre de nav basse, jamais en \"remontant\"), tous les autres en ont un.
+const SCREEN_HEADERS = {
+	viewContent: { titleKey: "playerView.nav_home", back: null },
+	profileScreen: { titleKey: "playerView.nav_profile_short", back: null },
+	myCardsScreen: { titleKey: "playerView.nav_my_cards", back: null },
+	leaderboardScreen: { titleKey: "playerView.nav_leaderboard", back: null },
+	sellPicker: { titleKey: "trade.sell_pick_title", back: "viewContent" },
+	sellPrice: { titleKey: "trade.sell_price_title", back: "sellPicker" },
+	sellQr: { titleKey: "trade.btn_sell", back: "sellPrice" },
+	scanCamera: { titleKey: "trade.scan_title", back: "viewContent" },
+	scanManual: { titleKey: "trade.manual_entry_title", back: "scanCamera" },
+	scanConfirm: { titleKey: "trade.confirm_title", back: "viewContent" },
+	tradeResult: { titleKey: "playerView.nav_home", back: null },
+	historyScreen: { titleKey: "playerView.nav_history", back: "profileScreen" },
+	creditRequestScreen: { titleKey: "playerView.credit_request_title", back: "viewContent" },
+};
+
 function showScreen(id) {
 	stopCamera(); // toujours couper la caméra en quittant scanCamera, quel que soit l'écran de destination
 	clearQrCountdown();
 	SCREENS.forEach((s) => el(s).classList.toggle("hidden", s !== id));
-	// Revenir au hub (bouton "Retour" depuis n'importe quel écran) doit aussi
-	// remettre "Accueil" actif dans la barre de nav basse.
+	updateAppHeader(id);
+	// Remet le bon onglet actif dans la barre de nav basse - "Accueil" au
+	// retour au hub, "Profil" pour l'historique (accessible uniquement depuis
+	// l'onglet Profil, voir SCREEN_HEADERS), sinon aucun changement (un écran
+	// de vente/achat n'appartient à aucun onglet précis).
 	if (id === "viewContent") setActiveNav("navBtnHome");
+	else if (id === "historyScreen") setActiveNav("navBtnProfile");
+}
+
+// Met à jour le titre + bouton retour de l'en-tête (voir .app-header et
+// SCREEN_HEADERS) - appelée à chaque changement d'écran (showScreen).
+function updateAppHeader(id) {
+	const config = SCREEN_HEADERS[id];
+	if (!config) return;
+	el("appHeaderTitle").textContent = t(config.titleKey);
+	const backBtn = el("appHeaderBack");
+	backBtn.classList.toggle("hidden", !config.back);
+	backBtn.innerHTML = config.back ? iconSvg("chevron-left") : "";
+	backBtn.onclick = config.back ? () => showScreen(config.back) : null;
 }
 
 // Met en évidence l'onglet actif de la barre de navigation basse (voir
 // player-view.html) - un seul actif à la fois.
 function setActiveNav(activeId) {
 	["navBtnHome", "navBtnCards", "navBtnStats", "navBtnProfile"].forEach((id) => {
-		el(id).classList.toggle("bottom-nav-item-active", id === activeId);
+		el(id).classList.toggle("active", id === activeId);
 	});
 }
 
@@ -105,8 +168,7 @@ function isDebtGame() {
 async function refreshPlayer() {
 	if (!state.gameId || !state.token) {
 		el("viewError").classList.remove("hidden");
-		el("screensContainer").classList.add("hidden");
-		el("bottomNav").classList.add("hidden");
+		el("mobileContainer").classList.add("hidden");
 		return;
 	}
 	try {
@@ -114,213 +176,377 @@ async function refreshPlayer() {
 		if (!res.ok) throw new Error("not found");
 		state.player = await res.json();
 		el("viewError").classList.add("hidden");
-		el("playerName").textContent = state.player.name;
-		el("playerStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
-		// Initiale de l'avatar (voir .dash-avatar) - un simple cercle de
-		// couleur avec la première lettre du nom, en attendant un vrai avatar
-		// choisi par le joueur (voir player.js pour l'écran d'inscription).
-		el("dashAvatar").textContent = (state.player.name || "?").charAt(0).toUpperCase();
-		// Le solde en jetons n'a de sens qu'en dette/libre - le troc n'a jamais
-		// de jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
-		el("balanceCard").classList.toggle("hidden", isTrocGame());
 		// Bouton "Demander un crédit" : monnaie dette uniquement (voir isDebtGame()).
 		el("btnOpenCreditRequest").classList.toggle("hidden", !isDebtGame());
-		if (!isTrocGame()) el("balanceCardValue").textContent = state.player.tradeBalance;
-		el("dashCardCount").textContent = state.player.goodsCount || 0;
 		const details = el("playerDetails");
 		let detailsHtml = "";
 		if ((state.player.curDebt > 0) || (state.player.curInterest > 0))
 			detailsHtml += `<p>${t("playerView.current_credit", { debt: state.player.curDebt, interest: state.player.curInterest })}</p>`;
 		details.innerHTML = detailsHtml;
-		// Bandeau "Mes cartes" en vedette sur le hub (voir le raisonnement en
-		// tête de player-view.html : les cartes doivent être immédiatement
-		// visibles, pas seulement accessibles via un clic de plus).
-		await renderDashCardsPreview();
+		await Promise.all([renderDashboard(), renderProfile()]);
 	} catch (err) {
 		el("viewError").classList.remove("hidden");
-		el("screensContainer").classList.add("hidden");
-		el("bottomNav").classList.add("hidden");
+		el("mobileContainer").classList.add("hidden");
 		return;
 	}
-	el("screensContainer").classList.remove("hidden");
-	el("bottomNav").classList.remove("hidden");
+	el("mobileContainer").classList.remove("hidden");
 	// Ne bascule sur le hub que si aucun autre écran d'échange n'est déjà affiché
 	// (le rafraîchissement périodique ne doit pas interrompre une vente/un achat en cours).
 	if (SCREENS.every((s) => el(s).classList.contains("hidden"))) showScreen("viewContent");
 }
 
-// Bandeau de cartes en vedette sur le hub (voir dashCardsSection) - un
-// aperçu compact de l'inventaire réel (voir renderMyCards pour la vue
-// complète, groupée par secteur). Monnaie libre uniquement (seul système
-// avec un vrai inventaire suivi aujourd'hui, voir isLibreGame()) - masqué
-// sinon plutôt que d'afficher un bandeau vide.
-async function renderDashCardsPreview() {
-	const section = el("dashCardsSection");
-	if (!isLibreGame()) {
-		section.classList.add("hidden");
+// ============================================================
+// Onglet "Accueil" : Tableau de bord (solde, évolution, dernière activité,
+// classement) - voir player-view.html, mockup de référence fourni par
+// l'utilisateur le 30/08/2026 (repris quasi verbatim, voir player.css).
+// ============================================================
+async function renderDashboard() {
+	// Le solde en jetons n'a de sens qu'en dette/libre - le troc n'a jamais de
+	// jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
+	el("balanceCard").classList.toggle("hidden", isTrocGame());
+	if (!isTrocGame()) el("balanceCardValue").textContent = state.player.tradeBalance;
+
+	// Historique du joueur (achats + ventes) - sert à la fois à l'évolution
+	// "ce tour" et à la carte "dernière activité" ci-dessous, une seule
+	// requête pour les deux plutôt que de la dupliquer.
+	let txs = [];
+	try {
+		txs = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/transactions`).then((r) => r.json());
+	} catch (err) {
+		txs = [];
+	}
+
+	// Évolution "ce tour" : ne connaît pas directement le numéro de tour
+	// courant de la partie (route joueur volontairement minimale, voir
+	// GecoServer) - on utilise le plus RÉCENT numéro de tour vu dans les
+	// transactions du joueur comme approximation raisonnable de "le tour en
+	// cours", cohérent tant que le joueur a déjà échangé au moins une fois.
+	const evolutionCard = el("evolutionCard");
+	if ((txs.length > 0) && !isTrocGame()) {
+		const latestTurn = Math.max(...txs.map((tx) => tx.turnNumber));
+		const thisTurnTxs = txs.filter((tx) => tx.turnNumber === latestTurn);
+		let delta = 0;
+		for (const tx of thisTurnTxs) {
+			if (tx.sellerPlayerId === state.player.id) delta += tx.totalCoinsValue;
+			if (tx.buyerPlayerId === state.player.id) delta -= tx.totalCoinsValue;
+		}
+		evolutionCard.classList.remove("hidden");
+		const amountEl = el("evolutionAmount");
+		amountEl.textContent = (delta >= 0 ? "+" : "") + delta;
+		amountEl.classList.toggle("negative", delta < 0);
+		renderEvolutionSparkline(thisTurnTxs, state.player.id);
+	} else {
+		evolutionCard.classList.add("hidden");
+	}
+
+	// Dernière activité (achat ou vente la plus récente, toutes monnaies confondues).
+	const activityCard = el("activityCard");
+	if (txs.length > 0) {
+		const latest = txs[0]; // déjà trié par date décroissante côté serveur (voir listPlayerTransactions)
+		const isSale = latest.sellerPlayerId === state.player.id;
+		const partner = isSale ? latest.buyerPlayerName : latest.sellerPlayerName;
+		const cardName = await resolveCardName(latest.cardTypeId);
+		const verbKey = isSale ? "playerView.activity_sold_to" : "playerView.activity_bought_from";
+		activityCard.classList.remove("hidden");
+		el("activityText").innerHTML = t(verbKey, {
+			card: `<strong>${escapeHtmlLocal(cardName)}</strong>`,
+			name: `<strong>${escapeHtmlLocal(partner)}</strong>`,
+			amount: `<strong>${latest.isGoodsTrade ? t("playerView.history_goods_amount_short", { n: latest.buyerWeakGoods + latest.buyerMediumGoods + latest.buyerStrongGoods }) : t("game.transactions_amount", { n: latest.totalCoinsValue })}</strong>`,
+		});
+		el("activityIconBadge").innerHTML = iconSvg("refresh-cw");
+		el("activityTime").textContent = formatRelativeTime(latest.timestamp);
+	} else {
+		activityCard.classList.add("hidden");
+	}
+
+	// Classement (aperçu, les 4 premiers - voir GameService.computeLeaderboard).
+	await renderLeaderboardInto("dashLeaderboardCard", "dashLeaderboardList", 4);
+}
+
+// Petit graphique d'évolution (voir .sparkline-chart) - une ligne simple
+// reliant le solde cumulé après chaque transaction du tour, pas une vraie
+// série temporelle complexe : suffisant pour donner un sens de tendance,
+// cohérent avec le niveau de détail du reste de l'écran.
+function renderEvolutionSparkline(turnTxs, playerId) {
+	const svg = el("evolutionSparkline");
+	if (turnTxs.length === 0) {
+		svg.innerHTML = "";
 		return;
 	}
-	try {
-		if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
-		if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
-		const inventory = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`)
-			.then((r) => r.json());
-		const cardIds = Object.keys(inventory);
-		if (cardIds.length === 0) {
-			section.classList.add("hidden");
-			return;
-		}
-		section.classList.remove("hidden");
-		el("dashCardsScroll").innerHTML = cardIds.slice(0, 8).map((cardId) => {
-			const entry = state.cardsCatalog.find((c) => c.id === cardId);
-			if (!entry) return "";
-			const visual = state.visualsCatalog.find((v) => v.id === entry.visualId);
-			const label = visual ? (catalogTextValue(visual.etiquette) || catalogTextValue(entry.nom)) : catalogTextValue(entry.nom);
-			return `
-			<div class="dash-mini-card">
-				${buildGameCardHtml(entry, visual, "game-card-sm")}
-				<span class="dash-mini-card-count">×${inventory[cardId]}</span>
-				<div class="dash-mini-card-label">${escapeHtmlLocal(label || entry.id)}</div>
-			</div>`;
-		}).join("");
-	} catch (err) {
-		section.classList.add("hidden"); // repli prudent : mieux vaut masquer que casser le hub
+	let running = 0;
+	const points = [0];
+	for (const tx of [...turnTxs].reverse()) { // du plus ancien au plus récent pour tracer dans l'ordre
+		if (tx.sellerPlayerId === playerId) running += tx.totalCoinsValue;
+		if (tx.buyerPlayerId === playerId) running -= tx.totalCoinsValue;
+		points.push(running);
 	}
+	const min = Math.min(...points);
+	const max = Math.max(...points);
+	const range = (max - min) || 1;
+	const coords = points.map((v, i) => {
+		const x = 10 + (i * (100 / Math.max(points.length - 1, 1)));
+		const y = 50 - ((v - min) / range) * 40;
+		return `${x.toFixed(1)},${y.toFixed(1)}`;
+	});
+	const isPositive = points[points.length - 1] >= points[0];
+	const color = isPositive ? "#2ed573" : "var(--danger, #dc2626)";
+	svg.innerHTML = `<polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></polyline>`;
+}
+
+// "il y a X min/h" - horodatage relatif pour la carte "dernière activité".
+function formatRelativeTime(epochMs) {
+	const diffMin = Math.max(0, Math.round((Date.now() - epochMs) / 60000));
+	if (diffMin < 1) return t("playerView.time_just_now");
+	if (diffMin < 60) return t("playerView.time_minutes_ago", { n: diffMin });
+	const diffH = Math.round(diffMin / 60);
+	return t("playerView.time_hours_ago", { n: diffH });
+}
+
+// Résout le nom affichable d'une carte à partir de son identifiant - charge
+// le catalogue au besoin (mis en cache dans state, comme partout ailleurs).
+async function resolveCardName(cardTypeId) {
+	if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
+	const entry = state.cardsCatalog.find((c) => c.id === cardTypeId);
+	return entry ? (catalogTextValue(entry.nom) || cardTypeId) : cardTypeId;
 }
 
 // ============================================================
-// ÉTAPE 3 : "Mes cartes" - inventaire par secteur (mockup de référence,
-// 28/08/2026) - voir GameService.computePlayerCardInventory : dérivé des
-// transactions smartphone, rien avant leur mise en usage (limite assumée,
-// voir la note d'explication affichée à l'écran).
+// Onglet "Profil" : identité + statistiques personnelles (voir
+// player-view.html, mockup de référence du 30/08/2026).
 // ============================================================
+async function renderProfile() {
+	el("profileName").textContent = state.player.name;
+	el("profileStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
+	el("statCoins").textContent = isTrocGame() ? "—" : state.player.tradeBalance;
+	el("statCards").textContent = state.player.goodsCount || 0;
+
+	let txs = [];
+	try {
+		txs = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/transactions`).then((r) => r.json());
+	} catch (err) {
+		txs = [];
+	}
+	const buys = txs.filter((tx) => tx.buyerPlayerId === state.player.id).length;
+	const sells = txs.filter((tx) => tx.sellerPlayerId === state.player.id).length;
+	el("statBuys").textContent = buys;
+	el("statSells").textContent = sells;
+}
+
+// ============================================================
+// Onglet "Cartes" : Mes cartes, grille par catégorie ou liste triable (voir
+// player-view.html, mockup de référence du 30/08/2026 - repris quasi
+// verbatim). GameService.computePlayerCardInventory : dérivé des
+// transactions smartphone, rien avant leur mise en usage (limite assumée,
+// voir la note affichée en cas d'inventaire vide).
+// ============================================================
+
+// Couleur de tuile (voir .card-yellow/.card-green/.card-blue/.card-purple)
+// par secteur - 8 secteurs réels (CatalogSeeds/cartes.json) répartis sur les
+// 4 couleurs de la référence, par proximité thématique plutôt qu'un simple
+// cycle arbitraire.
+const SECTOR_TILE_COLOR = {
+	alimentation: "yellow", agriculture: "green", ressources: "blue", artisanat: "blue",
+	culture: "purple", transport: "purple", industrie: "purple", technologie: "purple",
+};
+// Valeur de référence d'une carte par niveau - geconomicus.glibre.org/libre_money.html :
+// "les cartes de valeur la plus basse valent chacune 3, les valeurs
+// moyennes 6, les valeurs hautes 12" (progression ×2, tresforte extrapolée à 24).
+const LEVEL_VALUE = { faible: 3, moyenne: 6, forte: 12, tresforte: 24 };
+
 async function renderMyCards() {
 	showScreen("myCardsScreen");
+	if (!state.myCardsViewMode) state.myCardsViewMode = "grid";
+	if (!state.myCardsSortMode) state.myCardsSortMode = "category";
+
+	const filterBar = el("myCardsFilterBar");
+	filterBar.classList.toggle("hidden", state.myCardsViewMode === "list");
+	el("btnCardsViewGrid").classList.toggle("active", state.myCardsViewMode === "grid");
+	el("btnCardsViewList").classList.toggle("active", state.myCardsViewMode === "list");
+	el("btnCardsViewGrid").innerHTML = iconSvg("layout-grid");
+	el("btnCardsViewList").innerHTML = iconSvg("list");
+	el("myCardsSortIcon").innerHTML = iconSvg("chevron-down");
+	el("myCardsSortSelect").value = state.myCardsSortMode;
+
 	const body = el("myCardsBody");
-	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+	body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
 	try {
 		if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
 		if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
 		const inventory = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`).then((r) => r.json());
 		const cardIds = Object.keys(inventory);
 		if (cardIds.length === 0) {
-			body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("playerView.my_cards_empty")}</p>`;
+			body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;">${t("playerView.my_cards_empty")}</p>`;
 			return;
 		}
-		// Regroupe par secteur (voir CatalogSeeds/cartes.json, champ "secteur",
-		// désormais indépendant du niveau) - un groupe par secteur possédé
-		// uniquement, dans l'ordre où ils apparaissent en premier.
-		const bySector = new Map();
+		const items = [];
 		for (const cardId of cardIds) {
-			const entry = (state.cardsCatalog || []).find((c) => c.id === cardId);
+			const entry = state.cardsCatalog.find((c) => c.id === cardId);
 			if (!entry) continue; // carte retirée du catalogue depuis - on ignore plutôt que de casser l'écran
-			const sector = entry.secteur || "ressources";
-			if (!bySector.has(sector)) bySector.set(sector, []);
-			bySector.get(sector).push({ entry, count: inventory[cardId] });
+			const visual = state.visualsCatalog.find((v) => v.id === entry.visualId);
+			const label = visual ? (catalogTextValue(visual.etiquette) || catalogTextValue(entry.nom)) : catalogTextValue(entry.nom);
+			items.push({
+				entry, visual, count: inventory[cardId], label: label || entry.id,
+				value: LEVEL_VALUE[entry.niveau] || 0,
+				tileColor: SECTOR_TILE_COLOR[entry.secteur] || "blue",
+			});
 		}
-		body.innerHTML = [...bySector.entries()].map(([sector, cards]) => {
-			const totalInSector = cards.reduce((sum, c) => sum + c.count, 0);
-			return `
-			<div class="mycards-sector">
-				<div class="mycards-sector-header">
-					<span class="mycards-sector-title">${escapeHtmlLocal(catalogEnumLabel("sector", sector))}</span>
-					<span class="mycards-sector-count">${totalInSector}</span>
-				</div>
-				<div class="mycards-list">
-					${cards.map(({ entry, count }) => {
-						const visual = (state.visualsCatalog || []).find((v) => v.id === entry.visualId);
-						const label = visual ? (catalogTextValue(visual.etiquette) || catalogTextValue(entry.nom)) : catalogTextValue(entry.nom);
-						const icon = visual
-							? `<img src="/cartes/${escapeHtmlLocal(visual.filename)}" alt="">`
-							: `<span aria-hidden="true">🖼️</span>`;
-						return `
-						<div class="mycards-row level-${entry.niveau}">
-							<span class="mycards-row-icon">${icon}</span>
-							<span class="mycards-row-name">${escapeHtmlLocal(label || entry.id)}</span>
-							<span class="mycards-row-count">×${count}</span>
-						</div>`;
-					}).join("")}
-				</div>
-			</div>`;
-		}).join("");
+
+		if (state.myCardsViewMode === "grid") renderMyCardsGrid(body, items);
+		else renderMyCardsList(body, items);
 	} catch (err) {
 		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
 	}
 }
 
+function cardThumbInner(item) {
+	return item.visual
+		? `<img src="/cartes/${escapeHtmlLocal(item.visual.filename)}" alt="">`
+		: `<span class="card-emoji" aria-hidden="true">🖼️</span>`;
+}
+
+// Vue grille : groupée par secteur, une rangée défilante par groupe (voir
+// .category-section/.cards-scroll-container/.game-card).
+function renderMyCardsGrid(body, items) {
+	const bySector = new Map();
+	for (const item of items) {
+		const sector = item.entry.secteur || "ressources";
+		if (!bySector.has(sector)) bySector.set(sector, []);
+		bySector.get(sector).push(item);
+	}
+	body.innerHTML = [...bySector.entries()].map(([sector, cards]) => `
+		<section class="category-section">
+			<div class="category-header">
+				<h2 class="category-title">${escapeHtmlLocal(catalogEnumLabel("sector", sector))}</h2>
+				<span class="category-count">${cards.reduce((sum, c) => sum + c.count, 0)}</span>
+			</div>
+			<div class="cards-scroll-container">
+				${cards.map((item) => `
+				<div class="game-card card-${item.tileColor}">
+					<span class="card-name">${escapeHtmlLocal(item.label)}</span>
+					<div class="card-image-wrapper">${cardThumbInner(item)}</div>
+					<div class="card-quantity-badge">×${item.count}</div>
+				</div>`).join("")}
+			</div>
+		</section>`).join("");
+}
+
+// Vue liste : triable par catégorie/valeur/quantité (voir
+// .cards-list-view/.card-list-item) - le tri "par catégorie" garde un ordre
+// alphabétique de secteur, "par valeur"/"par quantité" trient décroissant
+// (la carte la plus intéressante en premier, cohérent avec l'intention du
+// mockup de référence : "Cochon 20 ×3" en tête de liste).
+function renderMyCardsList(body, items) {
+	const sorted = [...items];
+	if (state.myCardsSortMode === "value") sorted.sort((a, b) => b.value - a.value);
+	else if (state.myCardsSortMode === "quantity") sorted.sort((a, b) => b.count - a.count);
+	else sorted.sort((a, b) => catalogEnumLabel("sector", a.entry.secteur).localeCompare(catalogEnumLabel("sector", b.entry.secteur)));
+
+	body.innerHTML = `
+		<ul class="cards-list-view">
+			${sorted.map((item) => `
+			<li class="card-list-item">
+				<div class="item-left">
+					<div class="item-thumb card-${item.tileColor}">${cardThumbInner(item)}</div>
+					<span class="item-name">${escapeHtmlLocal(item.label)}</span>
+				</div>
+				<div class="item-right">
+					<span class="item-value">${item.value}</span>
+					<span class="item-quantity-badge">×${item.count}</span>
+				</div>
+			</li>`).join("")}
+		</ul>`;
+}
+
 // ============================================================
-// ÉTAPE 3 : "Classement" - voir GameService.computeLeaderboard.
+// ÉTAPE 3 : "Classement" (Stats) - voir GameService.computeLeaderboard.
+// Fonction partagée avec l'aperçu du tableau de bord (renderDashboard) :
+// même rendu, juste une profondeur (nombre de lignes) différente.
 // ============================================================
 async function renderLeaderboard() {
 	showScreen("leaderboardScreen");
-	const body = el("leaderboardBody");
-	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+	await renderLeaderboardInto("leaderboardScreen", "leaderboardBody", null);
+}
+
+// pCardWrapperId : id de la carte englobante (masquée s'il n'y a personne à
+// classer) - pLimit : null = tout le monde, un nombre = les N premiers
+// seulement (aperçu du tableau de bord).
+async function renderLeaderboardInto(pCardWrapperId, pListId, pLimit) {
+	const wrapper = el(pCardWrapperId);
+	const list = el(pListId);
+	list.innerHTML = `<li style="color:var(--text-muted);font-size:0.85rem;">${t("settings.catalog_loading")}</li>`;
 	try {
-		const entries = await fetch(`/api/games/${state.gameId}/leaderboard`).then((r) => r.json());
+		let entries = await fetch(`/api/games/${state.gameId}/leaderboard`).then((r) => r.json());
 		if (entries.length === 0) {
-			body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("playerView.leaderboard_empty")}</p>`;
+			wrapper.classList.add("hidden");
 			return;
 		}
-		const valueLabel = isTrocGame() ? t("playerView.leaderboard_value_goods") : t("playerView.leaderboard_value_coins");
-		body.innerHTML = `
-			<p class="galilee-explainer">${escapeHtmlLocal(valueLabel)}</p>
-			<ul class="leaderboard-list">
-				${entries.map((e) => `
-				<li class="leaderboard-row ${e.playerId === state.player.id ? "leaderboard-row-me" : ""}">
-					<span class="leaderboard-rank">${e.rank}</span>
-					<span class="leaderboard-name">${escapeHtmlLocal(e.playerName)}</span>
-					<span class="leaderboard-value">${e.value}</span>
-				</li>`).join("")}
-			</ul>`;
+		wrapper.classList.remove("hidden");
+		if (pLimit) entries = entries.slice(0, pLimit);
+		// Couleurs de badge tournantes (voir .avatar-badge, mockup de référence)
+		// - purement décoratif, un simple repère visuel par position dans la
+		// liste plutôt qu'un système de couleur par joueur à faire persister.
+		const badgeColors = ["bg-teal", "bg-pink", "bg-purple"];
+		list.innerHTML = entries.map((e, i) => {
+			const isMe = e.playerId === state.player.id;
+			const initial = escapeHtmlLocal((e.playerName || "?").charAt(0).toUpperCase());
+			return `
+			<li class="leaderboard-item">
+				<div class="player-info">
+					<div class="avatar-badge ${badgeColors[i % badgeColors.length]} ${isMe ? "me" : ""}">${initial}</div>
+					<span class="player-name">${escapeHtmlLocal(e.playerName)}${isMe ? ` (${escapeHtmlLocal(t("playerView.leaderboard_you"))})` : ""}</span>
+				</div>
+				<span class="player-score">${e.value}</span>
+			</li>`;
+		}).join("");
 	} catch (err) {
-		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
+		list.innerHTML = `<li style="color:var(--danger)">${t("game.transactions_load_error")}</li>`;
 	}
 }
 
 // ============================================================
-// ÉTAPE 3 : "Historique" personnel - voir GameService.listPlayerTransactions.
+// "Historique" personnel (accessible depuis l'onglet Profil) - voir
+// GameService.listPlayerTransactions.
 // ============================================================
 async function renderHistory() {
 	showScreen("historyScreen");
 	const body = el("historyBody");
-	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+	body.innerHTML = `<li style="color:var(--text-muted);font-size:0.85rem;">${t("settings.catalog_loading")}</li>`;
 	try {
+		if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
 		const txs = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/transactions`).then((r) => r.json());
 		if (txs.length === 0) {
-			body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("playerView.history_empty")}</p>`;
+			body.innerHTML = `<li style="color:var(--text-muted);font-size:0.85rem;">${t("playerView.history_empty")}</li>`;
 			return;
 		}
-		body.innerHTML = `
-			<ul class="history-list">
-				${txs.map((tx) => {
-					const isSale = tx.sellerPlayerId === state.player.id;
-					const entry = (state.cardsCatalog || []).find((c) => c.id === tx.cardTypeId);
-					const cardName = entry ? (catalogTextValue(entry.nom) || tx.cardTypeId) : tx.cardTypeId;
-					const partner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;
-					const verbKey = isSale ? "playerView.history_sold_to" : "playerView.history_bought_from";
-					// Vendre = on reçoit (badge vert, +) ; acheter = on donne (badge
-					// rouge, -) - vrai pour les jetons comme pour les cartes en troc
-					// (voir Transaction.buyerWeakGoods&co, toujours donné par
-					// l'ACHETEUR).
-					const amountValue = tx.isGoodsTrade
-						? (tx.buyerWeakGoods + tx.buyerMediumGoods + tx.buyerStrongGoods)
-						: tx.totalCoinsValue;
-					const amountLabel = tx.isGoodsTrade
-						? t("playerView.history_goods_amount_short", { n: amountValue })
-						: String(amountValue);
-					return `
-					<li class="history-row">
-						<span class="history-row-icon">${isSale ? "💰" : "🛒"}</span>
-						<div class="history-row-main">
-							<span class="history-row-name">${escapeHtmlLocal(cardName)}</span>
-							<span class="history-row-meta">${escapeHtmlLocal(t(verbKey, { name: partner }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))}</span>
-						</div>
-						<span class="history-row-amount ${isSale ? "positive" : "negative"}">${isSale ? "+" : "−"}${escapeHtmlLocal(amountLabel)}</span>
-					</li>`;
-				}).join("")}
-			</ul>`;
+		body.innerHTML = txs.map((tx) => {
+			const isSale = tx.sellerPlayerId === state.player.id;
+			const entry = state.cardsCatalog.find((c) => c.id === tx.cardTypeId);
+			const cardName = entry ? (catalogTextValue(entry.nom) || tx.cardTypeId) : tx.cardTypeId;
+			const partner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;
+			const verbKey = isSale ? "playerView.history_sold_to" : "playerView.history_bought_from";
+			// Vendre = on reçoit (badge vert, +) ; acheter = on donne (badge
+			// rouge, -) - vrai pour les jetons comme pour les cartes en troc
+			// (voir Transaction.buyerWeakGoods&co, toujours donné par l'ACHETEUR).
+			const amountValue = tx.isGoodsTrade
+				? (tx.buyerWeakGoods + tx.buyerMediumGoods + tx.buyerStrongGoods)
+				: tx.totalCoinsValue;
+			const amountLabel = tx.isGoodsTrade
+				? t("playerView.history_goods_amount_short", { n: amountValue })
+				: String(amountValue);
+			return `
+			<li class="leaderboard-item">
+				<div class="player-info">
+					<div class="avatar-badge ${isSale ? "bg-teal" : "bg-pink"}">${isSale ? "+" : "−"}</div>
+					<div>
+						<div class="player-name">${escapeHtmlLocal(cardName)}</div>
+						<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t(verbKey, { name: partner }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))}</div>
+					</div>
+				</div>
+				<span class="player-score" style="color:${isSale ? "var(--green-positive)" : "var(--danger, #dc2626)"};">${isSale ? "+" : "−"}${escapeHtmlLocal(amountLabel)}</span>
+			</li>`;
+		}).join("");
 	} catch (err) {
-		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
+		body.innerHTML = `<li style="color:var(--danger)">${t("game.transactions_load_error")}</li>`;
 	}
 }
 
@@ -411,8 +637,8 @@ function escapeHtmlLocal(s) {
 }
 
 // Assemble le fond de carte (propre au niveau) + l'illustration du visuel +
-// son étiquette (voir player.css, .game-card - raisonnement complet là-bas).
-// pSizeClass : "game-card-sm" (vignette, listes) ou "game-card-lg" (détail).
+// son étiquette (voir player.css, .geco-card - raisonnement complet là-bas).
+// pSizeClass : "geco-card-sm" (vignette, listes) ou "geco-card-lg" (détail).
 // pVisual peut être absent (catalogue incohérent, visuel supprimé...) - repli
 // sur un simple encadré, jamais un écran cassé pour si peu.
 function buildGameCardHtml(pEntry, pVisual, pSizeClass) {
@@ -420,17 +646,17 @@ function buildGameCardHtml(pEntry, pVisual, pSizeClass) {
 	const bgSrc = `/cartes/fond_carte_${niveau}.png`;
 	if (!pVisual) {
 		return `
-			<div class="game-card ${pSizeClass}">
-				<img class="game-card-bg" src="${bgSrc}" alt="">
-				<span class="game-card-label">${escapeHtmlLocal(catalogTextValue(pEntry.nom) || pEntry.id)}</span>
+			<div class="geco-card ${pSizeClass}">
+				<img class="geco-card-bg" src="${bgSrc}" alt="">
+				<span class="geco-card-label">${escapeHtmlLocal(catalogTextValue(pEntry.nom) || pEntry.id)}</span>
 			</div>`;
 	}
 	const label = catalogTextValue(pVisual.etiquette) || catalogTextValue(pEntry.nom) || pEntry.id;
 	return `
-		<div class="game-card ${pSizeClass}">
-			<img class="game-card-bg" src="${bgSrc}" alt="">
-			<img class="game-card-illustration" src="/cartes/${escapeHtmlLocal(pVisual.filename)}" alt="">
-			<span class="game-card-label">${escapeHtmlLocal(label)}</span>
+		<div class="geco-card ${pSizeClass}">
+			<img class="geco-card-bg" src="${bgSrc}" alt="">
+			<img class="geco-card-illustration" src="/cartes/${escapeHtmlLocal(pVisual.filename)}" alt="">
+			<span class="geco-card-label">${escapeHtmlLocal(label)}</span>
 		</div>`;
 }
 
@@ -450,12 +676,12 @@ function openSellPrice(entry, visual) {
 	const mediumLabel = document.querySelector('[data-coin="medium"] .price-stepper-label');
 	const strongLabel = document.querySelector('[data-coin="strong"] .price-stepper-label');
 	if (isTrocGame()) {
-		el("sellPriceTitle").textContent = t("trade.sell_goods_title");
+		el("appHeaderTitle").textContent = t("trade.sell_goods_title");
 		weakLabel.textContent = t("trade.goods_wanted_weak");
 		mediumLabel.textContent = t("trade.goods_wanted_medium");
 		strongLabel.textContent = t("trade.goods_wanted_strong");
 	} else {
-		el("sellPriceTitle").textContent = t("trade.sell_price_title");
+		el("appHeaderTitle").textContent = t("trade.sell_price_title");
 		weakLabel.textContent = t("trade.coin_weak");
 		mediumLabel.textContent = t("trade.coin_medium");
 		strongLabel.textContent = t("trade.coin_strong");
@@ -466,7 +692,7 @@ function openSellPrice(entry, visual) {
 function renderSellPriceCardInfo() {
 	const { entry, visual } = state.sellSelection;
 	const html = `
-		${buildGameCardHtml(entry, visual, "game-card-lg")}
+		${buildGameCardHtml(entry, visual, "geco-card-lg")}
 		<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", entry.niveau))}</span>`;
 	const infoEl = el("sellPriceCardInfo");
 	infoEl.className = `trade-card-info level-${entry.niveau}`;
@@ -738,7 +964,7 @@ function renderScanConfirm(offer) {
 	const visual = catalogEntry
 		? (state.visualsCatalog || []).find((v) => v.id === catalogEntry.visualId)
 		: null;
-	const cardHtml = buildGameCardHtml(entry, visual, "game-card-lg");
+	const cardHtml = buildGameCardHtml(entry, visual, "geco-card-lg");
 
 	if (isTrocGame()) {
 		// Troc : le "prix" est ce que L'ACHETEUR va donner en échange (des
@@ -847,15 +1073,30 @@ function showTradeResult(success, title, body) {
 function initTradeUI() {
 	el("btnOpenSell").addEventListener("click", openSellPicker);
 	// Barre de navigation basse persistante (voir le raisonnement en tête de
-	// player-view.html) - remplace les anciens boutons empilés sur le hub
-	// (btnOpenMyCards/btnOpenLeaderboard/btnOpenHistory, retirés du HTML).
+	// player-view.html) - 5 emplacements : Accueil/Cartes/[scan]/Stats/Profil,
+	// le bouton central reprenant l'action d'achat (openScan), déjà existante.
+	el("navIcHome").innerHTML = iconSvg("home");
+	el("navIcCards").innerHTML = iconSvg("inbox");
+	el("navIcScan").innerHTML = iconSvg("scan");
+	el("navIcStats").innerHTML = iconSvg("bar-chart-2");
+	el("navIcProfile").innerHTML = iconSvg("user");
 	el("navBtnHome").addEventListener("click", () => { showScreen("viewContent"); setActiveNav("navBtnHome"); });
 	el("navBtnCards").addEventListener("click", () => { renderMyCards(); setActiveNav("navBtnCards"); });
+	el("navBtnScan").addEventListener("click", openScan);
 	el("navBtnStats").addEventListener("click", () => { renderLeaderboard(); setActiveNav("navBtnStats"); });
-	el("navBtnProfile").addEventListener("click", () => { renderHistory(); setActiveNav("navBtnProfile"); });
+	el("navBtnProfile").addEventListener("click", () => { renderProfile(); showScreen("profileScreen"); setActiveNav("navBtnProfile"); });
+	el("btnOpenHistoryFromProfile").addEventListener("click", renderHistory);
+	// Bascule grille/liste + tri de "Mes cartes" (voir renderMyCards).
+	el("btnCardsViewGrid").addEventListener("click", () => { state.myCardsViewMode = "grid"; renderMyCards(); });
+	el("btnCardsViewList").addEventListener("click", () => { state.myCardsViewMode = "list"; renderMyCards(); });
+	el("myCardsSortSelect").addEventListener("change", (e) => { state.myCardsSortMode = e.target.value; renderMyCards(); });
 	el("btnOpenCreditRequest").addEventListener("click", renderCreditRequest);
-	el("btnOpenScan").addEventListener("click", openScan);
-	el("btnOpenManualEntry").addEventListener("click", openManualEntry);
+	// btnOpenManualEntry (bouton "Saisir un code" autonome sur le hub) a
+	// disparu avec la refonte du 30/08/2026 - la saisie manuelle reste
+	// entièrement fonctionnelle via son repli déjà existant depuis l'écran
+	// caméra (voir btnSwitchToManual juste en dessous), conformément au
+	// mockup de référence (un seul bouton "scanner" dans la barre de nav,
+	// jamais deux entrées séparées pour la même action d'achat).
 	el("btnSwitchToManual").addEventListener("click", openManualEntry);
 
 	document.querySelectorAll(".btn-back").forEach((btn) => {

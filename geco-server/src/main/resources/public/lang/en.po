@@ -1787,3 +1787,61 @@ msgstr "Scan"
 
 msgid "trade.btn_manual_entry_short"
 msgstr "Code"
+
+# ============ Redesign 30/08/2026 (v2): new Profile/Dashboard/Cards screens ============
+msgid "playerView.credit_request_btn"
+msgstr "🏦 Request credit"
+
+msgid "playerView.credit_request_title"
+msgstr "Request credit"
+
+msgid "playerView.evolution_label"
+msgstr "Evolution"
+
+msgid "playerView.evolution_period"
+msgstr "this turn"
+
+msgid "playerView.last_activity_label"
+msgstr "Last activity"
+
+msgid "playerView.leaderboard_you"
+msgstr "you"
+
+msgid "playerView.my_stats_title"
+msgstr "My stats"
+
+msgid "playerView.stat_buys"
+msgstr "purchases"
+
+msgid "playerView.stat_sells"
+msgstr "sales"
+
+msgid "playerView.stat_cards_short"
+msgstr "cards"
+
+msgid "playerView.time_just_now"
+msgstr "just now"
+
+msgid "playerView.time_minutes_ago"
+msgstr "{n} min ago"
+
+msgid "playerView.time_hours_ago"
+msgstr "{n}h ago"
+
+msgid "playerView.cards_view_label"
+msgstr "View"
+
+msgid "playerView.sort_by_category"
+msgstr "By category"
+
+msgid "playerView.sort_by_value"
+msgstr "By value"
+
+msgid "playerView.sort_by_quantity"
+msgstr "By quantity"
+
+msgid "playerView.activity_sold_to"
+msgstr "You sold {card} to {name} for {amount}."
+
+msgid "playerView.activity_bought_from"
+msgstr "You bought {card} from {name} for {amount}."

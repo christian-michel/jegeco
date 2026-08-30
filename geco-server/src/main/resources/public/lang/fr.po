@@ -1789,3 +1789,61 @@ msgstr "Scanner"
 
 msgid "trade.btn_manual_entry_short"
 msgstr "Code"
+
+# ============ Refonte du 30/08/2026 (v2) : nouvel ecran Profil/Tableau de bord/Cartes ============
+msgid "playerView.credit_request_btn"
+msgstr "🏦 Demander un crédit"
+
+msgid "playerView.credit_request_title"
+msgstr "Demander un crédit"
+
+msgid "playerView.evolution_label"
+msgstr "Évolution"
+
+msgid "playerView.evolution_period"
+msgstr "ce tour"
+
+msgid "playerView.last_activity_label"
+msgstr "Dernière activité"
+
+msgid "playerView.leaderboard_you"
+msgstr "vous"
+
+msgid "playerView.my_stats_title"
+msgstr "Mes statistiques"
+
+msgid "playerView.stat_buys"
+msgstr "achats"
+
+msgid "playerView.stat_sells"
+msgstr "ventes"
+
+msgid "playerView.stat_cards_short"
+msgstr "cartes"
+
+msgid "playerView.time_just_now"
+msgstr "à l'instant"
+
+msgid "playerView.time_minutes_ago"
+msgstr "il y a {n} min"
+
+msgid "playerView.time_hours_ago"
+msgstr "il y a {n} h"
+
+msgid "playerView.cards_view_label"
+msgstr "Vue"
+
+msgid "playerView.sort_by_category"
+msgstr "Par catégorie"
+
+msgid "playerView.sort_by_value"
+msgstr "Par valeur"
+
+msgid "playerView.sort_by_quantity"
+msgstr "Par quantité"
+
+msgid "playerView.activity_sold_to"
+msgstr "Vous avez vendu {card} à {name} pour {amount}."
+
+msgid "playerView.activity_bought_from"
+msgstr "Vous avez acheté {card} à {name} pour {amount}."
