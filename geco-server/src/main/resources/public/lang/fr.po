@@ -1853,3 +1853,28 @@ msgstr "Saisir le code"
 msgid "trade.scan_instruction"
 msgstr "Placez le code dans le cadre pour scanner automatiquement"
 
+
+# ============ Demande de credit (fonction manquante corrigee le 30/08/2026) ============
+msgid "playerView.credit_request_amount_label"
+msgstr "Montant souhaité"
+
+msgid "playerView.credit_request_submit"
+msgstr "Envoyer la demande"
+
+msgid "playerView.credit_request_invalid_amount"
+msgstr "Indiquez un montant supérieur à zéro."
+
+msgid "playerView.credit_request_status_pending"
+msgstr "En attente de validation par l'animateur"
+
+msgid "playerView.credit_request_status_approved"
+msgstr "Accordé ✓"
+
+msgid "playerView.credit_request_status_declined"
+msgstr "Refusé"
+
+msgid "playerView.credit_request_summary"
+msgstr "Demande de {amount} jetons"
+
+msgid "playerView.credit_request_new"
+msgstr "Faire une nouvelle demande"

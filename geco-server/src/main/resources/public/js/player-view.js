@@ -719,6 +719,80 @@ async function renderHistory() {
 }
 
 // ============================================================
+// Étape 3, monnaie dette : demande de crédit auprès de l'animateur/la
+// banque - voir CreditRequestService côté serveur. Bug trouvé le 30/08/2026
+// (remonté par l'utilisateur via les logs de la console : "renderCreditRequest
+// is not defined") : le bouton et l'écran existaient déjà depuis la
+// construction de cette fonctionnalité, mais cette fonction elle-même
+// n'avait JAMAIS été écrite - une erreur non rattrapée dans initTradeUI()
+// empêchait TOUT le câblage des boutons suivants de s'exécuter, d'où
+// l'écran entièrement vide observé.
+// ============================================================
+async function renderCreditRequest() {
+	showScreen("creditRequestScreen");
+	const body = el("creditRequestBody");
+	body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
+	try {
+		// Une demande existe-t-elle déjà pour ce joueur (n'importe quel statut) ?
+		const res = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/credit-requests`);
+		if (res.ok) {
+			renderCreditRequestStatus(await res.json());
+			return;
+		}
+	} catch (err) {
+		// Erreur réseau (pas un simple 404 "aucune demande") : on retombe quand
+		// même sur le formulaire plutôt que de bloquer l'écran - le joueur peut
+		// toujours réessayer d'envoyer sa demande.
+	}
+	renderCreditRequestForm();
+}
+
+function renderCreditRequestForm() {
+	el("creditRequestBody").innerHTML = `
+		<label class="field-label" for="creditRequestAmount" data-i18n="playerView.credit_request_amount_label">Montant souhaité</label>
+		<input id="creditRequestAmount" class="field-input" type="number" min="1" value="10">
+		<p id="creditRequestError" class="field-error hidden"></p>
+		<button type="button" class="btn-primary btn-block" id="btnSubmitCreditRequest">${escapeHtmlLocal(t("playerView.credit_request_submit"))}</button>`;
+	el("btnSubmitCreditRequest").addEventListener("click", submitCreditRequest);
+}
+
+async function submitCreditRequest() {
+	const amount = parseInt(el("creditRequestAmount").value, 10);
+	const errEl = el("creditRequestError");
+	if (!amount || (amount <= 0)) {
+		errEl.textContent = t("playerView.credit_request_invalid_amount");
+		errEl.classList.remove("hidden");
+		return;
+	}
+	errEl.classList.add("hidden");
+	try {
+		const res = await fetch(`/api/games/${state.gameId}/credit-requests`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ playerId: state.player.id, playerAccessToken: state.token, requestedPrincipal: amount }),
+		});
+		if (!res.ok) throw new Error(t("join.generic_error", { status: res.status }));
+		renderCreditRequestStatus(await res.json());
+	} catch (err) {
+		errEl.textContent = err.message;
+		errEl.classList.remove("hidden");
+	}
+}
+
+function renderCreditRequestStatus(request) {
+	const statusLabels = {
+		pending: t("playerView.credit_request_status_pending"),
+		approved: t("playerView.credit_request_status_approved"),
+		declined: t("playerView.credit_request_status_declined"),
+	};
+	el("creditRequestBody").innerHTML = `
+		<p style="text-align:center;font-size:0.95rem;">${escapeHtmlLocal(t("playerView.credit_request_summary", { amount: request.requestedPrincipal }))}</p>
+		<p style="text-align:center;font-weight:700;color:var(--primary-purple);margin-top:0.4rem;">${escapeHtmlLocal(statusLabels[request.status] || request.status)}</p>
+		${(request.status !== "pending") ? `<button type="button" class="btn-secondary btn-block" id="btnNewCreditRequest">${escapeHtmlLocal(t("playerView.credit_request_new"))}</button>` : ""}`;
+	if (request.status !== "pending") el("btnNewCreditRequest").addEventListener("click", renderCreditRequestForm);
+}
+
+// ============================================================
 // VENTE : étape 1 - choisir la carte
 // ============================================================
 async function openSellPicker() {

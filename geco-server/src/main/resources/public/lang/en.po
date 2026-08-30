@@ -1851,3 +1851,28 @@ msgstr "Enter code"
 msgid "trade.scan_instruction"
 msgstr "Place the code in the frame to scan automatically"
 
+
+# ============ Credit request (missing function fixed 30/08/2026) ============
+msgid "playerView.credit_request_amount_label"
+msgstr "Requested amount"
+
+msgid "playerView.credit_request_submit"
+msgstr "Send request"
+
+msgid "playerView.credit_request_invalid_amount"
+msgstr "Enter an amount greater than zero."
+
+msgid "playerView.credit_request_status_pending"
+msgstr "Waiting for the host's approval"
+
+msgid "playerView.credit_request_status_approved"
+msgstr "Approved ✓"
+
+msgid "playerView.credit_request_status_declined"
+msgstr "Declined"
+
+msgid "playerView.credit_request_summary"
+msgstr "Request for {amount} tokens"
+
+msgid "playerView.credit_request_new"
+msgstr "Make a new request"
