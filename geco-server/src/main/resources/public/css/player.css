@@ -250,15 +250,6 @@ body {
 .avatar-gallery-empty { grid-column: 1 / -1; text-align: center; color: var(--text-dim); font-size: 0.82rem; padding: 1.5rem 0.5rem; }
 
 /* ============ Étape 3 : hub d'échange (vendre / scanner) ============ */
-.trade-actions { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1.6rem; }
-
-.trade-header { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1.1rem; }
-.trade-header h2 { margin: 0; }
-.btn-back {
-	border: none; background: none; color: var(--accent-dark); font-weight: 700; font-size: 0.85rem;
-	cursor: pointer; font-family: inherit; padding: 0.2rem 0;
-}
-
 /* Groupes de cartes repliables */
 .trade-group-header {
 	display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left;
@@ -340,13 +331,6 @@ body {
 }
 .coin-timer-expired .coin-timer-value { color: var(--danger); }
 
-/* Caméra (achat) */
-.scan-viewport {
-	border-radius: 20px; overflow: hidden; background: #000; aspect-ratio: 1; max-width: 320px; margin: 0 auto;
-	border: 4px solid #fff; box-shadow: 0 2px 6px rgba(23,19,57,0.12), 0 16px 30px -10px rgba(23,19,57,0.3);
-}
-.scan-viewport video { width: 100%; height: 100%; object-fit: cover; display: block; }
-
 /* Résultat (succès/échec) */
 .trade-result-icon { font-size: 3.2rem; margin-bottom: 0.6rem; }
 #tradeResult h2 { font-family: var(--font-display); margin: 0 0 0.5rem; font-size: 1.25rem; }
@@ -362,20 +346,6 @@ body {
 .level-forte { --level-bg: #dcfce7; --level-fg: #166534; }
 .level-tresforte { --level-bg: #ede9fe; --level-fg: #5b21b6; }
 
-/* Couleurs par SECTEUR (indépendant du niveau, voir CatalogSeeds/cartes.json)
-   - 8 secteurs, palette distincte de celle des niveaux ci-dessus pour éviter
-   toute confusion entre les deux axes de classement. Utilisé sur "Mes
-   cartes" (mockup de référence, 28/08/2026) pour repérer les groupes d'un
-   coup d'œil, comme le fait le mockup. */
-.sector-alimentation { --sector-bg: #fef3c7; --sector-fg: #92400e; --sector-icon: "🌾"; }
-.sector-agriculture { --sector-bg: #dcfce7; --sector-fg: #166534; --sector-icon: "🐄"; }
-.sector-ressources { --sector-bg: #e0f2fe; --sector-fg: #0369a1; --sector-icon: "⛰️"; }
-.sector-artisanat { --sector-bg: #fde8d8; --sector-fg: #9a3412; --sector-icon: "🏠"; }
-.sector-culture { --sector-bg: #ede9fe; --sector-fg: #5b21b6; --sector-icon: "📷"; }
-.sector-transport { --sector-bg: #dbeafe; --sector-fg: #1e40af; --sector-icon: "🚀"; }
-.sector-industrie { --sector-bg: #f3e8ff; --sector-fg: #6b21a8; --sector-icon: "⚙️"; }
-.sector-technologie { --sector-bg: #e2e8f0; --sector-fg: #334155; --sector-icon: "💻"; }
-
 .trade-card-thumb-fallback, .trade-card-thumb { background: var(--level-bg, var(--mist)); }
 .trade-card-info { background: var(--level-bg, var(--mist)); }
 .trade-card-info-meta { color: var(--level-fg, var(--text-dim)); font-weight: 700; }
@@ -387,18 +357,6 @@ body {
 	color: var(--danger); font-weight: 700; font-size: 0.88rem; cursor: pointer;
 	font-family: inherit; padding: 0.6rem 0; margin-top: 0.2rem;
 }
-
-/* Cadre de visée caméra (mockup : coins violets superposés au flux vidéo) */
-.scan-viewport { position: relative; }
-.scan-frame { position: absolute; inset: 12%; pointer-events: none; }
-.scan-frame::before, .scan-frame::after,
-.scan-frame span::before, .scan-frame span::after {
-	content: ""; position: absolute; width: 26px; height: 26px; border: 3px solid var(--gold);
-}
-.scan-frame::before { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 6px 0 0 0; }
-.scan-frame::after { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 6px 0 0; }
-.scan-frame span::before { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 6px; }
-.scan-frame span::after { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 6px 0; }
 
 /* Lignes de calcul (Valeur / Votre solde / Nouveau solde) - écran de
    confirmation d'achat, sur le modèle du mockup de référence. */
@@ -414,18 +372,6 @@ body {
 .trade-balance-row-value.positive { color: #16a34a; }
 .trade-balance-row.total .trade-balance-row-label { color: var(--text); font-weight: 700; }
 .trade-balance-row.total .trade-balance-row-value { color: var(--gold-dark); font-size: 1.05rem; }
-
-/* Récapitulatif de solde sur le hub (voir player-view.js:refreshPlayer) */
-.balance-card {
-	display: flex; align-items: center; gap: 0.8rem; background: linear-gradient(135deg, #fff7e6, #fff);
-	border: 1.5px solid #fde8b8; border-radius: 16px; padding: 0.9rem 1rem; margin: 0.9rem 0 1rem;
-}
-.balance-card-icon {
-	width: 40px; height: 40px; border-radius: 50%; background: var(--gold); color: #fff;
-	display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;
-}
-.balance-card-label { font-size: 0.78rem; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
-.balance-card-value { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; color: var(--ink); }
 
 /* ============================================================
    Carte de jeu composite (fond + illustration + étiquette)

@@ -812,12 +812,6 @@ msgstr "Premier joueur"
 msgid "game.troc_counterparty_label"
 msgstr "Second joueur"
 
-msgid "game.troc_goods_from_initiator_label"
-msgstr "Biens donnés par le premier joueur"
-
-msgid "game.troc_goods_from_counterparty_label"
-msgstr "Biens donnés par le second joueur"
-
 msgid "game.troc_same_player_error"
 msgstr "Les deux joueurs de l'échange doivent être différents."
 

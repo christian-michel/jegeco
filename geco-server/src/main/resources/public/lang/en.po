@@ -812,12 +812,6 @@ msgstr "First player"
 msgid "game.troc_counterparty_label"
 msgstr "Second player"
 
-msgid "game.troc_goods_from_initiator_label"
-msgstr "Goods given by the first player"
-
-msgid "game.troc_goods_from_counterparty_label"
-msgstr "Goods given by the second player"
-
 msgid "game.troc_same_player_error"
 msgstr "The two players in the trade must be different."
 
