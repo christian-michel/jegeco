@@ -1851,3 +1851,11 @@ msgstr "Vous avez acheté {card} à {name} pour {amount}."
 # ============ Modal carte agrandie + retournement 3D (30/08/2026) ============
 msgid "playerView.card_modal_swipe_hint"
 msgstr "Glissez horizontalement pour retourner la carte"
+
+# ============ Scanner plein ecran (30/08/2026) ============
+msgid "trade.btn_switch_to_manual_short"
+msgstr "Saisir le code"
+
+msgid "trade.scan_instruction"
+msgstr "Placez le code dans le cadre pour scanner automatiquement"
+

@@ -296,13 +296,42 @@
 		</section>
 
 		<!-- ===== Achat : caméra ===== -->
-		<section id="scanCamera" class="join-card hidden">
-			<div class="scan-viewport">
-				<video id="scanVideo" playsinline autoplay muted></video>
-				<div class="scan-frame" aria-hidden="true"><span></span></div>
+		<!-- ===== Achat : caméra plein écran (mockup de référence, 30/08/2026) =====
+		     Repris quasi verbatim (viseur à coins + ligne laser + barre
+		     d'outils basse), MAIS branché sur la VRAIE caméra déjà
+		     fonctionnelle (getUserMedia + jsQR, voir openScan/scanTick) -
+		     jamais de fausse caméra/aperçu de carte factice comme dans la
+		     référence (qui n'avait pas de vraie caméra à montrer). -->
+		<section id="scanCamera" class="scanner-modal hidden">
+			<header class="scanner-header">
+				<button type="button" class="icon-btn-light" id="scannerCloseBtn" aria-label="Retour"></button>
+				<h1 class="scanner-title" data-i18n="trade.scan_title">Scannez le QR du vendeur</h1>
+				<span style="width:22px;"></span>
+			</header>
+			<div class="camera-viewport">
+				<!-- Vraie caméra (voir openScan) - pas un fond décoratif. -->
+				<video id="scanVideo" class="camera-feed-video" playsinline autoplay muted></video>
+				<div class="scanner-target-box" aria-hidden="true">
+					<div class="corner corner-top-left"></div>
+					<div class="corner corner-top-right"></div>
+					<div class="corner corner-bottom-left"></div>
+					<div class="corner corner-bottom-right"></div>
+					<div class="scan-laser-line"></div>
+				</div>
+				<p class="scanner-instruction" data-i18n="trade.scan_instruction">Placez le code dans le cadre pour scanner automatiquement</p>
+				<p id="scanCameraError" class="field-error hidden" data-i18n="trade.scan_camera_error">⚠️ Caméra indisponible. Vérifiez les autorisations de votre navigateur.</p>
 			</div>
-			<p id="scanCameraError" class="field-error hidden" data-i18n="trade.scan_camera_error">⚠️ Caméra indisponible. Vérifiez les autorisations de votre navigateur.</p>
-			<button type="button" id="btnSwitchToManual" class="btn-secondary btn-block" data-i18n="trade.btn_switch_to_manual">Saisir le code à la place</button>
+			<div class="scanner-bottom-bar">
+				<button type="button" class="scanner-tool-btn" id="scannerHistoryBtn">
+					<span class="tool-icon-circle" id="scannerHistoryIcon"></span>
+					<span data-i18n="playerView.nav_history">Historique</span>
+				</button>
+				<button type="button" class="scanner-flash-btn hidden" id="scannerFlashBtn" aria-label="Activer flash"></button>
+				<button type="button" class="scanner-tool-btn" id="btnSwitchToManual">
+					<span class="tool-icon-circle" id="scannerKeyboardIcon"></span>
+					<span data-i18n="trade.btn_switch_to_manual_short">Saisir le code</span>
+				</button>
+			</div>
 		</section>
 
 		<!-- ===== Achat : saisie manuelle du code (repli, voir §5.1 du cahier des charges) ===== -->

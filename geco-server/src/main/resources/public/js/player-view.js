@@ -46,6 +46,9 @@ const ICONS_SVG = {
 	"sliders-horizontal": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"></line><line x1="10" y1="4" x2="3" y2="4"></line><line x1="21" y1="12" x2="12" y2="12"></line><line x1="8" y1="12" x2="3" y2="12"></line><line x1="21" y1="20" x2="16" y2="20"></line><line x1="12" y1="20" x2="3" y2="20"></line><line x1="14" y1="2" x2="14" y2="6"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="16" y1="18" x2="16" y2="22"></line></svg>',
 	"layout-grid": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>',
 	list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>',
+	history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>',
+	keyboard: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M6 8h.01"></path><path d="M10 8h.01"></path><path d="M14 8h.01"></path><path d="M18 8h.01"></path><path d="M6 12h.01"></path><path d="M10 12h.01"></path><path d="M14 12h.01"></path><path d="M18 12h.01"></path><path d="M7 16h10"></path></svg>',
+	zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
 };
 function iconSvg(name) {
 	return ICONS_SVG[name] || "";
@@ -101,7 +104,9 @@ const SCREEN_HEADERS = {
 	sellPicker: { titleKey: "trade.sell_pick_title", back: "viewContent" },
 	sellPrice: { titleKey: "trade.sell_price_title", back: "sellPicker" },
 	sellQr: { titleKey: "trade.btn_sell", back: "sellPrice" },
-	scanCamera: { titleKey: "trade.scan_title", back: "viewContent" },
+	// scanCamera : pas d'entrée ici - cet écran a désormais son propre en-tête
+	// intégré (.scanner-header, voir player-view.html), il ne passe plus par
+	// .app-header/updateAppHeader() comme les autres.
 	scanManual: { titleKey: "trade.manual_entry_title", back: "scanCamera" },
 	scanConfirm: { titleKey: "trade.confirm_title", back: "viewContent" },
 	tradeResult: { titleKey: "playerView.nav_home", back: null },
@@ -1009,6 +1014,15 @@ async function openScan() {
 	video.srcObject = state.scanStream;
 	await video.play();
 
+	// Flash/torche réelle (30/08/2026, mockup de référence) - support
+	// variable selon les appareils/navigateurs (souvent absent sur iOS
+	// Safari) : le bouton reste masqué par défaut (voir player-view.html) et
+	// n'apparaît que si la capacité est réellement disponible sur CETTE
+	// caméra, plutôt que d'afficher un bouton qui ne ferait rien.
+	const [track] = state.scanStream.getVideoTracks();
+	const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+	el("scannerFlashBtn").classList.toggle("hidden", !capabilities.torch);
+
 	const canvas = document.createElement("canvas");
 	scanCanvasCtx = canvas.getContext("2d", { willReadFrequently: true });
 	state.scanRAF = requestAnimationFrame(scanTick);
@@ -1053,6 +1067,11 @@ function stopCamera() {
 		state.scanStream.getTracks().forEach((track) => track.stop());
 		state.scanStream = null;
 	}
+	// Réinitialise l'affichage du flash (le arrêt de la piste ci-dessus coupe
+	// déjà la torche physique) - évite qu'un bouton reste visuellement "actif"
+	// à la prochaine ouverture du scanner, avant que sa capacité réelle ne
+	// soit re-détectée (voir openScan()).
+	el("scannerFlashBtn").classList.remove("active");
 }
 
 // ---------- Saisie manuelle (repli, voir §5.1 du cahier des charges) ----------
@@ -1251,6 +1270,24 @@ function initTradeUI() {
 	el("navBtnHome").addEventListener("click", () => { showScreen("viewContent"); setActiveNav("navBtnHome"); });
 	el("navBtnCards").addEventListener("click", () => { renderMyCards(); setActiveNav("navBtnCards"); });
 	el("navBtnScan").addEventListener("click", openScan);
+	// Écran caméra plein écran (30/08/2026) - icônes + boutons propres à cet
+	// écran (en-tête, historique, clavier, flash).
+	el("scannerCloseBtn").innerHTML = iconSvg("chevron-left");
+	el("scannerHistoryIcon").innerHTML = iconSvg("history");
+	el("scannerKeyboardIcon").innerHTML = iconSvg("keyboard");
+	el("scannerFlashBtn").innerHTML = iconSvg("zap");
+	el("scannerCloseBtn").addEventListener("click", () => showScreen("viewContent"));
+	el("scannerHistoryBtn").addEventListener("click", () => { renderHistory(); setActiveNav("navBtnProfile"); });
+	el("scannerFlashBtn").addEventListener("click", async () => {
+		const btn = el("scannerFlashBtn");
+		const isOn = btn.classList.toggle("active");
+		try {
+			const [track] = (state.scanStream || { getVideoTracks: () => [] }).getVideoTracks();
+			if (track) await track.applyConstraints({ advanced: [{ torch: isOn }] });
+		} catch (err) {
+			btn.classList.toggle("active", !isOn); // repli : la bascule visuelle suit l'échec, pas d'état "actif" mensonger
+		}
+	});
 	el("navBtnStats").addEventListener("click", () => { renderLeaderboard(); setActiveNav("navBtnStats"); });
 	el("navBtnProfile").addEventListener("click", () => { renderProfile(); showScreen("profileScreen"); setActiveNav("navBtnProfile"); });
 	el("btnOpenHistoryFromProfile").addEventListener("click", renderHistory);
