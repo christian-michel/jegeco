@@ -18,6 +18,13 @@
 		(voir §5.1 du cahier des charges, décisions prises avec l'utilisateur le
 		27/08/2026 : QR autonome - tout dedans, pas d'aller-retour serveur pour le
 		générer - et scan par caméra). Toute la logique est dans player-view.js.
+
+		Refonte du 30/08/2026 (mockup de référence, remonté par l'utilisateur :
+		"les cartes de jeu doivent être immédiatement visibles et mises en
+		avant... intuitive et fluide") : barre de navigation basse PERSISTANTE
+		(voir .bottom-nav, en dehors du bloc .screens qui bascule d'écran en
+		écran) + hub reconstruit en tableau de bord (stats en grille, cartes en
+		vedette dans un bandeau défilant) plutôt qu'une pile de boutons.
 	-->
 	<div class="join-shell">
 		<header class="join-header">
@@ -30,53 +37,77 @@
 			<p data-i18n="playerView.error_invalid_link">⚠️ Lien invalide ou expiré. Redemandez un lien à jour à l'animateur.</p>
 		</div>
 
-		<!-- Hub : infos joueur + les deux actions d'échange -->
-		<div id="viewContent" class="join-card hidden">
-			<h2 id="playerName">—</h2>
-			<p id="playerStatus" style="color:var(--text-dim);font-size:0.9rem;"></p>
+		<!-- Conteneur de tous les écrans qui basculent (show/hide, voir
+		     showScreen() dans player-view.js) - la barre de nav basse reste,
+		     elle, TOUJOURS visible (voir plus bas, hors de ce conteneur). -->
+		<div id="screensContainer" class="hidden">
+
+		<!-- Hub reconstruit en tableau de bord (voir le raisonnement en tête de
+		     fichier) : bandeau joueur + tour en cours, stats en grille, cartes
+		     en vedette (bandeau défilant, vraies vignettes de carte), actions
+		     d'échange. -->
+		<div id="viewContent" class="dash-screen">
+			<div class="dash-topbar">
+				<div class="dash-topbar-who">
+					<div class="dash-avatar" id="dashAvatar">?</div>
+					<div>
+						<div class="dash-name" id="playerName">—</div>
+						<div class="dash-status" id="playerStatus"></div>
+					</div>
+				</div>
+				<span class="dash-turn-badge hidden" id="dashTurnBadge"></span>
+			</div>
+
 			<div id="playerDetails"></div>
 
-			<!-- Solde en jetons, dérivé de l'historique des échanges par QR (voir
-			     GameService.computeTradeBalance) - rempli par refreshPlayer(). -->
-			<div class="balance-card" id="balanceCard">
-				<span class="balance-card-icon" aria-hidden="true">🪙</span>
-				<div>
-					<div class="balance-card-label" data-i18n="trade.balance_label">Solde jetons (échanges)</div>
-					<div class="balance-card-value" id="balanceCardValue">0</div>
+			<div class="dash-stats-grid">
+				<!-- Solde en jetons, dérivé de l'historique des échanges par QR
+				     (voir GameService.computeTradeBalance) - masqué en troc (pas de
+				     jetons dans ce système, voir isTrocGame()). -->
+				<div class="dash-stat-card gold" id="balanceCard">
+					<div class="dash-stat-value"><span id="balanceCardValue">0</span> <span class="dash-stat-unit" data-i18n="playerView.stat_unit_coins">jetons</span></div>
+					<div class="dash-stat-label"><span aria-hidden="true">🪙</span> <span data-i18n="trade.balance_label">Solde jetons (échanges)</span></div>
+				</div>
+				<div class="dash-stat-card">
+					<div class="dash-stat-value" id="dashCardCount">0</div>
+					<div class="dash-stat-label"><span aria-hidden="true">🃏</span> <span data-i18n="playerView.stat_cards_in_hand">Cartes en main</span></div>
 				</div>
 			</div>
 
-			<div class="trade-actions">
-				<button type="button" id="btnOpenSell" class="btn-primary btn-block" data-i18n="trade.btn_sell">Vendre une carte</button>
-				<button type="button" id="btnOpenScan" class="btn-secondary btn-block" data-i18n="trade.btn_scan">Scanner un achat</button>
-				<button type="button" id="btnOpenManualEntry" class="btn-secondary btn-block" data-i18n="trade.btn_manual_entry">Saisir un code</button>
-				<!-- Étape 3, monnaie dette uniquement (voir isDebtGame() dans
-				     player-view.js) : demande de crédit auprès de l'animateur/la
-				     banque, remonté par l'utilisateur (28/08/2026). -->
-				<button type="button" id="btnOpenCreditRequest" class="btn-secondary btn-block hidden" data-i18n="playerView.credit_request_btn">🏦 Demander un crédit</button>
+			<!-- Bandeau de cartes en vedette (vraies vignettes, voir
+			     buildGameCardHtml) - un aperçu direct de l'inventaire, sans
+			     attendre de cliquer sur "Cartes" (voir la barre de nav basse) -
+			     répond directement à "les cartes de jeu doivent être
+			     immédiatement visibles". -->
+			<div id="dashCardsSection" class="hidden">
+				<div class="dash-section-title" data-i18n="playerView.nav_my_cards">Mes cartes</div>
+				<div class="dash-cards-scroll" id="dashCardsScroll"></div>
 			</div>
 
-			<!-- Étape 3 : "Mes cartes"/"Classement"/"Historique" - mockup de
-			     référence fourni par l'utilisateur (28/08/2026). -->
-			<div class="hub-nav-row">
-				<button type="button" id="btnOpenMyCards" class="hub-nav-btn">
-					<span aria-hidden="true">📦</span>
-					<span data-i18n="playerView.nav_my_cards">Mes cartes</span>
+			<div class="dash-action-row">
+				<button type="button" id="btnOpenSell" class="dash-action-btn primary">
+					<span class="dash-action-ic" aria-hidden="true">💰</span>
+					<span data-i18n="trade.btn_sell">Vendre</span>
 				</button>
-				<button type="button" id="btnOpenLeaderboard" class="hub-nav-btn">
-					<span aria-hidden="true">🏆</span>
-					<span data-i18n="playerView.nav_leaderboard">Classement</span>
+				<button type="button" id="btnOpenScan" class="dash-action-btn">
+					<span class="dash-action-ic" aria-hidden="true">📷</span>
+					<span data-i18n="trade.btn_scan_short">Scanner</span>
 				</button>
-				<button type="button" id="btnOpenHistory" class="hub-nav-btn">
-					<span aria-hidden="true">📜</span>
-					<span data-i18n="playerView.nav_history">Historique</span>
+				<button type="button" id="btnOpenManualEntry" class="dash-action-btn">
+					<span class="dash-action-ic" aria-hidden="true">⌨️</span>
+					<span data-i18n="trade.btn_manual_entry_short">Code</span>
 				</button>
 			</div>
+			<!-- Étape 3, monnaie dette uniquement (voir isDebtGame() dans
+			     player-view.js) : demande de crédit auprès de l'animateur/la
+			     banque, remonté par l'utilisateur (28/08/2026). -->
+			<button type="button" id="btnOpenCreditRequest" class="btn-secondary btn-block hidden" data-i18n="playerView.credit_request_btn">🏦 Demander un crédit</button>
 
-			<p style="font-size:0.78rem;color:var(--text-dim);margin-top:1.5rem;" data-i18n="playerView.footnote">
+			<p style="font-size:0.72rem;color:var(--text-dim);margin-top:1.2rem;text-align:center;" data-i18n="playerView.footnote">
 				Cette page se rafraîchit automatiquement. Gardez ce lien pour toute la partie.
 			</p>
 		</div>
+
 
 		<!-- ===== Vente : étape 1, choisir la carte ===== -->
 		<section id="sellPicker" class="join-card hidden">
@@ -233,6 +264,32 @@
 			</div>
 			<div id="creditRequestBody"></div>
 		</section>
+
+		</div>
+		<!-- ===== Barre de navigation basse PERSISTANTE ===== (voir le
+		     raisonnement en tête de fichier) - toujours visible, quel que soit
+		     l'écran affiché dans #screensContainer ci-dessus. "Stats" ->
+		     classement, "Profil" -> historique personnel (les 4 écrans du
+		     mockup de référence n'ont pas d'équivalent 1:1 exact avec nos 4
+		     écrans existants ; ce mapage est le plus proche en usage réel). -->
+		<nav class="bottom-nav hidden" id="bottomNav">
+			<button type="button" class="bottom-nav-item" id="navBtnHome" data-i18n-title="playerView.nav_home">
+				<span class="bottom-nav-ic" aria-hidden="true">🏠</span>
+				<span data-i18n="playerView.nav_home">Accueil</span>
+			</button>
+			<button type="button" class="bottom-nav-item" id="navBtnCards" data-i18n-title="playerView.nav_my_cards">
+				<span class="bottom-nav-ic" aria-hidden="true">🃏</span>
+				<span data-i18n="playerView.nav_cards_short">Cartes</span>
+			</button>
+			<button type="button" class="bottom-nav-item" id="navBtnStats" data-i18n-title="playerView.nav_leaderboard">
+				<span class="bottom-nav-ic" aria-hidden="true">📊</span>
+				<span data-i18n="playerView.nav_stats_short">Stats</span>
+			</button>
+			<button type="button" class="bottom-nav-item" id="navBtnProfile" data-i18n-title="playerView.nav_history">
+				<span class="bottom-nav-ic" aria-hidden="true">👤</span>
+				<span data-i18n="playerView.nav_profile_short">Profil</span>
+			</button>
+		</nav>
 	</div>
 
 	<!-- Bibliothèques hébergées localement (voir js/vendor/) plutôt qu'en CDN -

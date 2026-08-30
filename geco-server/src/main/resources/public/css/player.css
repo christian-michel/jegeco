@@ -532,3 +532,71 @@ body {
 }
 .history-row-amount.positive { background: #dcfce7; color: #166534; }
 .history-row-amount.negative { background: #fee2e2; color: #b91c1c; }
+
+/* ============================================================
+   Refonte du hub (30/08/2026) - mockup de référence fourni par
+   l'utilisateur : "les cartes de jeu doivent être immédiatement visibles et
+   mises en avant... intuitive et fluide". Remplace l'ancienne pile de
+   boutons par un vrai tableau de bord (stats en grille, cartes en vedette
+   dans un bandeau défilant) + une barre de navigation basse persistante.
+   ============================================================ */
+
+/* Le hub n'est plus un simple .join-card : fond transparent (le dégradé du
+   body reste visible autour), pas de grande carte blanche unique - suit de
+   plus près la structure du mockup (topbar sur fond sombre, contenu en
+   petites cartes blanches distinctes). */
+.dash-screen { padding: 0; }
+.dash-topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 0 1rem; }
+.dash-topbar-who { display: flex; align-items: center; gap: 0.7rem; }
+.dash-avatar {
+	width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff;
+	display: flex; align-items: center; justify-content: center; font-family: var(--font-display);
+	font-weight: 800; font-size: 1.05rem; flex-shrink: 0;
+}
+.dash-name { font-family: var(--font-display); font-weight: 800; font-size: 1.05rem; color: var(--ink); }
+.dash-status { font-size: 0.78rem; color: var(--text-dim); }
+.dash-turn-badge { background: #fff; border-radius: 999px; padding: 0.35rem 0.8rem; font-size: 0.78rem; font-weight: 700; color: var(--accent-dark); box-shadow: 0 1px 4px rgba(23,19,57,0.1); }
+
+.dash-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.7rem; margin-bottom: 1rem; }
+.dash-stat-card { background: #fff; border-radius: 16px; padding: 0.85rem 0.95rem; }
+.dash-stat-card.gold { background: linear-gradient(135deg, #fff7e6, #fff); border: 1.5px solid #fde8b8; }
+.dash-stat-value { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; color: var(--ink); display: flex; align-items: baseline; gap: 4px; }
+.dash-stat-unit { font-size: 0.7rem; font-weight: 700; color: var(--text-dim); }
+.dash-stat-label { font-size: 0.72rem; color: var(--text-dim); font-weight: 700; margin-top: 3px; }
+
+.dash-section-title { font-size: 0.78rem; font-weight: 800; color: rgba(255,255,255,0.75); text-transform: uppercase; letter-spacing: 0.03em; margin: 0.2rem 0 0.6rem; }
+/* Bandeau de cartes en vedette - vraies vignettes de carte (voir .game-card),
+   pas des icônes rondes : répond directement à la remarque de l'utilisateur
+   ("les cartes de jeu doivent être immédiatement visibles et mises en
+   avant"). Défilement horizontal, largeur fixe par carte. */
+.dash-cards-scroll { display: flex; gap: 0.7rem; overflow-x: auto; padding: 0.1rem 0.1rem 1.2rem; margin: 0 -0.1rem; -webkit-overflow-scrolling: touch; }
+.dash-mini-card { flex-shrink: 0; width: 84px; position: relative; }
+.dash-mini-card .game-card-sm { box-shadow: 0 2px 8px rgba(23,19,57,0.25); border-radius: 12px; }
+.dash-mini-card-count {
+	position: absolute; top: 4px; right: 4px; background: rgba(255,255,255,0.92); color: var(--ink);
+	font-family: var(--font-display); font-size: 0.68rem; font-weight: 800; border-radius: 999px; padding: 1px 6px;
+	box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.dash-mini-card-label { font-size: 0.68rem; font-weight: 700; text-align: center; margin-top: 5px; color: #fff; }
+
+.dash-action-row { display: flex; gap: 0.6rem; margin-bottom: 0.8rem; }
+.dash-action-btn {
+	flex: 1; background: #fff; border: none; border-radius: 14px; padding: 0.75rem 0.4rem; text-align: center;
+	font-size: 0.8rem; font-weight: 700; color: var(--text); font-family: inherit; cursor: pointer;
+}
+.dash-action-btn.primary { background: linear-gradient(150deg, var(--accent), var(--accent-dark)); color: #fff; }
+.dash-action-ic { font-size: 1.2rem; display: block; margin-bottom: 3px; }
+
+/* ============ Barre de navigation basse persistante ============ */
+.bottom-nav {
+	display: flex; gap: 0.2rem; margin-top: 1rem; background: #fff; border-radius: 20px;
+	padding: 0.5rem 0.4rem; box-shadow: 0 2px 8px rgba(23,19,57,0.15), 0 -2px 12px -6px rgba(23,19,57,0.1);
+	position: sticky; bottom: 0.6rem;
+}
+.bottom-nav-item {
+	flex: 1; background: none; border: none; border-radius: 14px; padding: 0.5rem 0.2rem; text-align: center;
+	font-size: 0.68rem; font-weight: 700; color: var(--text-dim); font-family: inherit; cursor: pointer;
+	transition: background 0.15s ease, color 0.15s ease;
+}
+.bottom-nav-ic { font-size: 1.3rem; display: block; margin-bottom: 2px; }
+.bottom-nav-item-active { color: var(--accent-dark); background: #efecfe; }

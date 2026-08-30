@@ -1764,3 +1764,28 @@ msgstr "Vendu à {name}"
 
 msgid "playerView.history_bought_from"
 msgstr "Acheté à {name}"
+
+# ============ Refonte du hub (30/08/2026) : barre de navigation basse ============
+msgid "playerView.nav_home"
+msgstr "Accueil"
+
+msgid "playerView.nav_cards_short"
+msgstr "Cartes"
+
+msgid "playerView.nav_stats_short"
+msgstr "Stats"
+
+msgid "playerView.nav_profile_short"
+msgstr "Profil"
+
+msgid "playerView.stat_unit_coins"
+msgstr "jetons"
+
+msgid "playerView.stat_cards_in_hand"
+msgstr "Cartes en main"
+
+msgid "trade.btn_scan_short"
+msgstr "Scanner"
+
+msgid "trade.btn_manual_entry_short"
+msgstr "Code"

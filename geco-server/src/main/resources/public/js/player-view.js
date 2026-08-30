@@ -66,6 +66,17 @@ function showScreen(id) {
 	stopCamera(); // toujours couper la caméra en quittant scanCamera, quel que soit l'écran de destination
 	clearQrCountdown();
 	SCREENS.forEach((s) => el(s).classList.toggle("hidden", s !== id));
+	// Revenir au hub (bouton "Retour" depuis n'importe quel écran) doit aussi
+	// remettre "Accueil" actif dans la barre de nav basse.
+	if (id === "viewContent") setActiveNav("navBtnHome");
+}
+
+// Met en évidence l'onglet actif de la barre de navigation basse (voir
+// player-view.html) - un seul actif à la fois.
+function setActiveNav(activeId) {
+	["navBtnHome", "navBtnCards", "navBtnStats", "navBtnProfile"].forEach((id) => {
+		el(id).classList.toggle("bottom-nav-item-active", id === activeId);
+	});
 }
 
 // ---------- Consultation (ex-refresh() de l'ancienne version de cette page) ----------
@@ -94,6 +105,8 @@ function isDebtGame() {
 async function refreshPlayer() {
 	if (!state.gameId || !state.token) {
 		el("viewError").classList.remove("hidden");
+		el("screensContainer").classList.add("hidden");
+		el("bottomNav").classList.add("hidden");
 		return;
 	}
 	try {
@@ -103,25 +116,76 @@ async function refreshPlayer() {
 		el("viewError").classList.add("hidden");
 		el("playerName").textContent = state.player.name;
 		el("playerStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
+		// Initiale de l'avatar (voir .dash-avatar) - un simple cercle de
+		// couleur avec la première lettre du nom, en attendant un vrai avatar
+		// choisi par le joueur (voir player.js pour l'écran d'inscription).
+		el("dashAvatar").textContent = (state.player.name || "?").charAt(0).toUpperCase();
 		// Le solde en jetons n'a de sens qu'en dette/libre - le troc n'a jamais
 		// de jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
 		el("balanceCard").classList.toggle("hidden", isTrocGame());
 		// Bouton "Demander un crédit" : monnaie dette uniquement (voir isDebtGame()).
 		el("btnOpenCreditRequest").classList.toggle("hidden", !isDebtGame());
-		if (!isTrocGame()) el("balanceCardValue").textContent = t("trade.balance_value", { n: state.player.tradeBalance });
+		if (!isTrocGame()) el("balanceCardValue").textContent = state.player.tradeBalance;
+		el("dashCardCount").textContent = state.player.goodsCount || 0;
 		const details = el("playerDetails");
 		let detailsHtml = "";
-		if (state.player.goodsCount > 0) detailsHtml += `<p>${t("playerView.goods_count", { n: state.player.goodsCount })}</p>`;
 		if ((state.player.curDebt > 0) || (state.player.curInterest > 0))
 			detailsHtml += `<p>${t("playerView.current_credit", { debt: state.player.curDebt, interest: state.player.curInterest })}</p>`;
 		details.innerHTML = detailsHtml;
+		// Bandeau "Mes cartes" en vedette sur le hub (voir le raisonnement en
+		// tête de player-view.html : les cartes doivent être immédiatement
+		// visibles, pas seulement accessibles via un clic de plus).
+		await renderDashCardsPreview();
 	} catch (err) {
 		el("viewError").classList.remove("hidden");
+		el("screensContainer").classList.add("hidden");
+		el("bottomNav").classList.add("hidden");
 		return;
 	}
+	el("screensContainer").classList.remove("hidden");
+	el("bottomNav").classList.remove("hidden");
 	// Ne bascule sur le hub que si aucun autre écran d'échange n'est déjà affiché
 	// (le rafraîchissement périodique ne doit pas interrompre une vente/un achat en cours).
 	if (SCREENS.every((s) => el(s).classList.contains("hidden"))) showScreen("viewContent");
+}
+
+// Bandeau de cartes en vedette sur le hub (voir dashCardsSection) - un
+// aperçu compact de l'inventaire réel (voir renderMyCards pour la vue
+// complète, groupée par secteur). Monnaie libre uniquement (seul système
+// avec un vrai inventaire suivi aujourd'hui, voir isLibreGame()) - masqué
+// sinon plutôt que d'afficher un bandeau vide.
+async function renderDashCardsPreview() {
+	const section = el("dashCardsSection");
+	if (!isLibreGame()) {
+		section.classList.add("hidden");
+		return;
+	}
+	try {
+		if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
+		if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
+		const inventory = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`)
+			.then((r) => r.json());
+		const cardIds = Object.keys(inventory);
+		if (cardIds.length === 0) {
+			section.classList.add("hidden");
+			return;
+		}
+		section.classList.remove("hidden");
+		el("dashCardsScroll").innerHTML = cardIds.slice(0, 8).map((cardId) => {
+			const entry = state.cardsCatalog.find((c) => c.id === cardId);
+			if (!entry) return "";
+			const visual = state.visualsCatalog.find((v) => v.id === entry.visualId);
+			const label = visual ? (catalogTextValue(visual.etiquette) || catalogTextValue(entry.nom)) : catalogTextValue(entry.nom);
+			return `
+			<div class="dash-mini-card">
+				${buildGameCardHtml(entry, visual, "game-card-sm")}
+				<span class="dash-mini-card-count">×${inventory[cardId]}</span>
+				<div class="dash-mini-card-label">${escapeHtmlLocal(label || entry.id)}</div>
+			</div>`;
+		}).join("");
+	} catch (err) {
+		section.classList.add("hidden"); // repli prudent : mieux vaut masquer que casser le hub
+	}
 }
 
 // ============================================================
@@ -782,9 +846,13 @@ function showTradeResult(success, title, body) {
 // ---------- Câblage des boutons (une fois, au chargement) ----------
 function initTradeUI() {
 	el("btnOpenSell").addEventListener("click", openSellPicker);
-	el("btnOpenMyCards").addEventListener("click", renderMyCards);
-	el("btnOpenLeaderboard").addEventListener("click", renderLeaderboard);
-	el("btnOpenHistory").addEventListener("click", renderHistory);
+	// Barre de navigation basse persistante (voir le raisonnement en tête de
+	// player-view.html) - remplace les anciens boutons empilés sur le hub
+	// (btnOpenMyCards/btnOpenLeaderboard/btnOpenHistory, retirés du HTML).
+	el("navBtnHome").addEventListener("click", () => { showScreen("viewContent"); setActiveNav("navBtnHome"); });
+	el("navBtnCards").addEventListener("click", () => { renderMyCards(); setActiveNav("navBtnCards"); });
+	el("navBtnStats").addEventListener("click", () => { renderLeaderboard(); setActiveNav("navBtnStats"); });
+	el("navBtnProfile").addEventListener("click", () => { renderHistory(); setActiveNav("navBtnProfile"); });
 	el("btnOpenCreditRequest").addEventListener("click", renderCreditRequest);
 	el("btnOpenScan").addEventListener("click", openScan);
 	el("btnOpenManualEntry").addEventListener("click", openManualEntry);

@@ -1762,3 +1762,28 @@ msgstr "Sold to {name}"
 
 msgid "playerView.history_bought_from"
 msgstr "Bought from {name}"
+
+# ============ Hub redesign (30/08/2026): bottom navigation bar ============
+msgid "playerView.nav_home"
+msgstr "Home"
+
+msgid "playerView.nav_cards_short"
+msgstr "Cards"
+
+msgid "playerView.nav_stats_short"
+msgstr "Stats"
+
+msgid "playerView.nav_profile_short"
+msgstr "Profile"
+
+msgid "playerView.stat_unit_coins"
+msgstr "tokens"
+
+msgid "playerView.stat_cards_in_hand"
+msgstr "Cards in hand"
+
+msgid "trade.btn_scan_short"
+msgstr "Scan"
+
+msgid "trade.btn_manual_entry_short"
+msgstr "Code"
