@@ -1925,3 +1925,7 @@ msgstr "4× {cashed} → 1× {promoted}"
 
 msgid "game.squares_breakthrough"
 msgstr "Rupture technologique"
+
+# ============ Regroupement par valeur dans Mes cartes (31/08/2026) ============
+msgid "playerView.cards_group_value_title"
+msgstr "Cartes de valeur {level}"

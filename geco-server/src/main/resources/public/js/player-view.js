@@ -453,7 +453,9 @@ const LEVEL_VALUE = { faible: 3, moyenne: 6, forte: 12, tresforte: 24 };
 async function renderMyCards() {
 	showScreen("myCardsScreen");
 	if (!state.myCardsViewMode) state.myCardsViewMode = "grid";
-	if (!state.myCardsSortMode) state.myCardsSortMode = "category";
+	// Remonté par l'utilisateur (31/08/2026) : "il faut faire de valeur
+	// l'affichage par défaut" - auparavant "catégorie".
+	if (!state.myCardsSortMode) state.myCardsSortMode = "value";
 
 	// Remonté par l'utilisateur le 31/08/2026 : "on ne voit plus les boutons de
 	// filtres" en vue liste - la barre entière était masquée dans ce mode, sans
@@ -503,36 +505,73 @@ function cardThumbInner(item) {
 		: `<span class="card-emoji" aria-hidden="true">🖼️</span>`;
 }
 
-// Vue grille : groupée par secteur, une rangée défilante par groupe (voir
-// .category-section/.cards-scroll-container/.game-card). data-card-id sur
+// Regroupement partagé grille/liste, selon le critère de tri choisi -
+// remonté par l'utilisateur (31/08/2026) : "il faut que le titre ET le type
+// de classement et d'affichage changent en fonction du filtre", pas
+// seulement l'ordre des cartes à l'intérieur d'un groupement toujours par
+// secteur. Trois comportements bien distincts :
+// - "category" : regroupé par secteur (Alimentation, Agriculture...), comme
+//   avant - le seul mode qui regroupe par secteur.
+// - "value" (DÉSORMAIS LE TRI PAR DÉFAUT) : regroupé par NIVEAU (voir
+//   LEVEL_VALUE) - "Cartes de valeur faible" en premier, puis moyenne,
+//   forte, tresforte - indépendamment du secteur.
+// - "quantity" : AUCUN regroupement, une liste plate triée de la carte la
+//   plus nombreuse à la moins nombreuse (voir "on affiche de la carte qu'on
+//   a dans le plus grand nombre d'exemplaires vers la carte qu'on a dans le
+//   plus petit nombre" - pas de titre de groupe dans ce mode).
+// Renvoie toujours un tableau de {title, count, cards} - title === null en
+// mode "quantity" (aucun en-tête à afficher).
+function groupCardsForDisplay(items, sortMode) {
+	if (sortMode === "quantity") {
+		return [{ title: null, count: null, cards: [...items].sort((a, b) => b.count - a.count) }];
+	}
+	if (sortMode === "value") {
+		const order = ["faible", "moyenne", "forte", "tresforte"];
+		const groups = new Map();
+		for (const item of items) {
+			const level = item.entry.niveau;
+			if (!groups.has(level)) groups.set(level, []);
+			groups.get(level).push(item);
+		}
+		return order.filter((level) => groups.has(level)).map((level) => {
+			const cards = groups.get(level);
+			return {
+				title: t("playerView.cards_group_value_title", { level: catalogEnumLabel("level", level) }),
+				count: cards.reduce((sum, c) => sum + c.count, 0),
+				cards,
+			};
+		});
+	}
+	// "category" (par secteur, comportement historique de cet écran).
+	const groups = new Map();
+	for (const item of items) {
+		const sector = item.entry.secteur || "ressources";
+		if (!groups.has(sector)) groups.set(sector, []);
+		groups.get(sector).push(item);
+	}
+	return [...groups.entries()].map(([sector, cards]) => ({
+		title: catalogEnumLabel("sector", sector),
+		count: cards.reduce((sum, c) => sum + c.count, 0),
+		cards,
+	}));
+}
+
+// Vue grille : une rangée défilante par groupe (voir groupCardsForDisplay
+// pour ce qui définit un "groupe" selon le tri choisi) - voir
+// .category-section/.cards-scroll-container/.game-card. data-card-id sur
 // chaque tuile (voir openCardModal) : le clic ouvre la carte en grand plutôt
 // que de scraper le texte affiché, on a déjà toute la donnée structurée ici.
 function renderMyCardsGrid(body, items) {
-	const bySector = new Map();
-	for (const item of items) {
-		const sector = item.entry.secteur || "ressources";
-		if (!bySector.has(sector)) bySector.set(sector, []);
-		bySector.get(sector).push(item);
-	}
-	// Remonté par l'utilisateur le 31/08/2026 : le tri choisi (voir
-	// myCardsSortSelect) doit se répercuter sur l'affichage, y compris en vue
-	// grille - jusqu'ici il ne s'appliquait qu'à la vue liste, la grille
-	// restait toujours identique quel que soit le critère choisi. Trie
-	// désormais les cartes À L'INTÉRIEUR de chaque groupe (les groupes
-	// eux-mêmes restent par secteur, la grille reste une vue "par
-	// catégorie" avant tout - seul l'ORDRE des cartes dans chaque groupe change).
-	for (const cards of bySector.values()) {
-		if (state.myCardsSortMode === "value") cards.sort((a, b) => b.value - a.value);
-		else if (state.myCardsSortMode === "quantity") cards.sort((a, b) => b.count - a.count);
-	}
-	body.innerHTML = [...bySector.entries()].map(([sector, cards]) => `
+	const groups = groupCardsForDisplay(items, state.myCardsSortMode);
+	body.innerHTML = groups.map((group) => `
 		<section class="category-section">
+			${group.title ? `
 			<div class="category-header">
-				<h2 class="category-title">${escapeHtmlLocal(catalogEnumLabel("sector", sector))}</h2>
-				<span class="category-count">${cards.reduce((sum, c) => sum + c.count, 0)}</span>
-			</div>
+				<h2 class="category-title">${escapeHtmlLocal(group.title)}</h2>
+				<span class="category-count">${group.count}</span>
+			</div>` : ""}
 			<div class="cards-scroll-container">
-				${cards.map((item) => `
+				${group.cards.map((item) => `
 				<div class="game-card card-${item.tileColor}" data-card-id="${escapeHtmlLocal(item.entry.id)}">
 					<span class="card-name">${escapeHtmlLocal(item.label)}</span>
 					<div class="card-image-wrapper">${cardThumbInner(item)}</div>
@@ -543,32 +582,35 @@ function renderMyCardsGrid(body, items) {
 	wireCardModalClicks(body, items);
 }
 
-// Vue liste : triable par catégorie/valeur/quantité (voir
-// .cards-list-view/.card-list-item) - le tri "par catégorie" garde un ordre
-// alphabétique de secteur, "par valeur"/"par quantité" trient décroissant
-// (la carte la plus intéressante en premier, cohérent avec l'intention du
-// mockup de référence : "Cochon 20 ×3" en tête de liste).
+// Vue liste : même regroupement que la grille (voir groupCardsForDisplay) -
+// remonté par l'utilisateur (31/08/2026) : "quand on passe en affichage
+// liste... on ne voit plus le type de classement" - la vue liste n'affichait
+// jusqu'ici AUCUN titre de groupe, quel que soit le tri. Corrigé : mêmes
+// titres que la grille, juste des lignes au lieu de tuiles.
 function renderMyCardsList(body, items) {
-	const sorted = [...items];
-	if (state.myCardsSortMode === "value") sorted.sort((a, b) => b.value - a.value);
-	else if (state.myCardsSortMode === "quantity") sorted.sort((a, b) => b.count - a.count);
-	else sorted.sort((a, b) => catalogEnumLabel("sector", a.entry.secteur).localeCompare(catalogEnumLabel("sector", b.entry.secteur)));
-
-	body.innerHTML = `
-		<ul class="cards-list-view">
-			${sorted.map((item) => `
-			<li class="card-list-item" data-card-id="${escapeHtmlLocal(item.entry.id)}">
-				<div class="item-left">
-					<div class="item-thumb card-${item.tileColor}">${cardThumbInner(item)}</div>
-					<span class="item-name">${escapeHtmlLocal(item.label)}</span>
-				</div>
-				<div class="item-right">
-					<span class="item-value">${item.value}</span>
-					<span class="item-quantity-badge">×${item.count}</span>
-				</div>
-			</li>`).join("")}
-		</ul>`;
-	wireCardModalClicks(body, sorted);
+	const groups = groupCardsForDisplay(items, state.myCardsSortMode);
+	body.innerHTML = groups.map((group) => `
+		<section class="category-section">
+			${group.title ? `
+			<div class="category-header">
+				<h2 class="category-title">${escapeHtmlLocal(group.title)}</h2>
+				<span class="category-count">${group.count}</span>
+			</div>` : ""}
+			<ul class="cards-list-view">
+				${group.cards.map((item) => `
+				<li class="card-list-item" data-card-id="${escapeHtmlLocal(item.entry.id)}">
+					<div class="item-left">
+						<div class="item-thumb card-${item.tileColor}">${cardThumbInner(item)}</div>
+						<span class="item-name">${escapeHtmlLocal(item.label)}</span>
+					</div>
+					<div class="item-right">
+						<span class="item-value">${item.value}</span>
+						<span class="item-quantity-badge">×${item.count}</span>
+					</div>
+				</li>`).join("")}
+			</ul>
+		</section>`).join("");
+	wireCardModalClicks(body, items);
 }
 
 // ============================================================

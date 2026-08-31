@@ -1923,3 +1923,7 @@ msgstr "4× {cashed} → 1× {promoted}"
 
 msgid "game.squares_breakthrough"
 msgstr "Technological breakthrough"
+
+# ============ Grouping by value in My cards (31/08/2026) ============
+msgid "playerView.cards_group_value_title"
+msgstr "{level} value cards"

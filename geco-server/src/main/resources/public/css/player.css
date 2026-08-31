@@ -606,11 +606,13 @@ body {
 
 .cards-list-view {
 	list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px;
-	/* Remonté par l'utilisateur le 31/08/2026 : les cartes touchaient la
-	   barre de filtres au-dessus - 30px d'air en plus, spécifique à la vue
-	   liste (la vue grille a déjà son propre espacement via .category-section). */
-	margin-top: 30px;
 }
+/* Remonté par l'utilisateur (31/08/2026) : liste et grille partagent
+   désormais la même structure .category-section/.category-header (voir
+   groupCardsForDisplay dans player-view.js) - le même espacement
+   header->contenu (gap: 8px, voir .category-section) s'applique donc
+   naturellement aux deux vues, "un affichage de cartes qui démarre à la
+   même hauteur qu'en vue vignettes" sans marge spécifique à ajouter ici. */
 .card-list-item {
 	background-color: var(--bg-card); border-radius: 16px; padding: 10px 14px; display: flex;
 	align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.02);
