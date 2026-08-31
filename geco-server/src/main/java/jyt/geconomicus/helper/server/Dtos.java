@@ -115,6 +115,36 @@ public class Dtos
 		}
 	}
 
+	/**
+	 * Encaissement d'un carré (voir CardSquareEvent) - remonté par
+	 * l'utilisateur (31/08/2026) : "toutes ces opérations sont enregistrées
+	 * dans l'historique du tour... et seront transmises à l'application de
+	 * l'animateur".
+	 */
+	public record CardSquareEventDto(Integer id, Integer playerId, String playerName, int turnNumber, long timestamp,
+			String cashedCardTypeId, String cashedLevel, String promotedCardTypeId, String promotedLevel,
+			java.util.List<String> replenishedCardIds, boolean triggeredBreakthrough)
+	{
+		static CardSquareEventDto from(final jyt.geconomicus.helper.CardSquareEvent s)
+		{
+			java.util.List<String> replenished;
+			try
+			{
+				replenished = new com.fasterxml.jackson.databind.ObjectMapper().readValue(s.getReplenishedCardIdsJson(),
+						new com.fasterxml.jackson.core.type.TypeReference<java.util.ArrayList<String>>()
+						{
+						});
+			}
+			catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+			{
+				replenished = java.util.List.of(); // donnée corrompue (ne devrait jamais arriver) : liste vide plutôt qu'une erreur
+			}
+			return new CardSquareEventDto(s.getId(), s.getPlayer().getId(), s.getPlayer().getName(), s.getTurnNumber(),
+					s.getTstamp() == null ? 0 : s.getTstamp().getTime(), s.getCashedCardTypeId(), s.getCashedLevel(),
+					s.getPromotedCardTypeId(), s.getPromotedLevel(), replenished, s.isTriggeredBreakthrough());
+		}
+	}
+
 	public record GameSummaryDto(Integer id, String description, int moneySystem, int turnNumber,
 			int nbTurnsPlanned, String location, String curdate)
 	{

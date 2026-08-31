@@ -814,41 +814,81 @@ async function renderHistory() {
 	body.innerHTML = `<li style="color:var(--text-muted);font-size:0.85rem;">${t("settings.catalog_loading")}</li>`;
 	try {
 		if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
-		const txs = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/transactions`).then((r) => r.json());
-		if (txs.length === 0) {
+		// Deux journaux distincts (voir CardSquareEvent.java : un carré n'est
+		// PAS une Transaction, c'est une interaction avec la pioche partagée,
+		// pas un échange entre deux joueurs) - fusionnés ici, triés par date,
+		// pour un historique unique du point de vue du joueur. Remonté par
+		// l'utilisateur (31/08/2026) : "toutes ces opérations sont enregistrées
+		// dans l'historique du tour, dans le smartphone du joueur".
+		const [txs, squares] = await Promise.all([
+			fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/transactions`).then((r) => r.json()),
+			fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/squares`).then((r) => r.json()),
+		]);
+		if ((txs.length === 0) && (squares.length === 0)) {
 			body.innerHTML = `<li style="color:var(--text-muted);font-size:0.85rem;">${t("playerView.history_empty")}</li>`;
 			return;
 		}
-		body.innerHTML = txs.map((tx) => {
-			const isSale = tx.sellerPlayerId === state.player.id;
-			const entry = state.cardsCatalog.find((c) => c.id === tx.cardTypeId);
-			const cardName = entry ? (catalogTextValue(entry.nom) || tx.cardTypeId) : tx.cardTypeId;
-			const partner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;
-			const verbKey = isSale ? "playerView.history_sold_to" : "playerView.history_bought_from";
-			// Vendre = on reçoit (badge vert, +) ; acheter = on donne (badge
-			// rouge, -) - vrai pour les jetons comme pour les cartes en troc
-			// (voir Transaction.buyerWeakGoods&co, toujours donné par l'ACHETEUR).
-			const amountValue = tx.isGoodsTrade
-				? (tx.buyerWeakGoods + tx.buyerMediumGoods + tx.buyerStrongGoods)
-				: tx.totalCoinsValue;
-			const amountLabel = tx.isGoodsTrade
-				? t("playerView.history_goods_amount_short", { n: amountValue })
-				: String(amountValue);
-			return `
-			<li class="leaderboard-item">
-				<div class="player-info">
-					<div class="avatar-badge ${isSale ? "bg-teal" : "bg-pink"}">${isSale ? "+" : "−"}</div>
-					<div>
-						<div class="player-name">${escapeHtmlLocal(cardName)}</div>
-						<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t(verbKey, { name: partner }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))}</div>
-					</div>
-				</div>
-				<span class="player-score" style="color:${isSale ? "var(--green-positive)" : "var(--danger, #dc2626)"};">${isSale ? "+" : "−"}${escapeHtmlLocal(amountLabel)}</span>
-			</li>`;
-		}).join("");
+		const items = [
+			...txs.map((tx) => ({ kind: "transaction", timestamp: tx.timestamp, data: tx })),
+			...squares.map((sq) => ({ kind: "square", timestamp: sq.timestamp, data: sq })),
+		].sort((a, b) => b.timestamp - a.timestamp);
+		body.innerHTML = items.map((item) => (item.kind === "transaction"
+			? historyTransactionRowHtml(item.data)
+			: historySquareRowHtml(item.data))).join("");
 	} catch (err) {
 		body.innerHTML = `<li style="color:var(--danger)">${t("game.transactions_load_error")}</li>`;
 	}
+}
+
+function historyTransactionRowHtml(tx) {
+	const isSale = tx.sellerPlayerId === state.player.id;
+	const entry = state.cardsCatalog.find((c) => c.id === tx.cardTypeId);
+	const cardName = entry ? (catalogTextValue(entry.nom) || tx.cardTypeId) : tx.cardTypeId;
+	const partner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;
+	const verbKey = isSale ? "playerView.history_sold_to" : "playerView.history_bought_from";
+	// Vendre = on reçoit (badge vert, +) ; acheter = on donne (badge
+	// rouge, -) - vrai pour les jetons comme pour les cartes en troc
+	// (voir Transaction.buyerWeakGoods&co, toujours donné par l'ACHETEUR).
+	const amountValue = tx.isGoodsTrade
+		? (tx.buyerWeakGoods + tx.buyerMediumGoods + tx.buyerStrongGoods)
+		: tx.totalCoinsValue;
+	const amountLabel = tx.isGoodsTrade
+		? t("playerView.history_goods_amount_short", { n: amountValue })
+		: String(amountValue);
+	return `
+	<li class="leaderboard-item">
+		<div class="player-info">
+			<div class="avatar-badge ${isSale ? "bg-teal" : "bg-pink"}">${isSale ? "+" : "−"}</div>
+			<div>
+				<div class="player-name">${escapeHtmlLocal(cardName)}</div>
+				<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t(verbKey, { name: partner }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))}</div>
+			</div>
+		</div>
+		<span class="player-score" style="color:${isSale ? "var(--green-positive)" : "var(--danger, #dc2626)"};">${isSale ? "+" : "−"}${escapeHtmlLocal(amountLabel)}</span>
+	</li>`;
+}
+
+// Ligne d'historique pour un carré encaissé (voir CardSquareEventDto) -
+// distincte visuellement d'une transaction (badge violet ⬡, jamais +/-
+// puisqu'un carré est neutre en richesse par construction, voir
+// StatsService.computeGain/docs/10-etape-plugins-troc.md).
+function historySquareRowHtml(sq) {
+	const cashedEntry = state.cardsCatalog.find((c) => c.id === sq.cashedCardTypeId);
+	const promotedEntry = state.cardsCatalog.find((c) => c.id === sq.promotedCardTypeId);
+	const cashedName = cashedEntry ? (catalogTextValue(cashedEntry.nom) || sq.cashedCardTypeId) : sq.cashedCardTypeId;
+	const promotedName = promotedEntry ? (catalogTextValue(promotedEntry.nom) || sq.promotedCardTypeId) : sq.promotedCardTypeId;
+	const breakthroughBadge = sq.triggeredBreakthrough
+		? `<span style="color:var(--primary-purple);font-weight:800;"> ⚡ ${escapeHtmlLocal(t("playerView.history_square_breakthrough"))}</span>` : "";
+	return `
+	<li class="leaderboard-item">
+		<div class="player-info">
+			<div class="avatar-badge bg-purple">⬡</div>
+			<div>
+				<div class="player-name">${escapeHtmlLocal(t("playerView.history_square_title"))}</div>
+				<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t("playerView.history_square_detail", { cashed: cashedName, promoted: promotedName }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: sq.turnNumber }))}${breakthroughBadge}</div>
+			</div>
+		</div>
+	</li>`;
 }
 
 // ============================================================

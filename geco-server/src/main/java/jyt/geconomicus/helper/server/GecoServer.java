@@ -947,6 +947,31 @@ public class GecoServer
 					.map(Dtos.TransactionDto::from).toList());
 		});
 
+		// Historique des carrés d'UN joueur - voir "Historique" côté espace
+		// joueur, remonté par l'utilisateur (31/08/2026) : "enregistrées dans
+		// l'historique du tour, dans le smartphone du joueur". Même principe
+		// d'exemption que la route transactions ci-dessus.
+		pApp.get("/api/games/{id}/players/by-token/{token}/squares", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final String token = ctx.pathParam("token"); //$NON-NLS-1$
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final Player player = game.getPlayers().stream()
+					.filter(p -> (p.getAccessToken() != null) && p.getAccessToken().equals(token)).findFirst()
+					.orElse(null);
+			if (player == null)
+			{
+				ctx.status(404).json(java.util.Map.of("error", "Jeton inconnu.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			ctx.json(mGameService.listPlayerSquares(id, player.getId()).stream()
+					.map(Dtos.CardSquareEventDto::from).toList());
+		});
+
 		// Classement des joueurs actifs d'une partie (voir "Classement de la
 		// partie", même mockup) - voir GameService.computeLeaderboard pour la
 		// formule et sa portée assumée.
@@ -1220,6 +1245,15 @@ public class GecoServer
 		pApp.get("/api/games/{id}/transactions", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			ctx.json(mGameService.listTransactions(id).stream().map(Dtos.TransactionDto::from).toList());
+		});
+
+		// Historique COMPLET des carrés d'une partie - écran animateur,
+		// protégée par le PIN normalement (voir GameService.listGameSquares).
+		// Remonté par l'utilisateur (31/08/2026) : "seront transmises à
+		// l'application de l'animateur lors de l'entre-deux tour".
+		pApp.get("/api/games/{id}/squares", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			ctx.json(mGameService.listGameSquares(id).stream().map(Dtos.CardSquareEventDto::from).toList());
 		});
 
 		// --- Offres de vente à courte durée de vie (scan caméra ET saisie

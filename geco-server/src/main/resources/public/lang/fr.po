@@ -1892,3 +1892,23 @@ msgstr "Vous avez vendu {name} à {buyer}."
 # ============ Blocage des echanges pendant la pause du minuteur (31/08/2026) ============
 msgid "trade.trading_paused"
 msgstr "Les échanges sont actuellement en pause. Attendez la reprise du tour."
+
+# ============ Traçabilité des carrés dans l'historique joueur (31/08/2026) ============
+msgid "playerView.history_square_title"
+msgstr "Carré encaissé"
+
+msgid "playerView.history_square_detail"
+msgstr "4× {cashed} → 1× {promoted}"
+
+msgid "playerView.history_square_breakthrough"
+msgstr "Rupture technologique"
+
+# ============ Carrés dans le panneau echanges animateur (31/08/2026) ============
+msgid "game.squares_section_title"
+msgstr "Carrés encaissés ({count})"
+
+msgid "game.squares_detail"
+msgstr "4× {cashed} → 1× {promoted}"
+
+msgid "game.squares_breakthrough"
+msgstr "Rupture technologique"

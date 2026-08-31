@@ -869,6 +869,27 @@ public class GameService
 					final java.util.Map<String, Integer> hand = new java.util.LinkedHashMap<>();
 					for (int i = 0; (i < 4) && (bagIndex < faibleBag.size()); i++)
 					{
+						// Remonté par l'utilisateur (31/08/2026) : "ne pas distribuer de
+						// carré tout prêt" - un joueur découvrait un carré déjà réuni dès
+						// la mise en place, avant tout échange. Cherche, dans le RESTE du
+						// sac (déjà mélangé), une carte qui ne donnerait pas au joueur son
+						// 4e exemplaire d'un même modèle ; l'échange par permutation
+						// préserve le caractère aléatoire du tirage (voir bagIndex, qui
+						// avance toujours de 1, seule la carte à CETTE position change).
+						// Repli assumé si aucune carte ne convient (cas extrême : tout le
+						// reste du sac est déjà le modèle dont ce joueur a 3 exemplaires) :
+						// on distribue quand même plutôt que de bloquer toute la mise en
+						// place pour un cas aussi improbable.
+						int swapIndex = bagIndex;
+						for (int j = bagIndex; j < faibleBag.size(); j++)
+						{
+							if (hand.getOrDefault(faibleBag.get(j), 0) < 3)
+							{
+								swapIndex = j;
+								break;
+							}
+						}
+						java.util.Collections.swap(faibleBag, bagIndex, swapIndex);
 						final String cardId = faibleBag.get(bagIndex++);
 						hand.merge(cardId, 1, Integer::sum);
 						faiblePile.merge(cardId, -1, Integer::sum); // retiré de la pioche, remis en main du joueur
@@ -1121,6 +1142,56 @@ public class GameService
 					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid) ORDER BY t.tstamp DESC", //$NON-NLS-1$
 					Transaction.class)
 					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.getResultList();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
+	 * Historique des carrés (voir CardSquareEvent) encaissés par UN joueur -
+	 * remonté par l'utilisateur (31/08/2026) : "toutes ces opérations sont
+	 * enregistrées dans l'historique du tour, dans le smartphone du joueur".
+	 * Même principe que {@link #listPlayerTransactions} : un joueur sur son
+	 * téléphone ne connaît jamais le PIN de l'animateur, cette méthode ne
+	 * renvoie donc que SES propres carrés.
+	 */
+	public List<CardSquareEvent> listPlayerSquares(final int pGameId, final int pPlayerId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			return em.createQuery(
+					"SELECT s FROM CardSquareEvent s WHERE s.game.id = :gameId AND s.player.id = :pid ORDER BY s.tstamp DESC", //$NON-NLS-1$
+					CardSquareEvent.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.getResultList();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
+	 * Historique COMPLET des carrés d'une partie, tous joueurs confondus -
+	 * remonté par l'utilisateur : "seront transmises à l'application de
+	 * l'animateur lors de l'entre-deux tour". Distincte de {@link
+	 * #listPlayerSquares} (un seul joueur) au même titre que {@link
+	 * #listTransactions}/{@link #listPlayerTransactions} : réservée à
+	 * l'écran animateur, protégée par le PIN normalement.
+	 */
+	public List<CardSquareEvent> listGameSquares(final int pGameId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			return em.createQuery(
+					"SELECT s FROM CardSquareEvent s WHERE s.game.id = :gameId ORDER BY s.tstamp DESC", //$NON-NLS-1$
+					CardSquareEvent.class)
+					.setParameter("gameId", pGameId) //$NON-NLS-1$
 					.getResultList();
 		}
 		finally

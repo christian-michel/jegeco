@@ -140,6 +140,10 @@ const Api = {
 	// l'assistant de fin de tour pour pré-remplir automatiquement le bilan de
 	// chaque joueur (voir renderStepAllPlayersMoney dans openEndOfTurnWizard).
 	getTransactions: (gameId) => api(`/api/games/${gameId}/transactions`),
+	// Historique complet des carrés (voir CardSquareEvent) - remonté par
+	// l'utilisateur (31/08/2026) : "seront transmises à l'application de
+	// l'animateur lors de l'entre-deux tour".
+	getSquares: (gameId) => api(`/api/games/${gameId}/squares`),
 	checkForUpdates: () => api("/api/updates/check"),
 	listLanguages: () => api("/api/languages"),
 	// Le corps envoyé est le contenu BRUT du fichier .po (pas du JSON) - on
@@ -2606,15 +2610,18 @@ async function renderTransactionsPanel(gameId) {
 	body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
 
 	let transactions;
+	let squares;
 	let cardsCatalog;
 	try {
-		[transactions, cardsCatalog] = await Promise.all([Api.getTransactions(gameId), Api.getCatalog("cartes")]);
+		[transactions, squares, cardsCatalog] = await Promise.all([
+			Api.getTransactions(gameId), Api.getSquares(gameId), Api.getCatalog("cartes"),
+		]);
 	} catch (err) {
 		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
 		return;
 	}
 
-	if (transactions.length === 0) {
+	if ((transactions.length === 0) && (squares.length === 0)) {
 		body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("game.transactions_empty")}</p>`;
 		return;
 	}
@@ -2698,7 +2705,29 @@ async function renderTransactionsPanel(gameId) {
 			</li>`).join("")}
 		</ul>`;
 
-	body.innerHTML = summaryHtml + activityHtml + historyHtml;
+	// Historique des carrés (voir CardSquareEvent) - remonté par l'utilisateur
+	// (31/08/2026) : "seront transmises à l'application de l'animateur lors
+	// de l'entre-deux tour puis conservés dans les données des stats du
+	// jeu". Section distincte de l'historique des transactions ci-dessus :
+	// un carré n'est pas un échange entre deux joueurs, c'est une
+	// interaction avec la pioche partagée (voir CardSquareEvent.java).
+	const squaresHtml = (squares.length === 0) ? "" : `
+		<h4 style="margin:1.2rem 0 0.5rem;font-size:0.85rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.02em;">
+			${t("game.squares_section_title", { count: squares.length })}
+		</h4>
+		<ul class="events-list">
+			${squares.map((sq) => `
+			<li>
+				<strong>${escapeHtml(sq.playerName)}</strong>
+				<span class="event-meta">
+					${t("game.squares_detail", { cashed: escapeHtml(cardName(sq.cashedCardTypeId)), promoted: escapeHtml(cardName(sq.promotedCardTypeId)) })}
+					· ${t("game.transactions_turn_label", { n: sq.turnNumber })}
+					${sq.triggeredBreakthrough ? ` · ⚡ ${escapeHtml(t("game.squares_breakthrough"))}` : ""}
+				</span>
+			</li>`).join("")}
+		</ul>`;
+
+	body.innerHTML = summaryHtml + activityHtml + historyHtml + squaresHtml;
 }
 
 

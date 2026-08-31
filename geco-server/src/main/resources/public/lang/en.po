@@ -1890,3 +1890,23 @@ msgstr "You sold {name} to {buyer}."
 # ============ Trading paused while the turn timer is on hold (31/08/2026) ============
 msgid "trade.trading_paused"
 msgstr "Trading is currently paused. Wait for the turn to resume."
+
+# ============ Square tracking in player history (31/08/2026) ============
+msgid "playerView.history_square_title"
+msgstr "Square cashed in"
+
+msgid "playerView.history_square_detail"
+msgstr "4× {cashed} → 1× {promoted}"
+
+msgid "playerView.history_square_breakthrough"
+msgstr "Technological breakthrough"
+
+# ============ Squares in the animator's exchange panel (31/08/2026) ============
+msgid "game.squares_section_title"
+msgstr "Squares cashed in ({count})"
+
+msgid "game.squares_detail"
+msgstr "4× {cashed} → 1× {promoted}"
+
+msgid "game.squares_breakthrough"
+msgstr "Technological breakthrough"
