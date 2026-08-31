@@ -404,14 +404,13 @@ async function renderProfile() {
 // voir la note affichée en cas d'inventaire vide).
 // ============================================================
 
-// Couleur de tuile (voir .card-yellow/.card-green/.card-blue/.card-purple)
-// par secteur - 8 secteurs réels (CatalogSeeds/cartes.json) répartis sur les
-// 4 couleurs de la référence, par proximité thématique plutôt qu'un simple
-// cycle arbitraire.
-const SECTOR_TILE_COLOR = {
-	alimentation: "yellow", agriculture: "green", ressources: "blue", artisanat: "blue",
-	culture: "purple", transport: "purple", industrie: "purple", technologie: "purple",
-};
+// Couleur de tuile par NIVEAU (pas par secteur - remonté par l'utilisateur
+// le 31/08/2026 : "toutes les cartes d'une même valeur ont toujours la même
+// couleur... par convention, toutes les cartes de valeur faible ont un fond
+// jaune. Il ne faut pas de bleu ni vert dans le fond si ce sont des cartes
+// de valeur faible.") - correction d'une erreur de conception antérieure
+// (SECTOR_TILE_COLOR, colorait par secteur, retirée).
+const LEVEL_TILE_COLOR = { faible: "yellow", moyenne: "green", forte: "blue", tresforte: "purple" };
 // Valeur de référence d'une carte par niveau - geconomicus.glibre.org/libre_money.html :
 // "les cartes de valeur la plus basse valent chacune 3, les valeurs
 // moyennes 6, les valeurs hautes 12" (progression ×2, tresforte extrapolée à 24).
@@ -422,8 +421,10 @@ async function renderMyCards() {
 	if (!state.myCardsViewMode) state.myCardsViewMode = "grid";
 	if (!state.myCardsSortMode) state.myCardsSortMode = "category";
 
-	const filterBar = el("myCardsFilterBar");
-	filterBar.classList.toggle("hidden", state.myCardsViewMode === "list");
+	// Remonté par l'utilisateur le 31/08/2026 : "on ne voit plus les boutons de
+	// filtres" en vue liste - la barre entière était masquée dans ce mode, sans
+	// aucun moyen de revenir à la grille. Toujours visible désormais, dans les
+	// deux vues.
 	el("btnCardsViewGrid").classList.toggle("active", state.myCardsViewMode === "grid");
 	el("btnCardsViewList").classList.toggle("active", state.myCardsViewMode === "list");
 	el("btnCardsViewGrid").innerHTML = iconSvg("layout-grid");
@@ -451,7 +452,7 @@ async function renderMyCards() {
 			items.push({
 				entry, visual, count: inventory[cardId], label: label || entry.id,
 				value: LEVEL_VALUE[entry.niveau] || 0,
-				tileColor: SECTOR_TILE_COLOR[entry.secteur] || "blue",
+				tileColor: LEVEL_TILE_COLOR[entry.niveau] || "yellow",
 			});
 		}
 
@@ -478,6 +479,17 @@ function renderMyCardsGrid(body, items) {
 		const sector = item.entry.secteur || "ressources";
 		if (!bySector.has(sector)) bySector.set(sector, []);
 		bySector.get(sector).push(item);
+	}
+	// Remonté par l'utilisateur le 31/08/2026 : le tri choisi (voir
+	// myCardsSortSelect) doit se répercuter sur l'affichage, y compris en vue
+	// grille - jusqu'ici il ne s'appliquait qu'à la vue liste, la grille
+	// restait toujours identique quel que soit le critère choisi. Trie
+	// désormais les cartes À L'INTÉRIEUR de chaque groupe (les groupes
+	// eux-mêmes restent par secteur, la grille reste une vue "par
+	// catégorie" avant tout - seul l'ORDRE des cartes dans chaque groupe change).
+	for (const cards of bySector.values()) {
+		if (state.myCardsSortMode === "value") cards.sort((a, b) => b.value - a.value);
+		else if (state.myCardsSortMode === "quantity") cards.sort((a, b) => b.count - a.count);
 	}
 	body.innerHTML = [...bySector.entries()].map(([sector, cards]) => `
 		<section class="category-section">
@@ -557,9 +569,14 @@ function openCardModal(item) {
 	el("cardModalTitle").textContent = item.label;
 	el("cardModalBackTitle").textContent = item.label;
 	el("cardModalCount").textContent = `×${item.count}`;
-	el("cardModalLevel").textContent = catalogEnumLabel("level", item.entry.niveau);
-	el("cardModalValue").textContent = item.value;
-	el("cardModalArt").innerHTML = buildGameCardHtml(item.entry, item.visual, "geco-card-lg");
+	// Juste l'illustration (transparente), plus le composant carte complet
+	// avec son propre fond - remonté par l'utilisateur (31/08/2026, voir le
+	// commentaire en tête de la modal dans player-view.html) : le fond de LA
+	// MODAL (déjà coloré par niveau, voir flip.className ci-dessus) doit
+	// occuper tout l'espace, sans un second fond imbriqué à l'intérieur.
+	el("cardModalArt").innerHTML = item.visual
+		? `<img src="/cartes/${escapeHtmlLocal(item.visual.filename)}" alt="">`
+		: `<span class="modal-big-emoji" aria-hidden="true">🖼️</span>`;
 
 	renderCardModalPriceStep(item);
 	el("cardModalOverlay").classList.add("active");
@@ -1391,7 +1408,12 @@ function showTradeResult(success, title, body) {
 // ---------- Câblage des boutons (une fois, au chargement) ----------
 function initTradeUI() {
 	initCardModalGestures();
-	el("btnOpenSell").addEventListener("click", openSellPicker);
+	// btnOpenSell (bouton "Vendre une carte" autonome sur l'onglet Cartes) a
+	// été retiré du HTML le 31/08/2026 (remonté par l'utilisateur) - vendre se
+	// fait désormais exclusivement en cliquant sur une carte (voir
+	// openCardModal). openSellPicker()/l'écran sellPicker restent dans le code
+	// (inoffensifs, jamais atteints par aucun chemin de clic) au cas où ce
+	// choix serait reconsidéré, mais plus aucun bouton n'y mène.
 	// Barre de navigation basse persistante (voir le raisonnement en tête de
 	// player-view.html) - 5 emplacements : Accueil/Cartes/[scan]/Stats/Profil,
 	// le bouton central reprenant l'action d'achat (openScan), déjà existante.

@@ -580,7 +580,13 @@ body {
 	font-size: 0.62rem; font-weight: 700; padding: 2px 6px; border-radius: 10px;
 }
 
-.cards-list-view { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.cards-list-view {
+	list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px;
+	/* Remonté par l'utilisateur le 31/08/2026 : les cartes touchaient la
+	   barre de filtres au-dessus - 30px d'air en plus, spécifique à la vue
+	   liste (la vue grille a déjà son propre espacement via .category-section). */
+	margin-top: 30px;
+}
 .card-list-item {
 	background-color: var(--bg-card); border-radius: 16px; padding: 10px 14px; display: flex;
 	align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.02);
@@ -634,8 +640,9 @@ body {
 	opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
 }
 .card-modal-overlay.active { opacity: 1; pointer-events: auto; }
+.modal-card-wrap { position: relative; }
 .modal-close-btn {
-	position: absolute; top: 24px; right: 20px; background: none; border: none;
+	position: absolute; top: -38px; right: 0; background: none; border: none;
 	color: #ffffff; cursor: pointer; z-index: 1010; padding: 6px;
 }
 .modal-close-btn::before {
@@ -669,10 +676,8 @@ body {
 .modal-card-title { font-size: 1.4rem; font-weight: 800; color: var(--text-dark); }
 .modal-card-icon { font-size: 1.2rem; font-weight: 700; color: var(--text-muted); }
 .modal-card-center { display: flex; justify-content: center; align-items: center; flex: 1; }
-.modal-card-center .geco-card-lg { max-width: 160px; }
+.modal-card-center img { max-width: 75%; max-height: 75%; object-fit: contain; filter: drop-shadow(0 8px 16px rgba(0,0,0,0.12)); }
 .modal-big-emoji { font-size: 6rem; filter: drop-shadow(0 8px 16px rgba(0,0,0,0.12)); }
-.modal-card-footer { display: flex; justify-content: space-between; align-items: center; }
-.modal-footer-label { font-size: 0.9rem; font-weight: 700; color: var(--text-dark); }
 
 .flip-card-back { transform: rotateY(180deg); align-items: center; }
 .qr-container { background-color: #ffffff; padding: 12px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin: 10px 0; }

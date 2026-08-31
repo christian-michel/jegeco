@@ -140,15 +140,10 @@
 	     Voir renderMyCards() dans player-view.js - bascule entre les deux vues
 	     (myCardsViewMode) et le critère de tri en liste (myCardsSortMode). -->
 	<div id="myCardsScreen" class="hidden">
-		<!-- Étape 3 : vendre une carte de son inventaire (voir openSellPicker)
-		     - remonté par l'utilisateur (30/08/2026) : "tout doit rester
-		     fonctionnel", ce bouton avait disparu lors de la refonte visuelle
-		     (le mockup de référence ne montre qu'un bouton "scanner" pour
-		     acheter, pas de bouton "vendre" - la vente reste naturellement
-		     accessible depuis l'onglet "Cartes", partant de son inventaire). -->
-		<div style="padding:0 1.1rem;">
-			<button type="button" id="btnOpenSell" class="btn-primary btn-block" style="margin-top:0.6rem;" data-i18n="trade.btn_sell">Vendre une carte</button>
-		</div>
+		<!-- Étape 3 : vendre une carte se fait désormais exclusivement en
+		     cliquant dessus (voir openCardModal -> retournement -> QR) - le
+		     bouton "Vendre une carte" a été retiré (remonté par l'utilisateur,
+		     31/08/2026) : redondant maintenant que le clic sur la carte suffit. -->
 		<div class="cards-filter-bar" id="myCardsFilterBar">
 			<div class="view-toggle">
 				<span class="filter-label" data-i18n="playerView.cards_view_label">Vue</span>
@@ -179,28 +174,43 @@
 	     player-view.js) : le QR affiché au dos est celui d'une vraie offre
 	     TradeOfferService, pas un QR de démonstration externe. -->
 	<div class="card-modal-overlay" id="cardModalOverlay">
-		<button type="button" class="modal-close-btn" id="cardModalCloseBtn" aria-label="Fermer"></button>
-		<div class="flip-card" id="cardModalFlip">
-			<div class="flip-card-inner">
-				<div class="flip-card-front">
-					<div class="modal-card-header">
-						<span class="modal-card-title" id="cardModalTitle">—</span>
-						<span class="modal-card-icon" id="cardModalCount">×0</span>
+		<!-- Enveloppe positionnée AUTOUR de la carte (voir .modal-card-wrap) -
+		     remonté par l'utilisateur (31/08/2026) : la croix de fermeture,
+		     ancrée au coin de l'ÉCRAN jusqu'ici, se retrouvait cachée derrière
+		     le sélecteur de langue (élément flottant global). Ancrée au coin
+		     de LA CARTE désormais, juste au-dessus. -->
+		<div class="modal-card-wrap">
+			<button type="button" class="modal-close-btn" id="cardModalCloseBtn" aria-label="Fermer"></button>
+			<div class="flip-card" id="cardModalFlip">
+				<div class="flip-card-inner">
+					<!-- Recto : simplifié le 31/08/2026 (remonté par l'utilisateur -
+					     "le fond jaune de la carte doit occuper tout l'espace", "cet
+					     angle moche") : n'imbrique plus le composant carte complet
+					     (.geco-card, avec son propre fond_carte_xxx.png et ses coins
+					     arrondis) À L'INTÉRIEUR du cadre déjà coloré de la modal - les
+					     DEUX fonds se juxtaposaient, créant des coins visibles et des
+					     zones non couvertes. Seule l'illustration (transparente) flotte
+					     désormais directement sur le fond de la modal elle-même.
+					     Étiquettes niveau/valeur du pied de page retirées aussi (la
+					     couleur de fond indique déjà le niveau sans ambiguïté - remonté
+					     par l'utilisateur : "le programme connaît automatiquement la
+					     valeur"). -->
+					<div class="flip-card-front">
+						<div class="modal-card-header">
+							<span class="modal-card-title" id="cardModalTitle">—</span>
+							<span class="modal-card-icon" id="cardModalCount">×0</span>
+						</div>
+						<div class="modal-card-center" id="cardModalArt"></div>
 					</div>
-					<div class="modal-card-center" id="cardModalArt"></div>
-					<div class="modal-card-footer">
-						<span class="modal-footer-label" id="cardModalLevel">—</span>
-						<span class="modal-footer-label" id="cardModalValue">—</span>
+					<div class="flip-card-back">
+						<div class="modal-card-header">
+							<span class="modal-card-title" id="cardModalBackTitle">—</span>
+						</div>
+						<!-- Étape "prix" (avant de générer le QR) - voir
+						     renderCardModalPriceStep(). Remplacée par le vrai QR une
+						     fois généré (voir generateCardModalQr()). -->
+						<div id="cardModalBackBody"></div>
 					</div>
-				</div>
-				<div class="flip-card-back">
-					<div class="modal-card-header">
-						<span class="modal-card-title" id="cardModalBackTitle">—</span>
-					</div>
-					<!-- Étape "prix" (avant de générer le QR) - voir
-					     renderCardModalPriceStep(). Remplacée par le vrai QR une
-					     fois généré (voir generateCardModalQr()). -->
-					<div id="cardModalBackBody"></div>
 				</div>
 			</div>
 		</div>
