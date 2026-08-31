@@ -3362,13 +3362,17 @@ async function openEndOfTurnWizard() {
 		// Aucun point de contrôle encore posé pour ce joueur (typiquement : tout
 		// premier tour) - remonté par l'utilisateur, avec les règles officielles
 		// à l'appui (geconomicus.glibre.org/libre_money.html) : la mise en place
-		// donne 1 jeton de CHAQUE dénomination (pas un solde de zéro), voir
-		// PlayerDto.hasStartingAllocation (posé par
-		// GameService.dealStartingHandsForLibreIfNeeded). Sans ce repli,
-		// l'assistant pré-remplissait le tout premier tour à zéro, ignorant
-		// cette dotation de départ.
+		// donne une dotation de départ de VALEUR 7 (voir
+		// PlayerDto.hasStartingAllocation, posé par
+		// GameService.dealStartingHandsForLibreIfNeeded), pas un solde de zéro.
+		// Corrigé le 31/08/2026 (remonté par l'utilisateur) : le nombre de
+		// jetons de CHAQUE dénomination dépend de "Valeur d'une pièce faible"
+		// (fWeakCoinValue, écran Nouvelle partie) - un simple 1/1/1 codé en dur
+		// n'est correct QUE si cette valeur vaut 1. Réutilise
+		// computeTokenBreakdown(), déjà la référence pour cette conversion
+		// partout ailleurs dans cet assistant (grosses coupures privilégiées).
 		const player = game.players.find((p) => p.id === playerId);
-		if (player && player.hasStartingAllocation) return { weak: 1, medium: 1, strong: 1 };
+		if (player && player.hasStartingAllocation) return computeTokenBreakdown(7, game.weakCoinValue);
 		return { weak: 0, medium: 0, strong: 0 };
 	}
 
