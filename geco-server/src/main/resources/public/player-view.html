@@ -355,21 +355,39 @@
 		<!-- ===== Achat : confirmation avant paiement ===== -->
 		<section id="scanConfirm" class="join-card hidden">
 			<h2 data-i18n="trade.confirm_title">Confirmer l'achat ?</h2>
-			<div id="scanConfirmInfo" class="trade-card-info"></div>
+			<!-- Remonté par l'utilisateur (31/08/2026) : "monte les boutons
+			     Confirmer l'achat et Annuler tout en haut, en premier, pour
+			     qu'on les voit tout de suite" - avant le détail de la carte,
+			     pas après. -->
+			<button type="button" id="btnConfirmBuy" class="btn-primary btn-block" style="margin-top:0.9rem;" data-i18n="trade.btn_confirm_buy">Confirmer l'achat</button>
+			<button type="button" id="btnCancelBuy" class="btn-secondary btn-block" data-i18n="trade.btn_cancel">Annuler</button>
+			<div id="scanConfirmInfo" class="trade-card-info" style="margin-top:1.2rem;"></div>
 			<!-- Solde avant/après (voir GameService.computeTradeBalance et
 			     player-view.js:renderScanConfirm) - rempli dynamiquement. -->
 			<div id="scanConfirmBalanceRows" class="trade-balance-rows"></div>
-			<button type="button" id="btnConfirmBuy" class="btn-primary btn-block" data-i18n="trade.btn_confirm_buy">Confirmer l'achat</button>
-			<button type="button" id="btnCancelBuy" class="btn-secondary btn-block" data-i18n="trade.btn_cancel">Annuler</button>
 			<p id="scanConfirmError" class="field-error hidden"></p>
 		</section>
 
-		<!-- ===== Achat/Vente : résultat ===== -->
-		<section id="tradeResult" class="join-card hidden" style="text-align:center;">
-			<div id="tradeResultIcon" class="trade-result-icon"></div>
-			<h2 id="tradeResultTitle"></h2>
-			<p id="tradeResultBody"></p>
-			<button type="button" id="btnTradeResultBack" class="btn-primary btn-block" data-i18n="trade.btn_back_to_hub">Retour</button>
+		<!-- ===== Achat/Vente : résultat =====
+		     Refonte du 31/08/2026 (remonté par l'utilisateur, code HTML/CSS
+		     fourni en référence exacte) : centré verticalement, se ferme tout
+		     seul après 3 secondes vers "Mes cartes" (voir showTradeResult dans
+		     player-view.js) - plus de bouton "Retour" à cliquer. -->
+		<section id="tradeResult" class="join-card trade-result-v2 hidden">
+			<div id="tradeResultIcon" class="trade-result-v2-icon"></div>
+			<h2 id="tradeResultTitle" class="trade-result-v2-title"></h2>
+			<p id="tradeResultBody" class="trade-result-v2-desc"></p>
+			<hr class="trade-result-v2-divider">
+			<footer class="trade-result-v2-footer">
+				<div class="trade-result-v2-balance">
+					<span class="trade-result-v2-label" data-i18n="trade.new_balance_label">Nouveau solde</span>
+					<div class="trade-result-v2-amount-group">
+						<span class="trade-result-v2-amount" id="tradeResultNewBalance">—</span>
+						<span class="trade-result-v2-unit" data-i18n="playerView.stat_unit_coins">jetons</span>
+					</div>
+				</div>
+				<div class="trade-result-v2-delta" id="tradeResultDelta"></div>
+			</footer>
 		</section>
 
 	</div>

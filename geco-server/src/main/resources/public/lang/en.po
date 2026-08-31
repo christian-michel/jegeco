@@ -1876,3 +1876,17 @@ msgstr "Request for {amount} tokens"
 
 msgid "playerView.credit_request_new"
 msgstr "Make a new request"
+
+# ============ Result screen redesign + sale notification (31/08/2026) ============
+msgid "trade.new_balance_label"
+msgstr "New balance"
+
+msgid "trade.result_sale_success_title"
+msgstr "Sale successful!"
+
+msgid "trade.result_success_body_sold"
+msgstr "You sold {name} to {buyer}."
+
+# ============ Trading paused while the turn timer is on hold (31/08/2026) ============
+msgid "trade.trading_paused"
+msgstr "Trading is currently paused. Wait for the turn to resume."

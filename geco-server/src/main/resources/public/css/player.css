@@ -331,9 +331,33 @@ body {
 }
 .coin-timer-expired .coin-timer-value { color: var(--danger); }
 
-/* Résultat (succès/échec) */
-.trade-result-icon { font-size: 3.2rem; margin-bottom: 0.6rem; }
-#tradeResult h2 { font-family: var(--font-display); margin: 0 0 0.5rem; font-size: 1.25rem; }
+/* Résultat (succès/échec) - refonte du 31/08/2026, code fourni en référence
+   exacte par l'utilisateur (repris quasi verbatim), centré sur la hauteur de
+   l'écran, fermeture automatique après 3s (voir showTradeResult). */
+.trade-result-v2 {
+	display: flex; flex-direction: column; align-items: center; text-align: center;
+	min-height: 60vh; justify-content: center;
+}
+.trade-result-v2-icon {
+	width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center;
+	justify-content: center; margin-bottom: 1.5rem;
+}
+.trade-result-v2-icon.success { background: linear-gradient(135deg, #66bb6a, #43a047); color: #fff; }
+.trade-result-v2-icon.success svg { width: 34px; height: 34px; }
+.trade-result-v2-icon.error { background: var(--danger-bg); color: var(--danger); font-size: 1.8rem; }
+.trade-result-v2-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; color: #2e7d32; margin: 0 0 1rem; }
+.trade-result-v2-title.error { color: var(--danger); }
+.trade-result-v2-desc { color: var(--text); font-size: 1.05rem; line-height: 1.5; margin: 0; }
+.trade-result-v2-divider { width: 100%; border: none; border-top: 1px solid var(--border); margin: 1.8rem 0 1.3rem; }
+.trade-result-v2-footer { width: 100%; display: flex; justify-content: space-between; align-items: flex-end; }
+.trade-result-v2-balance { display: flex; flex-direction: column; align-items: flex-start; }
+.trade-result-v2-label { font-size: 0.85rem; font-weight: 600; color: var(--text); margin-bottom: 0.5rem; }
+.trade-result-v2-amount-group { display: flex; flex-direction: column; align-items: flex-start; }
+.trade-result-v2-amount { font-family: var(--font-display); font-size: 2rem; font-weight: 800; color: var(--ink); line-height: 1; }
+.trade-result-v2-unit { font-size: 0.82rem; color: var(--text-dim); margin-top: 2px; }
+.trade-result-v2-delta { font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; margin-bottom: 0.3rem; }
+.trade-result-v2-delta.positive { color: #2e7d32; }
+.trade-result-v2-delta.negative { color: var(--danger); }
 
 /* ============ Couleurs par niveau (faible/moyenne/forte/tresforte) ============
    Analogue honnête aux couleurs par bien du mockup de référence : nos

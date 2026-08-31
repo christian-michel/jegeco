@@ -58,14 +58,15 @@ public class Dtos
 	public record PlayerSelfViewDto(Integer id, String name, boolean active, int curDebt, int curInterest,
 			boolean visitedBank, Integer declaredAge, String favoriteColor, String avatarConfigJson,
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
-			int moneySystem)
+			int moneySystem, boolean tradingAllowed)
 	{
-		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem)
+		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
+				final boolean pTradingAllowed)
 		{
 			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
 					p.getGoodsCount(), p.getAccessToken(), pTradeBalance, p.getWeakGoods(), p.getMediumGoods(),
-					p.getStrongGoods(), pMoneySystem);
+					p.getStrongGoods(), pMoneySystem, pTradingAllowed);
 		}
 	}
 

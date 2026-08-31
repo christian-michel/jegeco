@@ -935,6 +935,70 @@ Le bouton "+30s" a aussi été adapté : s'il est actionné pendant une pause, i
 ajoute directement au temps figé plutôt que de décaler `turnStartedAt` (qui ne
 pilote plus l'affichage tant que la pause est active).
 
+**Étape 3, mise à jour du 31/08/2026** : ce même champ `pausedRemainingSeconds`
+pilote maintenant AUSSI le blocage des échanges par QR code entre joueurs -
+remonté par l'utilisateur : "lorsque le compte à rebours s'arrête... les
+transactions depuis le smartphone... soient bloquées aussi. Lorsque le compte
+à rebours repart, les transactions sont automatiquement possibles de
+nouveau." Voir `GameService.isTradingAllowed(Game)` : couvre en réalité trois
+cas où le "compte à rebours est arrêté" au sens large (partie pas encore
+démarrée, partie terminée, minuteur explicitement en pause) - vérifié côté
+serveur à la fois à la création d'une offre et à sa rédemption (jamais
+seulement côté client, qui n'affiche qu'un message anticipé pour éviter un
+aller-retour serveur inutile). Aucune route supplémentaire nécessaire : la
+mise en pause/reprise déjà existante suffit, le champ étant déjà partagé.
+
+### Découverte en creusant "Vente réussie" : `player-view.js` n'avait pas de WebSocket
+
+En construisant l'écran "Vente réussie" (le vendeur doit être notifié
+automatiquement dès que sa carte est achetée, remonté par l'utilisateur avec
+un code de référence exact), il est apparu que `player-view.js` (l'espace
+joueur smartphone) n'avait, contrairement au tableau de bord animateur
+(`app.js`, voir `connectWs()`), AUCUNE connexion WebSocket - le vendeur
+n'avait donc aucun moyen de savoir que son QR avait été scanné avec succès,
+seulement un compte à rebours qui finissait par atteindre 0, indiscernable
+d'un QR simplement jamais scanné. Ajouté `connectPlayerWs()` (même schéma que
+`connectWs()` côté animateur : une connexion, reconnexion automatique toutes
+les 2s si coupée) qui écoute les diffusions de type `"transaction"` déjà
+émises par `POST /trade-offers/{code}/redeem` (aucun changement serveur
+nécessaire, ce canal existait déjà) et déclenche l'écran de succès dès que
+`payload.sellerPlayerId` correspond au joueur courant ET qu'une modal carte
+est actuellement ouverte sur une offre (sinon, pas de réaction - le solde/
+inventaire à jour restera visible au prochain rafraîchissement automatique,
+sans interrompre autre chose que le joueur ferait sur son téléphone).
+
+### Prix automatique par niveau, plus de saisie manuelle (31/08/2026)
+
+Remonté par l'utilisateur : "il faut limiter les risques d'erreurs donc le
+nombre de saisies humaines. Tout ce qui peut être automatisé doit l'être...
+la valeur de la carte est définie dans le code." Le vendeur ne fixe plus
+librement un prix (steppers manuels, désormais réservés au troc - la notion
+de "valeur automatique en jetons" ne s'y applique pas). En dette/libre, la
+valeur d'une carte est déterminée par son NIVEAU, avec la même formule que
+les règles officielles (`geconomicus.glibre.org/libre_money.html` : "les
+cartes de valeur la plus basse valent chacune 3, les valeurs moyennes 6, les
+valeurs hautes 12" - tresforte extrapolée à 24, absente des règles
+officielles à 3 niveaux) :
+
+| Niveau     | Valeur | Jetons (voir `LEVEL_JETON_PRICE`, player-view.js) |
+|------------|--------|----------------------------------------------------|
+| faible     | 3      | 3 jetons faibles                                    |
+| moyenne    | 6      | 3 jetons moyens                                     |
+| forte      | 12     | 3 jetons forts                                      |
+| tresforte  | 24     | 6 jetons forts (pas de 4e dénomination de jeton)    |
+
+Conséquence directe : le QR de vente est désormais généré IMMÉDIATEMENT à
+l'ouverture de la modal carte (voir `openCardModal`), avant même le
+retournement - "la personne clique sur la carte, swipe pour la vendre",
+aucune étape de saisie intermédiaire. Corollaire ajouté au même moment,
+lui aussi remonté par l'utilisateur ("au scan, on vérifie que l'acheteur ait
+le montant en jetons") : `GameService.recordTransaction` vérifie désormais
+réellement le solde de l'acheteur avant d'accepter une transaction - un vrai
+trou jusque-là, aucune vérification n'existait. Le solde est vérifié via
+`TradeOfferService.peek()` (consultation sans consommer) AVANT `redeem()`
+(qui consomme l'offre de façon atomique), pour ne jamais gâcher le QR d'un
+vendeur si l'achat échoue pour cette raison.
+
 ### Autres correctifs (retours utilisateur)
 
 - **Actions conditionnelles dans le bilan des joueurs endettés** : "Rembourse

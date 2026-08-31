@@ -598,6 +598,18 @@ function openCardModal(item) {
 
 	el("cardModalOverlay").classList.add("active");
 
+	// Remonté par l'utilisateur (31/08/2026) : les échanges doivent être
+	// bloqués pendant que le compte à rebours de tour est en pause (voir
+	// PlayerSelfViewDto.tradingAllowed, calculé côté serveur - même règle
+	// exacte que la vérification faite là-bas avant d'accepter une offre :
+	// ce contrôle client n'est qu'un raccourci pour éviter d'attendre un
+	// aller-retour serveur avant d'afficher le message, le serveur reste
+	// seul juge final).
+	if (state.player && (state.player.tradingAllowed === false)) {
+		el("cardModalBackBody").innerHTML = `<p class="qr-instruction" style="color:#fff;font-weight:700;">${escapeHtmlLocal(t("trade.trading_paused"))}</p>`;
+		return;
+	}
+
 	// Dette/libre : prix automatique, le QR est généré tout de suite (prêt
 	// dès que le joueur swipe, pas d'étape manuelle intermédiaire) - "la
 	// personne clique sur la carte, swipe pour la vendre", rien de plus.
@@ -1199,6 +1211,16 @@ let scanCanvasCtx = null;
 async function openScan() {
 	showScreen("scanCamera");
 	el("scanCameraError").classList.add("hidden");
+	// Remonté par l'utilisateur (31/08/2026) : inutile de laisser un joueur
+	// scanner pendant que les échanges sont en pause - il échouerait de toute
+	// façon au moment de confirmer (le serveur reste seul juge final, voir
+	// GameService.isTradingAllowed). Message immédiat plutôt qu'une caméra
+	// ouverte pour rien.
+	if (state.player && (state.player.tradingAllowed === false)) {
+		el("scanCameraError").textContent = t("trade.trading_paused");
+		el("scanCameraError").classList.remove("hidden");
+		return;
+	}
 	try {
 		state.scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
 	} catch (err) {
@@ -1431,7 +1453,8 @@ async function confirmPurchase() {
 		} else {
 			const newBalance = (state.player.tradeBalance || 0) - transaction.totalCoinsValue;
 			showTradeResult(true, t("trade.result_success_title"),
-				t("trade.result_success_body_balance", { name: cardName, balance: newBalance }));
+				t("trade.result_success_body_balance", { name: cardName, balance: newBalance }),
+				{ newBalance, delta: -transaction.totalCoinsValue });
 		}
 		refreshPlayer();
 	} catch (err) {
@@ -1443,11 +1466,43 @@ async function confirmPurchase() {
 	}
 }
 
-function showTradeResult(success, title, body) {
-	el("tradeResultIcon").textContent = success ? "✅" : "⚠️";
+// Refonte du 31/08/2026 (remonté par l'utilisateur, code HTML/CSS fourni en
+// référence exacte) : se ferme automatiquement après 3 secondes - plus de
+// bouton "Retour" à cliquer - vers "Mes cartes" en cas de succès (on vient
+// de vendre/acheter, la suite naturelle est d'y voir son inventoire à jour),
+// vers l'accueil en cas d'échec. pBalanceInfo (optionnel) : {newBalance,
+// delta} - affiché seulement pour un succès en dette/libre (jamais en troc,
+// qui n'a pas de jetons, ni pour un échec).
+function showTradeResult(success, title, body, pBalanceInfo) {
+	el("tradeResultIcon").innerHTML = success
+		? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+		: '<span aria-hidden="true">⚠️</span>';
+	el("tradeResultIcon").className = `trade-result-v2-icon ${success ? "success" : "error"}`;
 	el("tradeResultTitle").textContent = title;
+	el("tradeResultTitle").classList.toggle("error", !success);
 	el("tradeResultBody").textContent = body;
+
+	const divider = document.querySelector("#tradeResult .trade-result-v2-divider");
+	const footer = document.querySelector("#tradeResult .trade-result-v2-footer");
+	if (success && pBalanceInfo) {
+		divider.classList.remove("hidden");
+		footer.classList.remove("hidden");
+		el("tradeResultNewBalance").textContent = pBalanceInfo.newBalance;
+		const deltaEl = el("tradeResultDelta");
+		deltaEl.textContent = (pBalanceInfo.delta >= 0 ? "+" : "") + pBalanceInfo.delta;
+		deltaEl.className = `trade-result-v2-delta ${pBalanceInfo.delta >= 0 ? "positive" : "negative"}`;
+	} else {
+		divider.classList.add("hidden");
+		footer.classList.add("hidden");
+	}
+
 	showScreen("tradeResult");
+
+	clearTimeout(state.tradeResultTimeout);
+	state.tradeResultTimeout = setTimeout(() => {
+		if (success) { renderMyCards(); setActiveNav("navBtnCards"); }
+		else { showScreen("viewContent"); }
+	}, 3000);
 }
 
 // ---------- Câblage des boutons (une fois, au chargement) ----------
@@ -1525,7 +1580,9 @@ function initTradeUI() {
 
 	el("btnConfirmBuy").addEventListener("click", confirmPurchase);
 	el("btnCancelBuy").addEventListener("click", () => showScreen("viewContent"));
-	el("btnTradeResultBack").addEventListener("click", () => showScreen("viewContent"));
+	// btnTradeResultBack a été retiré du HTML le 31/08/2026 (remonté par
+	// l'utilisateur) : l'écran de résultat se ferme désormais tout seul après
+	// 3 secondes (voir showTradeResult), plus besoin de bouton "Retour".
 }
 
 // ---------- Démarrage ----------
@@ -1550,6 +1607,45 @@ async function startOnce() {
 	initTradeUI();
 	refreshPlayer();
 	setInterval(refreshPlayer, 5000);
+	connectPlayerWs();
 }
+
+// Étape 3 (31/08/2026) : connexion WebSocket - remonté par l'utilisateur en
+// creusant l'écran "Vente réussie" (côté VENDEUR) : jusqu'ici, rien ne
+// prévenait le vendeur que sa carte avait été vendue - il ne voyait que le
+// compte à rebours de son QR arriver à 0, indiscernable d'un QR simplement
+// expiré sans avoir jamais été scanné. Même mécanisme que app.js (voir
+// connectWs côté animateur) : une seule connexion, reconnexion automatique.
+function connectPlayerWs() {
+	const proto = location.protocol === "https:" ? "wss" : "ws";
+	const ws = new WebSocket(`${proto}://${location.host}/ws`);
+	ws.onclose = () => setTimeout(connectPlayerWs, 2000);
+	ws.onerror = () => ws.close();
+	ws.onmessage = (evt) => {
+		const msg = JSON.parse(evt.data);
+		if (String(msg.gameId) !== String(state.gameId)) return;
+		if ((msg.type === "transaction") && state.player && (msg.payload.sellerPlayerId === state.player.id))
+			handleOwnSaleCompleted(msg.payload);
+	};
+}
+
+// Ma propre carte vient d'être vendue (voir connectPlayerWs) - seulement si
+// la modal carte est ACTUELLEMENT ouverte sur CETTE offre (state.cardModalOffer) :
+// si le joueur a déjà refermé la modal entre-temps, l'offre a bien été
+// honorée côté serveur (le nouvel inventaire/solde apparaîtra au prochain
+// rafraîchissement, voir refreshPlayer) mais on ne réagit pas ici pour
+// éviter d'interrompre autre chose que le joueur ferait sur son téléphone.
+function handleOwnSaleCompleted(transactionDto) {
+	if (!state.cardModalOffer) return; // pas de modal ouverte sur une offre, rien à faire ici (voir le commentaire au-dessus)
+	clearCardModalCountdown();
+	closeCardModal();
+	const cardName = state.cardModalItem ? state.cardModalItem.label : transactionDto.cardTypeId;
+	const newBalance = (state.player.tradeBalance || 0) + transactionDto.totalCoinsValue;
+	showTradeResult(true, t("trade.result_sale_success_title"),
+		t("trade.result_success_body_sold", { name: cardName, buyer: transactionDto.buyerPlayerName }),
+		{ newBalance, delta: transactionDto.totalCoinsValue });
+	refreshPlayer();
+}
+
 if (window.GecoI18n) window.GecoI18n.onChange(startOnce);
 setTimeout(startOnce, 1500);

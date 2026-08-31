@@ -72,6 +72,32 @@ public class GameService
 	}
 
 	/**
+	 * Étape 3, échanges smartphone : les échanges entre joueurs doivent être
+	 * bloqués exactement quand le compte à rebours de tour, côté animateur,
+	 * est arrêté - remonté par l'utilisateur (31/08/2026) : "lorsque le
+	 * compte à rebours s'arrête... les transactions... soient bloquées
+	 * aussi. Lorsque le compte à rebours repart, les transactions sont
+	 * automatiquement possibles de nouveau." Trois cas couverts, tous
+	 * représentant un compte à rebours "arrêté" au sens large :
+	 * <ul>
+	 * <li>la partie n'a pas encore démarré (avant le premier "Démarrer la
+	 * partie", voir GameService.captureDeckPlayerCountIfNeeded) ;</li>
+	 * <li>la partie est terminée (dernier tour déjà joué) ;</li>
+	 * <li>l'animateur a explicitement mis le minuteur en pause (voir
+	 * Game.pausedRemainingSeconds, non nul pendant une pause - même champ
+	 * déjà utilisé côté animateur, voir startTurnTimer() dans app.js).</li>
+	 * </ul>
+	 */
+	public boolean isTradingAllowed(final Game pGame)
+	{
+		if (pGame.getTurnNumber() == 0)
+			return false; // pas encore démarrée
+		if (pGame.getTurnNumber() >= pGame.getNbTurnsPlanned())
+			return false; // dernier tour déjà joué
+		return pGame.getPausedRemainingSeconds() == null; // minuteur pas en pause
+	}
+
+	/**
 	 * Définit le PIN d'une partie - appelé juste après sa création si la
 	 * protection par code est activée (voir AppSettings.protectionEnabled et
 	 * GecoServer, route POST /api/games). Une transaction séparée de

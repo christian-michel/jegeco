@@ -894,7 +894,7 @@ public class GecoServer
 				return;
 			}
 			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
-					game.getMoneySystem()));
+					game.getMoneySystem(), mGameService.isTradingAllowed(game)));
 		});
 
 		// Inventaire de cartes d'un joueur, par SON PROPRE jeton (voir "Mes
@@ -1246,6 +1246,11 @@ public class GecoServer
 			if (mAppSettings.isProtectionEnabled() && ((seller.getAccessToken() == null)
 					|| !seller.getAccessToken().equals(req.sellerAccessToken())))
 				throw new ForbiddenResponse("Jeton de vendeur requis ou incorrect."); //$NON-NLS-1$
+			// Remonté par l'utilisateur (31/08/2026) : les échanges smartphone
+			// doivent être bloqués pendant que le compte à rebours de tour est
+			// arrêté (voir GameService.isTradingAllowed).
+			if (!mGameService.isTradingAllowed(game))
+				throw new BadRequestResponse("Les échanges sont actuellement en pause."); //$NON-NLS-1$
 			final String code = mTradeOfferService.create(id, req.sellerPlayerId(), seller.getName(),
 					req.cardTypeId(), req.cardLevel(), req.cardName(), req.weakCoins(), req.mediumCoins(),
 					req.strongCoins(), req.weakGoodsWanted(), req.mediumGoodsWanted(), req.strongGoodsWanted(),
@@ -1270,20 +1275,28 @@ public class GecoServer
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			final String code = ctx.pathParam("code"); //$NON-NLS-1$
 			final Dtos.RedeemTradeOfferRequest req = ctx.bodyAsClass(Dtos.RedeemTradeOfferRequest.class);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
 			if (mAppSettings.isProtectionEnabled())
 			{
-				final Game game = mGameService.getGame(id);
-				if (game == null)
-				{
-					ctx.status(404);
-					return;
-				}
 				final boolean tokenMatches = game.getPlayers().stream()
 						.anyMatch(p -> p.getId().equals(req.buyerPlayerId()) && (p.getAccessToken() != null)
 								&& p.getAccessToken().equals(req.buyerAccessToken()));
 				if (!tokenMatches)
 					throw new ForbiddenResponse("Jeton d'acheteur requis ou incorrect."); //$NON-NLS-1$
 			}
+			// Remonté par l'utilisateur (31/08/2026) : les échanges smartphone
+			// doivent être bloqués pendant que le compte à rebours de tour est
+			// arrêté (voir GameService.isTradingAllowed) - vérifié ICI, avant de
+			// consommer l'offre (même principe que la vérification de solde
+			// juste en dessous : ne jamais gâcher un QR pour une raison qui
+			// aurait pu être détectée sans y toucher).
+			if (!mGameService.isTradingAllowed(game))
+				throw new BadRequestResponse("Les échanges sont actuellement en pause."); //$NON-NLS-1$
 			// redeem() retire l'offre de façon atomique : un second appel avec le
 			// même code (rejeu, double-clic, deux acheteurs qui scannent le même
 			// QR...) échoue toujours, c'est la protection anti-rejeu principale

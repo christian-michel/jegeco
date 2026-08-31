@@ -1878,3 +1878,17 @@ msgstr "Demande de {amount} jetons"
 
 msgid "playerView.credit_request_new"
 msgstr "Faire une nouvelle demande"
+
+# ============ Ecran de resultat refonte + notification de vente (31/08/2026) ============
+msgid "trade.new_balance_label"
+msgstr "Nouveau solde"
+
+msgid "trade.result_sale_success_title"
+msgstr "Vente réussie !"
+
+msgid "trade.result_success_body_sold"
+msgstr "Vous avez vendu {name} à {buyer}."
+
+# ============ Blocage des echanges pendant la pause du minuteur (31/08/2026) ============
+msgid "trade.trading_paused"
+msgstr "Les échanges sont actuellement en pause. Attendez la reprise du tour."
