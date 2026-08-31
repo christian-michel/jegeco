@@ -57,6 +57,9 @@
 				<span class="card-subtitle" data-i18n="trade.balance_label">Solde jetons (échanges)</span>
 				<div class="balance-amount"><span id="balanceCardValue">0</span></div>
 				<span class="balance-unit" data-i18n="playerView.stat_unit_coins">jetons</span>
+				<!-- Décomposition en jetons physiques (31/08/2026) - voir
+				     renderDashboard()/computeTokenBreakdown() dans player-view.js. -->
+				<div class="token-breakdown" id="balanceCardBreakdown"></div>
 			</div>
 			<div class="coin-icon-wrapper" aria-hidden="true">🪙</div>
 		</section>
@@ -118,6 +121,7 @@
 				<div class="stat-card">
 					<div class="stat-header"><span class="stat-icon" aria-hidden="true">🪙</span><span class="stat-value" id="statCoins">0</span></div>
 					<span class="stat-label" data-i18n="playerView.stat_unit_coins">jetons</span>
+					<div class="token-breakdown" id="statCoinsBreakdown" style="margin-top:0.3rem;"></div>
 				</div>
 				<div class="stat-card">
 					<div class="stat-header"><span class="stat-icon" aria-hidden="true">🃏</span><span class="stat-value" id="statCards">0</span></div>

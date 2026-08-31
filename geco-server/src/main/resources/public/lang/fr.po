@@ -1553,6 +1553,19 @@ msgstr "Jetons moyens"
 msgid "trade.coin_strong"
 msgstr "Jetons forts"
 
+# ============ Décomposition en jetons physiques (31/08/2026) ============
+msgid "trade.coin_weak_short"
+msgstr "faible"
+
+msgid "trade.coin_medium_short"
+msgstr "moyen"
+
+msgid "trade.coin_strong_short"
+msgstr "fort"
+
+msgid "trade.coin_none"
+msgstr "aucun jeton"
+
 msgid "trade.btn_generate_qr"
 msgstr "Générer le QR code"
 

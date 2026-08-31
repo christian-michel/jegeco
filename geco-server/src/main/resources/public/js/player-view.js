@@ -112,6 +112,23 @@ function buildProfileAvatarHtml(pAvatarConfigJson) {
 	return `<span aria-hidden="true">🧑</span>`;
 }
 
+// Étape 3 (31/08/2026) : décomposition d'une VALEUR (voir
+// GameService.computeTradeBalance, jamais une simple donnée locale) en
+// jetons physiques faible/moyen/fort - remonté par l'utilisateur : "il faut
+// que ce soit cohérent entre les smartphones et l'application [animateur]".
+// Portée VERBATIM depuis computeTokenBreakdown() dans app.js (même
+// algorithme exact, grosses coupures privilégiées) - jamais réinventée,
+// pour qu'un même solde donne TOUJOURS la même décomposition des deux
+// côtés, vérifiable par l'animateur comme par le joueur.
+function computeTokenBreakdown(pTotalValue, pWeakCoinValue) {
+	let units = Math.max(0, Math.round(pTotalValue / (pWeakCoinValue || 1)));
+	const strong = Math.floor(units / 4);
+	units -= strong * 4;
+	const medium = Math.floor(units / 2);
+	units -= medium * 2;
+	return { weak: units, medium, strong };
+}
+
 const params = new URLSearchParams(window.location.search);
 const state = {
 	gameId: params.get("gameId"),
@@ -267,7 +284,16 @@ async function renderDashboard() {
 	// Le solde en jetons n'a de sens qu'en dette/libre - le troc n'a jamais de
 	// jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
 	el("balanceCard").classList.toggle("hidden", isTrocGame());
-	if (!isTrocGame()) el("balanceCardValue").textContent = state.player.tradeBalance;
+	if (!isTrocGame()) {
+		el("balanceCardValue").textContent = state.player.tradeBalance;
+		// Décomposition en jetons physiques (30/08/2026, remonté par
+		// l'utilisateur : "important pour pouvoir vérifier, comparer et
+		// s'assurer que tout soit correct... pour que les joueurs comprennent
+		// ce qui se passe") - même algorithme que côté animateur (voir
+		// computeTokenBreakdown), respecte "Valeur d'une pièce faible".
+		const breakdown = computeTokenBreakdown(state.player.tradeBalance, state.player.weakCoinValue);
+		el("balanceCardBreakdown").innerHTML = tokenBreakdownHtml(breakdown);
+	}
 
 	// Historique du joueur (achats + ventes) - sert à la fois à l'évolution
 	// "ce tour" et à la carte "dernière activité" ci-dessous, une seule
@@ -382,6 +408,14 @@ async function renderProfile() {
 	el("profileStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
 	el("profileAvatarWrapper").innerHTML = buildProfileAvatarHtml(state.player.avatarConfigJson);
 	el("statCoins").textContent = isTrocGame() ? "—" : state.player.tradeBalance;
+	// Décomposition en jetons physiques (31/08/2026) - même logique que
+	// renderDashboard(), voir computeTokenBreakdown().
+	if (!isTrocGame()) {
+		const breakdown = computeTokenBreakdown(state.player.tradeBalance, state.player.weakCoinValue);
+		el("statCoinsBreakdown").innerHTML = tokenBreakdownHtml(breakdown);
+	} else {
+		el("statCoinsBreakdown").innerHTML = "";
+	}
 	el("statCards").textContent = state.player.goodsCount || 0;
 
 	let txs = [];
@@ -555,6 +589,34 @@ function wireCardModalClicks(container, items) {
 			if (item) openCardModal(item);
 		});
 	});
+}
+
+// Décomposition d'une valeur en jetons physiques (faible/moyen/fort) - copie
+// EXACTE de computeTokenBreakdown() dans app.js (côté animateur), remonté
+// par l'utilisateur (31/08/2026) : "il faut que ce soit cohérent entre les
+// smartphones et l'application" - même algorithme (grosses coupures
+// privilégiées), respecte "Valeur d'une pièce faible" (voir
+// PlayerSelfViewDto.weakCoinValue, écran Nouvelle partie côté animateur).
+// Dupliquée ici comme buildAvatarSVG plus haut : les deux pages sont
+// chargées séparément, pas de module JS partagé dans ce projet.
+function computeTokenBreakdown(pTotalValue, pWeakCoinValue) {
+	let units = Math.max(0, Math.round(pTotalValue / (pWeakCoinValue || 1)));
+	const strong = Math.floor(units / 4);
+	units -= strong * 4;
+	const medium = Math.floor(units / 2);
+	units -= medium * 2;
+	return { weak: units, medium, strong };
+}
+
+// HTML compact de la décomposition (3 pastilles faible/moyen/fort) - voir
+// renderDashboard/renderProfile. N'affiche que les dénominations non nulles,
+// pour ne pas encombrer l'écran d'un "0 jeton fort" sans intérêt.
+function tokenBreakdownHtml(pBreakdown) {
+	const parts = [];
+	if (pBreakdown.weak > 0) parts.push(`<span class="token-chip token-weak">${pBreakdown.weak} × ${escapeHtmlLocal(t("trade.coin_weak_short"))}</span>`);
+	if (pBreakdown.medium > 0) parts.push(`<span class="token-chip token-medium">${pBreakdown.medium} × ${escapeHtmlLocal(t("trade.coin_medium_short"))}</span>`);
+	if (pBreakdown.strong > 0) parts.push(`<span class="token-chip token-strong">${pBreakdown.strong} × ${escapeHtmlLocal(t("trade.coin_strong_short"))}</span>`);
+	return parts.length > 0 ? parts.join(" ") : `<span class="token-chip">${escapeHtmlLocal(t("trade.coin_none"))}</span>`;
 }
 
 // Valeur automatique d'une carte, en jetons, selon son niveau - remonté par

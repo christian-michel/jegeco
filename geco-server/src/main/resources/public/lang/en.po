@@ -1551,6 +1551,19 @@ msgstr "Medium coins"
 msgid "trade.coin_strong"
 msgstr "Strong coins"
 
+# ============ Physical coin breakdown (31/08/2026) ============
+msgid "trade.coin_weak_short"
+msgstr "weak"
+
+msgid "trade.coin_medium_short"
+msgstr "medium"
+
+msgid "trade.coin_strong_short"
+msgstr "strong"
+
+msgid "trade.coin_none"
+msgstr "no tokens"
+
 msgid "trade.btn_generate_qr"
 msgstr "Generate QR code"
 
