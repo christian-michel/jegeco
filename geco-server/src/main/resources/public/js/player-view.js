@@ -557,6 +557,24 @@ function wireCardModalClicks(container, items) {
 	});
 }
 
+// Valeur automatique d'une carte, en jetons, selon son niveau - remonté par
+// l'utilisateur (31/08/2026) : "il faut limiter les risques d'erreurs donc
+// le nombre de saisies humaines. Tout ce qui peut être automatisé doit
+// l'être... la valeur de la carte est définie dans le code", plutôt que de
+// laisser le vendeur fixer librement un prix (steppers manuels, retirés en
+// dette/libre - toujours utilisés en troc, voir plus bas, cette
+// simplification ne concernant que les jetons). Une carte de niveau X vaut
+// toujours 3 jetons de LA DÉNOMINATION CORRESPONDANTE (3 faibles pour une
+// carte faible, 3 moyens pour une carte moyenne, 3 forts pour une carte
+// forte) - tresforte n'ayant pas de 4e dénomination de jeton, 6 jetons forts
+// (même valeur totale que 3 jetons d'une dénomination supérieure aurait eu).
+const LEVEL_JETON_PRICE = {
+	faible: { weak: 3, medium: 0, strong: 0 },
+	moyenne: { weak: 0, medium: 3, strong: 0 },
+	forte: { weak: 0, medium: 0, strong: 3 },
+	tresforte: { weak: 0, medium: 0, strong: 6 },
+};
+
 function openCardModal(item) {
 	state.cardModalItem = item;
 	state.cardModalPrice = { weak: 0, medium: 0, strong: 0 };
@@ -578,8 +596,22 @@ function openCardModal(item) {
 		? `<img src="/cartes/${escapeHtmlLocal(item.visual.filename)}" alt="">`
 		: `<span class="modal-big-emoji" aria-hidden="true">🖼️</span>`;
 
-	renderCardModalPriceStep(item);
 	el("cardModalOverlay").classList.add("active");
+
+	// Dette/libre : prix automatique, le QR est généré tout de suite (prêt
+	// dès que le joueur swipe, pas d'étape manuelle intermédiaire) - "la
+	// personne clique sur la carte, swipe pour la vendre", rien de plus.
+	// Troc : pas de valeur en jetons par principe (voir docs/10-etape-
+	// plugins-troc.md, règle 3) - garde l'étape manuelle existante
+	// (steppers de cartes voulues en retour, librement négocié).
+	if (isTrocGame()) {
+		renderCardModalPriceStep(item);
+	} else {
+		el("cardModalBackBody").innerHTML = `<p style="color:#666;font-size:0.85rem;">${escapeHtmlLocal(t("settings.catalog_loading"))}</p>`;
+		const p = LEVEL_JETON_PRICE[item.entry.niveau] || { weak: 0, medium: 0, strong: 0 };
+		state.cardModalPrice = { ...p };
+		generateCardModalQr(item);
+	}
 }
 
 function closeCardModal() {
@@ -592,8 +624,10 @@ function closeCardModal() {
 }
 
 // Étape "prix" au dos de la carte, avant de générer le QR - steppers
-// compacts (voir .modal-price-steppers). Troc : demande des cartes en
-// retour plutôt qu'un prix en jetons, même logique que openSellPrice.
+// compacts (voir .modal-price-steppers). TROC UNIQUEMENT désormais (voir
+// openCardModal) : demande des cartes en retour, librement négocié, comme
+// openSellPrice. Le prix en jetons (dette/libre) est automatique, voir
+// LEVEL_JETON_PRICE ci-dessus.
 function renderCardModalPriceStep(item) {
 	const isTroc = isTrocGame();
 	const labels = isTroc
@@ -638,7 +672,18 @@ async function generateCardModalQr(item) {
 			: { weakCoins: state.cardModalPrice.weak, mediumCoins: state.cardModalPrice.medium, strongCoins: state.cardModalPrice.strong };
 		const offer = await createTradeOffer(item.entry, priceFields);
 		state.cardModalOffer = offer;
+		// Prix automatique affiché pour transparence (voir LEVEL_JETON_PRICE) -
+		// le vendeur voit ce qui a été fixé pour lui, même s'il n'a rien saisi.
+		const priceParts = [];
+		if (!isTrocGame()) {
+			if (state.cardModalPrice.weak > 0) priceParts.push(t("trade.price_weak", { n: state.cardModalPrice.weak }));
+			if (state.cardModalPrice.medium > 0) priceParts.push(t("trade.price_medium", { n: state.cardModalPrice.medium }));
+			if (state.cardModalPrice.strong > 0) priceParts.push(t("trade.price_strong", { n: state.cardModalPrice.strong }));
+		}
+		const priceLine = (priceParts.length > 0)
+			? `<p class="qr-instruction" style="font-weight:700;margin-bottom:-4px;">${escapeHtmlLocal(priceParts.join(" + "))}</p>` : "";
 		el("cardModalBackBody").innerHTML = `
+			${priceLine}
 			<div class="qr-container"><div id="cardModalQrBox"></div></div>
 			<p class="qr-instruction">${escapeHtmlLocal(t("trade.qr_instructions"))}</p>
 			<div class="qr-timer"><span aria-hidden="true">⏱️</span><span id="cardModalCountdownValue">01:30</span></div>

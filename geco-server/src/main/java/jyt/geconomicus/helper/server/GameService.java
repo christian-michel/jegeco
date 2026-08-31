@@ -409,6 +409,21 @@ public class GameService
 				throw new IllegalArgumentException("Ce QR code a déjà été utilisé."); //$NON-NLS-1$
 			if (System.currentTimeMillis() > pExpiresAtEpochMs)
 				throw new IllegalArgumentException("Ce QR code a expiré, demandez-en un nouveau au vendeur."); //$NON-NLS-1$
+			// Remonté par l'utilisateur (31/08/2026) : "au scan, on vérifie que
+			// l'acheteur ait le montant en jetons et si c'est bon, la
+			// transaction est faite automatiquement" - jusqu'ici, RIEN ne
+			// vérifiait que l'acheteur avait réellement de quoi payer (un vrai
+			// trou : n'importe quel achat passait, même à solde insuffisant).
+			// Sans effet en troc (prix toujours à 0 en jetons dans ce système,
+			// voir Transaction.isGoodsTrade()) : le contrôle passe alors
+			// trivialement (0 <= n'importe quel solde).
+			final int price = pWeakCoins + (2 * pMediumCoins) + (4 * pStrongCoins);
+			if (price > 0)
+			{
+				final int buyerBalance = computeTradeBalance(pGameId, pBuyerPlayerId);
+				if (buyerBalance < price)
+					throw new IllegalArgumentException("Solde insuffisant pour cet achat."); //$NON-NLS-1$
+			}
 			em.getTransaction().begin();
 			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, pCardLevel, pWeakCoins,
 					pMediumCoins, pStrongCoins, pBuyerWeakGoods, pBuyerMediumGoods, pBuyerStrongGoods, pNonce);

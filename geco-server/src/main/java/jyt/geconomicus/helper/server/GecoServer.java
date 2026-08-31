@@ -1289,6 +1289,26 @@ public class GecoServer
 			// QR...) échoue toujours, c'est la protection anti-rejeu principale
 			// (voir TradeOfferService) - le nonce vérifié dans recordTransaction
 			// ci-dessous n'est qu'une seconde protection, redondante par design.
+			// Remonté par l'utilisateur (31/08/2026) : "au scan, on vérifie que
+			// l'acheteur ait le montant en jetons et si c'est bon, la
+			// transaction est faite automatiquement" - le solde est donc
+			// vérifié AVANT de consommer l'offre (peek(), pas redeem()) :
+			// sinon, un acheteur à solde insuffisant "gâcherait" le QR du
+			// vendeur pour rien (l'offre aurait déjà été retirée avant l'échec).
+			final TradeOfferService.Offer preview = mTradeOfferService.peek(code);
+			if ((preview == null) || (preview.gameId() != id))
+			{
+				throw new BadRequestResponse("Ce code est invalide, déjà utilisé, ou a expiré."); //$NON-NLS-1$
+			}
+			final int previewPrice = preview.weakCoins() + (2 * preview.mediumCoins()) + (4 * preview.strongCoins());
+			if (previewPrice > 0)
+			{
+				final int buyerBalance = mGameService.computeTradeBalance(id, req.buyerPlayerId());
+				if (buyerBalance < previewPrice)
+					throw new BadRequestResponse("Solde insuffisant pour cet achat."); //$NON-NLS-1$
+			}
+			// À ce stade, la transaction devrait réussir - on consomme l'offre
+			// (atomique, voir le commentaire ci-dessous) seulement maintenant.
 			final TradeOfferService.Offer offer = mTradeOfferService.redeem(code);
 			if ((offer == null) || (offer.gameId() != id))
 			{
