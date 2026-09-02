@@ -1276,8 +1276,24 @@ public class GameService
 	 * lors de la création d'un événement dans l'interface web actuelle - pas
 	 * d'édition des cartes/jetons, non exposés à la création non plus.
 	 */
+	/**
+	 * Remonté par l'utilisateur (02/09/2026) : le formulaire de modification
+	 * générique proposait "Montant principal"/"Intérêt" pour TOUS les
+	 * événements, y compris JOIN en monnaie LIBRE où ces deux notions n'ont
+	 * aucun sens ("en monnaie libre il n'y a ni principal ni intérêt"), et ne
+	 * permettait pas de corriger une erreur de saisie sur le PRÉNOM du
+	 * joueur ("j'ai écrit VM au lieu de CM"). pName (optionnel, null = pas de
+	 * changement) : renomme directement Player.name (jamais un champ propre à
+	 * Event) - le joueur voit son nouveau prénom dès son prochain
+	 * rafraîchissement automatique (voir refreshPlayer() dans
+	 * player-view.js, PlayerSelfViewDto.name lu à chaque fois, aucune
+	 * mise en cache côté client à invalider). Volontairement une capacité
+	 * réservée à l'animateur : le joueur, lui, ne peut jamais renommer son
+	 * propre personnage une fois inscrit (aucune route publique ne le
+	 * permet).
+	 */
 	public void editEvent(final int pGameId, final int pEventId, final int pPrincipal, final int pInterest,
-			final java.util.Date pTstamp)
+			final java.util.Date pTstamp, final String pName)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -1294,6 +1310,8 @@ public class GameService
 			event.setInterest(pInterest);
 			if (pTstamp != null)
 				event.setTstamp(pTstamp);
+			if ((pName != null) && !pName.isBlank() && (event.getPlayer() != null))
+				event.getPlayer().setName(pName.trim());
 			game.recomputeAll(null);
 			em.getTransaction().commit();
 		}

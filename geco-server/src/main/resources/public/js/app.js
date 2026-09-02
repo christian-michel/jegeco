@@ -1129,11 +1129,28 @@ function confirmDeleteGame(g) {
 function openEditEventDialog(e) {
 	const t = window.GecoI18n.t;
 	const localDatetime = new Date(e.timestamp - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+	// Remonté par l'utilisateur (02/09/2026) : "en monnaie libre il n'y a ni
+	// principal ni intérêt. Il faut les retirer... il faut ajouter la
+	// possibilité de modifier le nom" - le formulaire générique proposait
+	// systématiquement principal/intérêt, y compris pour un événement JOIN en
+	// monnaie libre où ces deux notions n'ont aucun sens, et ne permettait
+	// jamais de corriger le prénom saisi à l'inscription (une simple faute de
+	// frappe restait bloquée). isJoinEvent : seul ce type d'événement porte un
+	// prénom modifiable - les autres (crédit, remboursement...) n'en ont pas.
+	const isJoinEvent = e.type === "JOIN";
+	const isLibre = state.currentGame && (state.currentGame.moneySystem === 0); // Game.MONEY_LIBRE
+	const showPrincipalInterest = !(isJoinEvent && isLibre);
 	openDialog(t("game.edit_event_title", { type: eventTypeLabel(e.type) }) + (e.playerName ? " — " + e.playerName : ""), `
+		${isJoinEvent ? `
+		<label>${t("game.field_player_name")}</label>
+		<input id="fEditPlayerName" type="text" value="${escapeHtml(e.playerName || "")}">
+		` : ""}
+		${showPrincipalInterest ? `
 		<label>${t("game.field_principal")}</label>
 		<input id="fEditPrincipal" type="number" value="${e.principal}">
 		<label>${t("game.field_interest")}</label>
 		<input id="fEditInterest" type="number" value="${e.interest}">
+		` : ""}
 		<label>${t("game.edit_event_datetime_label")}</label>
 		<input id="fEditTstamp" type="datetime-local" value="${localDatetime}">
 		<p style="font-size:0.78rem;color:var(--text-dim);margin-top:0.5rem">
@@ -1141,9 +1158,10 @@ function openEditEventDialog(e) {
 	`, async () => {
 		const tstampInput = el("fEditTstamp").value;
 		await Api.editEvent(state.currentGameId, e.id, {
-			principal: parseInt(el("fEditPrincipal").value || "0", 10),
-			interest: parseInt(el("fEditInterest").value || "0", 10),
+			principal: showPrincipalInterest ? parseInt(el("fEditPrincipal").value || "0", 10) : e.principal,
+			interest: showPrincipalInterest ? parseInt(el("fEditInterest").value || "0", 10) : e.interest,
 			tstamp: tstampInput ? new Date(tstampInput).toISOString() : null,
+			name: isJoinEvent ? el("fEditPlayerName").value.trim() : null,
 		});
 		renderGameDetail(state.currentGameId);
 	});

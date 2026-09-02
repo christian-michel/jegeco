@@ -284,7 +284,7 @@ public class Dtos
 	/** Requête d'édition d'un événement existant (annuler/supprimer/éditer). tstamp
 	 * est optionnel (format ISO-8601, ex. "2026-08-16T10:30:00Z") - null ou absent
 	 * pour ne pas changer la date. */
-	public record EditEventRequest(int principal, int interest, String tstamp)
+	public record EditEventRequest(int principal, int interest, String tstamp, String name)
 	{
 	}
 

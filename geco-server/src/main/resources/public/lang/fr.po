@@ -450,6 +450,9 @@ msgstr "Nouvel événement — {name}"
 msgid "game.field_event_type"
 msgstr "Type d'événement"
 
+msgid "game.field_player_name"
+msgstr "Prénom du joueur"
+
 msgid "game.field_principal"
 msgstr "Montant principal"
 

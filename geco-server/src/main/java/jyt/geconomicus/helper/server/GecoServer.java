@@ -1407,7 +1407,7 @@ public class GecoServer
 			ctx.status(204);
 		});
 
-		// Édition d'un événement (principal/intérêt/date), avec le même recalcul intégral.
+		// Édition d'un événement (principal/intérêt/date/prénom pour JOIN), avec le même recalcul intégral.
 		pApp.put("/api/games/{id}/events/{eventId}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			final int eventId = Integer.parseInt(ctx.pathParam("eventId")); //$NON-NLS-1$
@@ -1417,7 +1417,7 @@ public class GecoServer
 			{
 				tstamp = java.util.Date.from(java.time.Instant.parse(req.tstamp()));
 			}
-			mGameService.editEvent(id, eventId, req.principal(), req.interest(), tstamp);
+			mGameService.editEvent(id, eventId, req.principal(), req.interest(), tstamp, req.name());
 			final Game updated = mGameService.getGame(id);
 			broadcast(id, "game_recomputed", GameDetailDto.from(updated)); //$NON-NLS-1$
 			ctx.status(200).json(GameDetailDto.from(updated));
