@@ -56,7 +56,11 @@
 				<span class="avatar-preview-badge" aria-hidden="true">✎</span>
 			</div>
 
-			<div class="avatar-mode-tabs">
+			<!-- Remonté par l'utilisateur (02/09/2026) : bascule masquée, la
+			     galerie s'affiche seule par défaut - "Personnalisé" reste dans
+			     le code (repli technique, voir modeCustomBtn dans player.js)
+			     mais n'est plus atteignable depuis l'interface. -->
+			<div class="avatar-mode-tabs hidden">
 				<button type="button" id="modeGalleryBtn" class="avatar-mode-tab active" data-i18n="join.mode_gallery">Galerie</button>
 				<button type="button" id="modeCustomBtn" class="avatar-mode-tab" data-i18n="join.mode_custom">Personnalisé</button>
 			</div>
