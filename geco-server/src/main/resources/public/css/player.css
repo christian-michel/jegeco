@@ -802,3 +802,58 @@ body {
 .token-chip.token-weak { background: #fff3cd; color: #92400e; }
 .token-chip.token-medium { background: #dbeafe; color: #1e40af; }
 .token-chip.token-strong { background: #dcfce7; color: #166534; }
+
+/* ============================================================
+   Animation "Carré encaissé" (31/08/2026) - inspirée d'un code de référence
+   fourni par l'utilisateur (Web Animations API), adaptée pour utiliser les
+   vraies cartes du joueur et le fond indigo/violet déjà établi ailleurs
+   dans l'app (--bg/--bg-gradient-end) plutôt qu'un fond noir générique.
+   ============================================================ */
+.square-anim-overlay {
+	position: fixed; inset: 0; z-index: 3000;
+	background: radial-gradient(120% 90% at 50% -10%, var(--bg-gradient-end), var(--bg) 60%);
+	display: flex; flex-direction: column; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+	overflow: hidden;
+}
+.square-anim-overlay.active { opacity: 1; pointer-events: auto; }
+.square-anim-title {
+	font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; color: #fff;
+	text-align: center; margin-bottom: 1.5rem; text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.square-anim-subtitle {
+	font-size: 0.9rem; color: rgba(255,255,255,0.85); text-align: center; margin-top: 1.5rem; min-height: 1.3em;
+}
+.square-anim-board {
+	display: flex; gap: 14px; justify-content: center; align-items: center;
+	perspective: 1000px; transform-style: preserve-3d; will-change: transform;
+}
+.square-anim-board.shake-impact { animation: squareAnimShake 450ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+@keyframes squareAnimShake {
+	0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+	10%  { transform: translate3d(-10px, 7px, 0) rotate(-1.2deg); }
+	20%  { transform: translate3d(9px, -7px, 0) rotate(1deg); }
+	30%  { transform: translate3d(-7px, 5px, 0) rotate(-0.6deg); }
+	40%  { transform: translate3d(5px, -4px, 0) rotate(0.4deg); }
+	60%  { transform: translate3d(-3px, 2px, 0) rotate(-0.2deg); }
+	100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) { .square-anim-board.shake-impact { animation: none; } }
+
+.square-anim-card { width: 70px; will-change: transform, opacity; }
+.square-anim-card .geco-card { box-shadow: 0 4px 15px rgba(0,0,0,0.4); }
+.square-anim-card.promoted .geco-card {
+	box-shadow: 0 0 20px rgba(255,215,0,0.6), 0 4px 15px rgba(0,0,0,0.4);
+	outline: 3px solid #ffd700; outline-offset: 2px; border-radius: 14px;
+}
+
+.square-anim-flash {
+	position: fixed; width: 250px; height: 250px; margin-left: -125px; margin-top: -125px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(255,215,0,0.8) 35%, rgba(124,111,238,0.35) 60%, rgba(0,0,0,0) 75%);
+	pointer-events: none; z-index: 3010; will-change: transform, opacity;
+}
+.square-anim-particle {
+	position: fixed; pointer-events: none; z-index: 3005; will-change: transform, opacity;
+	font-size: 1.1rem;
+}

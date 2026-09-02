@@ -1770,6 +1770,11 @@ function connectPlayerWs() {
 		if (String(msg.gameId) !== String(state.gameId)) return;
 		if ((msg.type === "transaction") && state.player && (msg.payload.sellerPlayerId === state.player.id))
 			handleOwnSaleCompleted(msg.payload);
+		// Carré encaissé (voir GameService.checkAndCashInSquares, diffusé
+		// depuis GecoServer) - remonté par l'utilisateur (31/08/2026) :
+		// déclenche l'animation automatiquement, pour CE joueur uniquement.
+		if ((msg.type === "square") && state.player && (msg.payload.playerId === state.player.id))
+			playSquareAnimation(msg.payload);
 	};
 }
 
@@ -1789,6 +1794,140 @@ function handleOwnSaleCompleted(transactionDto) {
 		t("trade.result_success_body_sold", { name: cardName, buyer: transactionDto.buyerPlayerName }),
 		{ newBalance, delta: transactionDto.totalCoinsValue });
 	refreshPlayer();
+}
+
+// ============================================================
+// Animation "Carré encaissé" (31/08/2026) - remonté par l'utilisateur : les
+// carrés se produisaient en silence, sans aucun retour visuel, d'où sa
+// confusion initiale ("je n'ai pas fait de carré, pourtant..."). Inspirée
+// d'un code de référence fourni (Web Animations API : squash, convergence,
+// implosion, flash+étoiles, apparition des 5 nouvelles cartes) - adaptée
+// pour utiliser les VRAIES cartes du joueur (résolues depuis le catalogue,
+// jamais des cartes génériques) et le fond indigo/violet déjà établi
+// ailleurs (voir .square-anim-overlay dans player.css). Dure environ 3,3
+// secondes puis referme automatiquement vers "Mes cartes".
+async function playSquareAnimation(squareDto) {
+	if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
+	if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
+
+	function resolveCard(cardTypeId, fallbackLevel) {
+		const entry = state.cardsCatalog.find((c) => c.id === cardTypeId) || { id: cardTypeId, niveau: fallbackLevel, nom: {} };
+		const visual = state.visualsCatalog.find((v) => v.id === entry.visualId) || null;
+		const label = visual ? (catalogTextValue(visual.etiquette) || catalogTextValue(entry.nom)) : (catalogTextValue(entry.nom) || cardTypeId);
+		return { entry, visual, label };
+	}
+
+	const cashed = resolveCard(squareDto.cashedCardTypeId, squareDto.cashedLevel);
+	const promoted = resolveCard(squareDto.promotedCardTypeId, squareDto.promotedLevel);
+
+	const overlay = el("squareAnimOverlay");
+	const board = el("squareAnimBoard");
+	el("squareAnimTitle").textContent = t("playerView.square_anim_title");
+	el("squareAnimSubtitle").textContent = "";
+	board.classList.remove("shake-impact");
+	board.innerHTML = "";
+	for (let i = 0; i < 4; i++) {
+		const cardEl = document.createElement("div");
+		cardEl.className = "square-anim-card";
+		cardEl.innerHTML = buildGameCardHtml(cashed.entry, cashed.visual, "geco-card-sm");
+		board.appendChild(cardEl);
+	}
+
+	overlay.classList.add("active");
+	await new Promise((r) => setTimeout(r, 350)); // laisse le temps aux cartes de se peindre avant de mesurer leur position
+
+	const cardEls = [...board.children];
+	const targetX = window.innerWidth / 2;
+	const targetY = window.innerHeight / 2;
+
+	// PHASE A : anticipation (squash), légèrement décalée d'une carte à l'autre.
+	await Promise.all(cardEls.map((cardEl, i) => cardEl.animate([
+		{ transform: "translate(0,0) scale(1,1)" },
+		{ transform: "translate(0,8px) scale(1.12,0.88)", offset: 0.5 },
+		{ transform: "translate(0,-10px) scale(0.9,1.1)" },
+	], { duration: 160, delay: i * 25, easing: "ease-out", fill: "forwards" }).finished));
+
+	// PHASE B : convergence vers le centre de l'écran.
+	await Promise.all(cardEls.map((cardEl, i) => {
+		const rect = cardEl.getBoundingClientRect();
+		const dx = targetX - (rect.left + (rect.width / 2));
+		const dy = targetY - (rect.top + (rect.height / 2));
+		const rotZ = (i - 1.5) * 15;
+		return cardEl.animate([
+			{ transform: "translate(0,-10px) scale(0.9,1.1) rotate(0deg)" },
+			{ transform: `translate(${dx}px, ${dy}px) rotate(${rotZ}deg) scale(0.85)` },
+		], { duration: 420, easing: "cubic-bezier(0.25,1,0.5,1)", fill: "forwards" }).finished;
+	}));
+
+	// PHASE C : implosion (fusion des 4 cartes en un point).
+	await Promise.all(cardEls.map((cardEl) => cardEl.animate([
+		{ opacity: 1 },
+		{ transform: "scale(0.1)", opacity: 0 },
+	], { duration: 140, easing: "cubic-bezier(0.6,-0.28,0.735,0.045)", composite: "add", fill: "forwards" }).finished));
+	board.innerHTML = "";
+
+	// PHASE D : impact - secousse de l'écran, flash lumineux, étoiles projetées
+	// façon dessin animé (voir la demande explicite de l'utilisateur : "des
+	// animations et des étoiles").
+	board.classList.add("shake-impact");
+	const flash = document.createElement("div");
+	flash.className = "square-anim-flash";
+	flash.style.left = `${targetX}px`;
+	flash.style.top = `${targetY}px`;
+	document.body.appendChild(flash);
+	flash.animate([
+		{ transform: "scale(0.2)", opacity: 0 },
+		{ transform: "scale(1.4)", opacity: 1, offset: 0.3 },
+		{ transform: "scale(2.2)", opacity: 0 },
+	], { duration: 400, easing: "ease-out" }).finished.then(() => flash.remove());
+
+	const stars = ["⭐", "✨", "🌟"];
+	for (let i = 0; i < 16; i++) {
+		const p = document.createElement("div");
+		p.className = "square-anim-particle";
+		p.textContent = stars[i % stars.length];
+		p.style.left = `${targetX}px`;
+		p.style.top = `${targetY}px`;
+		document.body.appendChild(p);
+		const angle = (i / 16) * Math.PI * 2;
+		const dist = 90 + (Math.random() * 70);
+		const px = Math.cos(angle) * dist;
+		const py = Math.sin(angle) * dist;
+		p.animate([
+			{ transform: "translate(-50%,-50%) scale(1.1)", opacity: 1 },
+			{ transform: `translate(calc(-50% + ${px}px), calc(-50% + ${py}px)) scale(0)`, opacity: 0 },
+		], { duration: 500 + (Math.random() * 200), easing: "cubic-bezier(0.1,0.9,0.2,1)" }).finished.then(() => p.remove());
+	}
+	await new Promise((r) => setTimeout(r, 200));
+
+	// PHASE E : apparition des 5 nouvelles cartes - les VRAIES cartes reçues
+	// (4 de remplacement au même niveau + 1 promue, mise en valeur par un
+	// liseré doré, voir .square-anim-card.promoted).
+	el("squareAnimSubtitle").textContent = t("playerView.square_anim_detail", { cashed: cashed.label, promoted: promoted.label });
+	const revealItems = [...squareDto.replenishedCardIds.map((id) => ({ id, promotedFlag: false })),
+		{ id: squareDto.promotedCardTypeId, promotedFlag: true }];
+	const newEls = revealItems.map((item) => {
+		const resolved = resolveCard(item.id, item.promotedFlag ? squareDto.promotedLevel : squareDto.cashedLevel);
+		const cardEl = document.createElement("div");
+		cardEl.className = `square-anim-card${item.promotedFlag ? " promoted" : ""}`;
+		cardEl.style.opacity = "0";
+		cardEl.innerHTML = buildGameCardHtml(resolved.entry, resolved.visual, "geco-card-sm");
+		board.appendChild(cardEl);
+		return cardEl;
+	});
+	await Promise.all(newEls.map((cardEl, i) => cardEl.animate([
+		{ transform: "translateY(40px) scale(0.3)", opacity: 0 },
+		{ transform: "translateY(-10px) scale(1.15)", opacity: 1, offset: 0.75 },
+		{ transform: "translateY(0) scale(1)", opacity: 1 },
+	], { duration: 420, delay: i * 60, easing: "cubic-bezier(0.175,0.885,0.32,1.275)", fill: "forwards" }).finished));
+
+	// Laisse le résultat visible un instant, puis referme automatiquement vers
+	// "Mes cartes" - "l'écran d'animation disparaisse et laisse apparaître
+	// l'écran cartes du joueur".
+	await new Promise((r) => setTimeout(r, 1300));
+	overlay.classList.remove("active");
+	renderMyCards();
+	setActiveNav("navBtnCards");
 }
 
 if (window.GecoI18n) window.GecoI18n.onChange(startOnce);

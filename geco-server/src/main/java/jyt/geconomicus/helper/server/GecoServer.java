@@ -1370,6 +1370,21 @@ public class GecoServer
 						offer.mediumCoins(), offer.strongCoins(), offer.weakGoodsWanted(), offer.mediumGoodsWanted(),
 						offer.strongGoodsWanted(), code, offer.expiresAtEpochMs());
 				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
+				// Encaissement automatique des carrés (voir checkAndCashInSquares) -
+				// ICI plutôt que dans GameService (remonté par l'utilisateur,
+				// 31/08/2026) : une VRAIE animation doit se déclencher sur le
+				// téléphone du joueur concerné, ce qui nécessite de diffuser
+				// l'événement (voir broadcast(), accessible seulement ici).
+				// Monnaie libre uniquement (seul système avec un vrai inventaire
+				// suivi aujourd'hui) - le vendeur ET l'acheteur sont vérifiés,
+				// l'un des deux peut avoir complété un carré par cet échange précis.
+				if (game.getMoneySystem() == Game.MONEY_LIBRE)
+				{
+					for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, offer.sellerPlayerId()))
+						broadcast(id, "square", Dtos.CardSquareEventDto.from(square)); //$NON-NLS-1$
+					for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, req.buyerPlayerId()))
+						broadcast(id, "square", Dtos.CardSquareEventDto.from(square)); //$NON-NLS-1$
+				}
 				ctx.status(201).json(Dtos.TransactionDto.from(transaction));
 			}
 			catch (final IllegalArgumentException | PlayerNotFoundException e)

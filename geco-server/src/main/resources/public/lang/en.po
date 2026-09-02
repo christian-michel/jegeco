@@ -1927,3 +1927,10 @@ msgstr "Technological breakthrough"
 # ============ Grouping by value in My cards (31/08/2026) ============
 msgid "playerView.cards_group_value_title"
 msgstr "{level} value cards"
+
+# ============ "Square cashed in" animation (31/08/2026) ============
+msgid "playerView.square_anim_title"
+msgstr "Square completed! 🎉"
+
+msgid "playerView.square_anim_detail"
+msgstr "4× {cashed} traded for 1× {promoted}"

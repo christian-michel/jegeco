@@ -221,6 +221,24 @@
 		<p class="galilee-explainer" style="color:rgba(255,255,255,0.85);margin-top:1rem;" data-i18n="playerView.card_modal_swipe_hint">Glissez horizontalement pour retourner la carte</p>
 	</div>
 
+	<!-- ===== Animation "Carré encaissé" (31/08/2026) =====
+	     Remonté par l'utilisateur : les carrés se produisaient en silence,
+	     sans aucun retour visuel - confusion totale sur ce qui se passait.
+	     Inspirée du code fourni en référence (Web Animations API : squash,
+	     convergence, implosion, flash+particules, apparition des 5 nouvelles
+	     cartes) - adaptée pour utiliser les VRAIES cartes du joueur (voir
+	     playSquareAnimation dans player-view.js) plutôt que des placeholders,
+	     et pour reprendre le fond indigo/violet de l'inscription (--bg/
+	     --bg-gradient-end) plutôt qu'un fond noir générique. Se déclenche
+	     automatiquement dès la réception de l'événement WebSocket "square"
+	     (voir connectPlayerWs), dure 3-4 secondes, puis referme et affiche
+	     "Mes cartes". -->
+	<div class="square-anim-overlay" id="squareAnimOverlay">
+		<div class="square-anim-title" id="squareAnimTitle"></div>
+		<div class="square-anim-board" id="squareAnimBoard"></div>
+		<div class="square-anim-subtitle" id="squareAnimSubtitle"></div>
+	</div>
+
 	<!-- ===== Onglet "Stats" : classement complet ===== -->
 	<div id="leaderboardScreen" class="main-content hidden">
 		<section class="card leaderboard-card">

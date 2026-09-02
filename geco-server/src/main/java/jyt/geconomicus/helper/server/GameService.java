@@ -479,24 +479,14 @@ public class GameService
 				seller.setGoodsCount(seller.getGoodsCount() - 1 + pBuyerWeakGoods + pBuyerMediumGoods + pBuyerStrongGoods);
 				buyer.setGoodsCount(buyer.getGoodsCount() + 1 - pBuyerWeakGoods - pBuyerMediumGoods - pBuyerStrongGoods);
 			}
-			final boolean isLibre = game.getMoneySystem() == Game.MONEY_LIBRE;
-			final int sellerId = seller.getId();
-			final int buyerId = buyer.getId();
 			em.getTransaction().commit();
-			// Encaissement automatique des carrés (voir checkAndCashInSquares) -
-			// APRÈS le commit ci-dessus et EN DEHORS de cette transaction/cet
-			// EntityManager (checkAndCashInSquares gère les siens, une seule
-			// EntityManager ne pouvant pas imbriquer plusieurs transactions
-			// actives) - monnaie libre uniquement pour l'instant (voir la
-			// question posée à l'utilisateur le 28/08/2026 : troc/dette pas
-			// encore concernés par un vrai inventaire suivi). Le vendeur ET
-			// l'acheteur sont vérifiés : l'un des deux peut avoir complété un
-			// carré par cet échange précis.
-			if (isLibre)
-			{
-				checkAndCashInSquares(pGameId, sellerId);
-				checkAndCashInSquares(pGameId, buyerId);
-			}
+			// Encaissement automatique des carrés (voir checkAndCashInSquares) :
+			// DÉPLACÉ vers l'appelant (GecoServer, route de rédemption) le
+			// 31/08/2026 - remonté par l'utilisateur, qui veut une ANIMATION
+			// commémorant l'événement sur le téléphone du joueur concerné. Pour
+			// diffuser cette notification (voir broadcast()), il faut être dans
+			// GecoServer, qui seul y a accès - GameService ne s'en occupe donc
+			// plus lui-même.
 			return transaction;
 		}
 		finally
@@ -955,8 +945,9 @@ public class GameService
 	 * qu'il les tirait déjà identiques à 3 cartes déjà en main) - la boucle
 	 * protège contre ce cas, même rare.
 	 */
-	public void checkAndCashInSquares(final int pGameId, final int pPlayerId)
+	public java.util.List<CardSquareEvent> checkAndCashInSquares(final int pGameId, final int pPlayerId)
 	{
+		final java.util.List<CardSquareEvent> cashedInThisCall = new java.util.ArrayList<>();
 		while (true)
 		{
 			final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -964,7 +955,7 @@ public class GameService
 			{
 				final Game game = em.find(Game.class, pGameId);
 				if ((game == null) || (game.getSmartphoneCardPileJson() == null))
-					return; // pas (encore) de mise en place - rien à faire
+					return cashedInThisCall; // pas (encore) de mise en place - rien à faire
 
 				final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
 				final java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel;
@@ -977,7 +968,7 @@ public class GameService
 				}
 				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
 				{
-					return; // donnée corrompue : on abandonne silencieusement plutôt que de planter
+					return cashedInThisCall; // donnée corrompue : on abandonne silencieusement plutôt que de planter
 				}
 
 				// Cherche un modèle réuni en 4 exemplaires ou plus dans
@@ -997,17 +988,17 @@ public class GameService
 					}
 				}
 				if (squareCardId == null)
-					return; // rien à encaisser, on s'arrête là
+					return cashedInThisCall; // rien à encaisser, on s'arrête là
 
 				final int levelIndex = LEVEL_ORDER.indexOf(squareLevel);
 				if ((levelIndex < 0) || (levelIndex >= LEVEL_ORDER.size() - 1))
-					return; // déjà au niveau le plus haut (tresforte) - pas de niveau supérieur dans ce modèle simplifié
+					return cashedInThisCall; // déjà au niveau le plus haut (tresforte) - pas de niveau supérieur dans ce modèle simplifié
 
 				final String nextLevel = LEVEL_ORDER.get(levelIndex + 1);
 				final java.util.Map<String, Integer> samePile = pilesByLevel.get(squareLevel);
 				final java.util.Map<String, Integer> nextPile = pilesByLevel.get(nextLevel);
 				if ((samePile == null) || (nextPile == null) || samePile.isEmpty() || nextPile.isEmpty())
-					return; // pioche absente/vide (ne devrait pas arriver si la mise en place a bien eu lieu)
+					return cashedInThisCall; // pioche absente/vide (ne devrait pas arriver si la mise en place a bien eu lieu)
 
 				// Remet les 4 cartes défaussées dans LEUR pioche.
 				samePile.merge(squareCardId, 4, Integer::sum);
@@ -1015,7 +1006,7 @@ public class GameService
 				// Pioche 1 carte au hasard dans le niveau supérieur.
 				final String promotedCardId = pickRandomAvailable(nextPile);
 				if (promotedCardId == null)
-					return; // pioche supérieure épuisée (cas limite, ne devrait pas arriver avec 5×(N+1) exemplaires)
+					return cashedInThisCall; // pioche supérieure épuisée (cas limite, ne devrait pas arriver avec 5×(N+1) exemplaires)
 				nextPile.merge(promotedCardId, -1, Integer::sum);
 
 				// Pioche 4 nouvelles cartes dans LE MÊME niveau que celui
@@ -1048,6 +1039,7 @@ public class GameService
 						promotedCardId, nextLevel, toJsonQuietly(mapper, replenished), isFirstBreakthrough);
 				em.persist(squareEvent);
 				em.getTransaction().commit();
+				cashedInThisCall.add(squareEvent);
 
 				if (isFirstBreakthrough)
 				{
