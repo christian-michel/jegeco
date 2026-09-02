@@ -1012,8 +1012,25 @@ public class GameService
 				final String nextLevel = LEVEL_ORDER.get(levelIndex + 1);
 				final java.util.Map<String, Integer> samePile = pilesByLevel.get(squareLevel);
 				final java.util.Map<String, Integer> nextPile = pilesByLevel.get(nextLevel);
-				if ((samePile == null) || (nextPile == null) || samePile.isEmpty() || nextPile.isEmpty())
-					return cashedInThisCall; // pioche absente/vide (ne devrait pas arriver si la mise en place a bien eu lieu)
+				// BUG TROUVÉ (remonté par l'utilisateur, 02/09/2026) : ce garde-fou
+				// vérifiait AUSSI que samePile n'était pas VIDE avant de continuer -
+				// or les 4 cartes défaussées sont justement remises DANS samePile
+				// juste en dessous (voir samePile.merge(squareCardId, 4, ...)), ce
+				// qui la rend non-vide de toute façon. Avec peu de joueurs, la
+				// réserve dans la pioche est petite (ex. 2 joueurs/2 modèles/5
+				// exemplaires = seulement 2 cartes dans la pioche au départ, le
+                // reste distribué) : elle pouvait se retrouver VIDE au fil des
+				// échanges, et cette condition trop stricte bloquait alors
+				// SILENCIEUSEMENT tout carré suivant sur ce niveau - "le carré ne
+				// s'est pas déclenché automatiquement quand le joueur a eu 4
+				// cartes Abeilles" est exactement ce symptôme. Seul un sac cible
+				// (nextPile) réellement introuvable/vide empêche de continuer (déjà
+				// vérifié une seconde fois juste en dessous via pickRandomAvailable,
+				// cette vérification-ci ne sert donc qu'à distinguer "configuration
+				// absente" - ne devrait jamais arriver si la mise en place a eu
+				// lieu - d'un simple "plus rien à tirer maintenant", géré plus bas).
+				if ((samePile == null) || (nextPile == null))
+					return cashedInThisCall; // configuration de pioche absente (ne devrait pas arriver si la mise en place a bien eu lieu)
 
 				// Remet les 4 cartes défaussées dans LEUR pioche.
 				samePile.merge(squareCardId, 4, Integer::sum);
@@ -1026,7 +1043,12 @@ public class GameService
 
 				// Pioche 4 nouvelles cartes dans LE MÊME niveau que celui
 				// défaussé (peut inclure à nouveau le modèle qu'on vient de
-				// rendre, ou d'autres - un vrai tirage au hasard).
+				// rendre, ou d'autres - un vrai tirage au hasard). Peut tirer
+				// MOINS de 4 cartes si la pioche est temporairement pauvre (voir
+				// pickRandomAvailable ci-dessous) - ce n'est PAS bloquant, contrairement
+				// à l'ancien garde-fou plus haut : les 4 cartes défaussées viennent
+				// d'être remises dans cette même pioche juste au-dessus, il y a donc
+				// TOUJOURS au moins ces 4-là de disponibles pour ce tirage.
 				final java.util.List<String> replenished = new java.util.ArrayList<>();
 				for (int i = 0; i < 4; i++)
 				{
