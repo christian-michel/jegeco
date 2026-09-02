@@ -1775,6 +1775,16 @@ function connectPlayerWs() {
 		// déclenche l'animation automatiquement, pour CE joueur uniquement.
 		if ((msg.type === "square") && state.player && (msg.payload.playerId === state.player.id))
 			playSquareAnimation(msg.payload);
+		// Nouveau tour démarré (voir bouton "Démarrer la partie", app.js) -
+		// remonté par l'utilisateur (02/09/2026) : "il faut aussi que l'écran
+		// des joueurs montre automatiquement l'écran des Cartes". Ne
+		// bouscule jamais un achat/une vente EN COURS (modal carte ouverte
+		// ou caméra active) - seulement depuis un écran "passif" (accueil,
+		// profil, stats, déjà sur Cartes...).
+		if ((msg.type === "event") && (msg.payload.type === "TURN") && !state.cardModalOffer && !state.scanStream) {
+			renderMyCards();
+			setActiveNav("navBtnCards");
+		}
 	};
 }
 
