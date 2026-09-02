@@ -198,6 +198,14 @@ const EVENT_TYPE_LABEL_KEYS = {
 	SIDE_INVESTMENT: "event.type.SIDE_INVESTMENT",
 	ASSESSMENT_FINAL: "event.type.ASSESSMENT_FINAL",
 	GOODS_TRADE: "event.type.GOODS_TRADE",
+	// Manquait ici (remonté par l'utilisateur, 02/09/2026 : "WEALTH_CHECKPOINT...
+	// il faudrait le remplacer par un nom plus explicite") - le repli de
+	// eventTypeLabel() sur le nom brut de l'enum expliquait exactement ce qui
+	// était affiché. Un libellé français correct existait pourtant déjà côté
+	// serveur (voir messages_fr.properties, jamais utilisé ici : ce panneau
+	// traduit toujours côté client, voir le commentaire au-dessus de
+	// EVENT_TYPE_LABEL_KEYS).
+	WEALTH_CHECKPOINT: "event.type.WEALTH_CHECKPOINT",
 };
 function eventTypeLabel(fullEnumName) {
 	const key = EVENT_TYPE_LABEL_KEYS[fullEnumName];

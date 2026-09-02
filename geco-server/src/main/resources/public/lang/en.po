@@ -265,6 +265,10 @@ msgstr "Bank investment"
 msgid "event.type.ASSESSMENT_FINAL"
 msgstr "Final bank assessment"
 
+msgid "event.type.WEALTH_CHECKPOINT"
+msgstr "Balance recorded (tokens)"
+
+
 # ============ Automatic classification for "Cannot pay" (Seizure/Bankruptcy/Prison) ============
 msgid "event.outcome.seizure_simple_label"
 msgstr "Seizure"

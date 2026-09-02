@@ -1760,6 +1760,43 @@ async function startOnce() {
 // compte à rebours de son QR arriver à 0, indiscernable d'un QR simplement
 // expiré sans avoir jamais été scanné. Même mécanisme que app.js (voir
 // connectWs côté animateur) : une seule connexion, reconnexion automatique.
+// Coup de sifflet à chaque début de tour (remonté par l'utilisateur,
+// 02/09/2026) - même fichier son que côté animateur (voir playWhistle()
+// dans app.js), version simplifiée : pas de réglage volume/muet à
+// consulter ici (ces réglages sont propres à l'écran animateur, jamais
+// exposés au joueur). Secours synthétisé identique si la lecture du
+// fichier échoue (ex. navigateur exigeant une interaction préalable).
+let mPlayerAudioCtx = null;
+function playPlayerWhistle() {
+	try {
+		const audio = new Audio("/sounds/whistle.mp3");
+		audio.play().catch(() => playSynthesizedPlayerWhistle());
+	} catch (err) {
+		playSynthesizedPlayerWhistle();
+	}
+}
+function playSynthesizedPlayerWhistle() {
+	try {
+		if (!mPlayerAudioCtx) mPlayerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		if (mPlayerAudioCtx.state === "suspended") mPlayerAudioCtx.resume();
+		const now = mPlayerAudioCtx.currentTime;
+		const osc = mPlayerAudioCtx.createOscillator();
+		const gain = mPlayerAudioCtx.createGain();
+		osc.connect(gain);
+		gain.connect(mPlayerAudioCtx.destination);
+		osc.type = "square";
+		osc.frequency.setValueAtTime(2200, now);
+		gain.gain.setValueAtTime(0.0001, now);
+		gain.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
+		gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+		osc.start(now);
+		osc.stop(now + 0.35);
+	} catch (err) {
+		// Ni fichier ni synthèse possible (navigateur très restrictif) : on
+		// abandonne silencieusement, jamais bloquant pour la suite.
+	}
+}
+
 function connectPlayerWs() {
 	const proto = location.protocol === "https:" ? "wss" : "ws";
 	const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -1774,16 +1811,26 @@ function connectPlayerWs() {
 		// depuis GecoServer) - remonté par l'utilisateur (31/08/2026) :
 		// déclenche l'animation automatiquement, pour CE joueur uniquement.
 		if ((msg.type === "square") && state.player && (msg.payload.playerId === state.player.id))
-			playSquareAnimation(msg.payload);
+			enqueueSquareAnimation(msg.payload);
 		// Nouveau tour démarré (voir bouton "Démarrer la partie", app.js) -
 		// remonté par l'utilisateur (02/09/2026) : "il faut aussi que l'écran
 		// des joueurs montre automatiquement l'écran des Cartes". Ne
 		// bouscule jamais un achat/une vente EN COURS (modal carte ouverte
 		// ou caméra active) - seulement depuis un écran "passif" (accueil,
 		// profil, stats, déjà sur Cartes...).
-		if ((msg.type === "event") && (msg.payload.type === "TURN") && !state.cardModalOffer && !state.scanStream) {
-			renderMyCards();
-			setActiveNav("navBtnCards");
+		// Nouveau tour démarré (voir bouton "Démarrer la partie"/l'assistant de
+		// fin de tour, app.js) - remonté par l'utilisateur : "il faut que
+		// chaque début de tour s'accompagne d'un coup de sifflet", en plus de
+		// la bascule automatique déjà en place (voir plus haut, session
+		// précédente). Le sifflet joue TOUJOURS, y compris pendant un
+		// achat/une vente en cours (un simple son n'interrompt rien, contrairement
+		// à la bascule d'écran juste en dessous, elle bien gardée).
+		if ((msg.type === "event") && (msg.payload.type === "TURN")) {
+			playPlayerWhistle();
+			if (!state.cardModalOffer && !state.scanStream) {
+				renderMyCards();
+				setActiveNav("navBtnCards");
+			}
 		}
 	};
 }
@@ -1807,6 +1854,35 @@ function handleOwnSaleCompleted(transactionDto) {
 }
 
 // ============================================================
+// File d'attente pour l'animation "Carré encaissé" (02/09/2026) - remonté
+// par l'utilisateur : "j'ai eu des tours où j'ai reçu plus de 5 cartes à la
+// suite d'un carré". Cause trouvée : si DEUX carrés se déclenchent coup sur
+// coup pour le même joueur (le remplacement après un premier carré peut
+// immédiatement en créer un second, voir la boucle while(true) de
+// checkAndCashInSquares côté serveur, qui gère déjà ce cas correctement),
+// GecoServer diffuse alors DEUX messages "square" rapprochés - et
+// playSquareAnimation() (async, ~3,3 secondes) n'était protégée contre
+// aucun appel concurrent : la seconde animation écrasait le DOM de la
+// première EN PLEIN MILIEU (board.innerHTML = ...), pouvant faire
+// apparaître un mélange des deux jeux de cartes à l'écran. Corrigé : chaque
+// carré reçu est mis en file, un seul à la fois joue réellement, les
+// suivants attendent que le précédent soit terminé.
+let mSquareAnimQueue = [];
+let mSquareAnimRunning = false;
+function enqueueSquareAnimation(squareDto) {
+	mSquareAnimQueue.push(squareDto);
+	if (!mSquareAnimRunning) drainSquareAnimQueue();
+}
+async function drainSquareAnimQueue() {
+	mSquareAnimRunning = true;
+	while (mSquareAnimQueue.length > 0) {
+		const next = mSquareAnimQueue.shift();
+		await playSquareAnimation(next); // toujours attendu en entier avant le suivant - jamais deux animations en même temps
+	}
+	mSquareAnimRunning = false;
+}
+
+// ============================================================
 // Animation "Carré encaissé" (31/08/2026) - remonté par l'utilisateur : les
 // carrés se produisaient en silence, sans aucun retour visuel, d'où sa
 // confusion initiale ("je n'ai pas fait de carré, pourtant..."). Inspirée
@@ -1815,7 +1891,10 @@ function handleOwnSaleCompleted(transactionDto) {
 // pour utiliser les VRAIES cartes du joueur (résolues depuis le catalogue,
 // jamais des cartes génériques) et le fond indigo/violet déjà établi
 // ailleurs (voir .square-anim-overlay dans player.css). Dure environ 3,3
-// secondes puis referme automatiquement vers "Mes cartes".
+// secondes puis referme automatiquement vers "Mes cartes". Appelée
+// UNIQUEMENT depuis drainSquareAnimQueue() ci-dessus - jamais directement,
+// pour garantir qu'une seule animation ne joue à la fois (voir le
+// commentaire au-dessus).
 async function playSquareAnimation(squareDto) {
 	if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
 	if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());

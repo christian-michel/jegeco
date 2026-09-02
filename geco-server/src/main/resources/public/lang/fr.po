@@ -265,6 +265,12 @@ msgstr "Investissement banque"
 msgid "event.type.ASSESSMENT_FINAL"
 msgstr "Bilan final banque"
 
+# Remonté par l'utilisateur (02/09/2026) : "WEALTH_CHECKPOINT... il faudrait
+# le remplacer par un nom plus explicite (ex. : inventaire monétaire ou DU)"
+# - repris ici avec la mécanique exacte plutôt qu'un terme encore ambigu.
+msgid "event.type.WEALTH_CHECKPOINT"
+msgstr "Solde constaté (jetons)"
+
 # ============ Classification automatique "Ne peut pas payer" (Saisie/Banqueroute/Prison) ============
 msgid "event.outcome.seizure_simple_label"
 msgstr "Saisie"
