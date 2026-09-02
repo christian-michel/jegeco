@@ -15,6 +15,7 @@ import io.javalin.websocket.WsContext;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
 
+import jyt.geconomicus.helper.CardSquareEvent;
 import jyt.geconomicus.helper.Event;
 import jyt.geconomicus.helper.Game;
 import jyt.geconomicus.helper.Player;
