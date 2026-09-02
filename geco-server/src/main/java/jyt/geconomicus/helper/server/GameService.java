@@ -94,7 +94,22 @@ public class GameService
 			return false; // pas encore démarrée
 		if (pGame.getTurnNumber() >= pGame.getNbTurnsPlanned())
 			return false; // dernier tour déjà joué
-		return pGame.getPausedRemainingSeconds() == null; // minuteur pas en pause
+		if (pGame.getPausedRemainingSeconds() != null)
+			return false; // minuteur explicitement mis en pause par l'animateur
+		// Remonté par l'utilisateur (02/09/2026) : "lorsque le compte à rebours
+		// arrive à 0 (et qu'on vient de terminer le tour) on peut toujours
+		// faire des transactions. Il faudrait bloquer... En revanche il
+		// faudrait autoriser les transactions lorsque le compte à rebours
+		// fonctionne." - un vrai trou : jusqu'ici seule la pause EXPLICITE
+		// (pausedRemainingSeconds) était vérifiée, jamais l'expiration
+		// NATURELLE du minuteur (qui atteint 0 sans que l'animateur clique sur
+		// "Pause" - le tour est fini mais le suivant n'a pas encore démarré,
+		// voir turnStartedAt/turnDurationSeconds, déjà la référence pour ce
+		// calcul côté animateur, voir startTurnTimer() dans app.js).
+		if (pGame.getTurnStartedAt() == null)
+			return true; // minuteur jamais démarré pour ce tour (ne devrait pas arriver si turnNumber >= 1, mais par prudence on n'y ajoute pas de contrainte)
+		final long elapsedSeconds = (System.currentTimeMillis() - pGame.getTurnStartedAt().getTime()) / 1000;
+		return elapsedSeconds < pGame.getTurnDurationSeconds();
 	}
 
 	/**
