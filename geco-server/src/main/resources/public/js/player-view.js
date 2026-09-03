@@ -1799,7 +1799,14 @@ function playSynthesizedPlayerWhistle() {
 
 function connectPlayerWs() {
 	const proto = location.protocol === "https:" ? "wss" : "ws";
-	const ws = new WebSocket(`${proto}://${location.host}/ws`);
+	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement
+	// internet) : un joueur reste toujours sur LA MÊME partie pendant toute
+	// la durée de sa session (connue dès le chargement de la page, jamais
+	// changée) - contrairement à l'animateur (voir connectWs dans app.js,
+	// qui doit gérer un changement de partie EN COURS DE SESSION via un
+	// message dédié), il suffit ici de transmettre gameId une seule fois, en
+	// paramètre de connexion.
+	const ws = new WebSocket(`${proto}://${location.host}/ws?gameId=${encodeURIComponent(state.gameId)}`);
 	ws.onclose = () => setTimeout(connectPlayerWs, 2000);
 	ws.onerror = () => ws.close();
 	ws.onmessage = (evt) => {

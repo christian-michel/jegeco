@@ -999,6 +999,97 @@ trou jusque-là, aucune vérification n'existait. Le solde est vérifié via
 (qui consomme l'offre de façon atomique), pour ne jamais gâcher le QR d'un
 vendeur si l'achat échoue pour cette raison.
 
+### Passe de sécurité (02/09/2026) - en anticipation d'un hébergement accessible depuis internet
+
+L'utilisateur envisage, sans l'avoir encore tranché, d'héberger un jour le jeu
+sur un serveur accessible depuis internet plutôt qu'un réseau local d'atelier
+uniquement - une question sur les prérequis d'un tel déploiement a mené à
+examiner le code existant et à trouver deux failles concrètes, jamais un
+problème hypothétique.
+
+**1. Le PIN de partie ne protégeait rien côté serveur.** `GameService.verifyGamePin()`
+n'était appelé que par la route `/unlock` elle-même (qui ne fait QUE vérifier
+le PIN) - toutes les autres routes de données/administration d'une partie
+(`GET /api/games/{id}`, qui renvoie même le PIN en clair dans sa réponse,
+création/modification d'événements, gestion des joueurs...) étaient
+accessibles à quiconque connaissait (ou devinait, les identifiants de partie
+étant séquentiels) un identifiant de partie, PIN ou pas, correct ou non. Le
+client (voir `api()` dans app.js) anticipait pourtant DÉJÀ une réponse 403 et
+savait y réagir (redemande le PIN via une invite, réessaie automatiquement) -
+le mécanisme était à moitié construit, seule la vérification serveur
+manquait. Corrigé par une nouvelle méthode `requireGamePin(Context, int)`
+dans GecoServer, appliquée à 24 routes identifiées comme relevant strictement
+de l'animateur (jamais les routes joueur, protégées par leur propre jeton
+d'accès individuel - `Player.accessToken`, un mécanisme différent et déjà
+correct). `GET /api/games/compare` (qui accepte PLUSIEURS identifiants de
+partie à la fois) traitée séparément : chaque partie demandée est filtrée
+individuellement (incluse seulement si non protégée ou si le PIN fourni lui
+correspond), plutôt que de tout rejeter si les parties comparées ont des PIN
+différents.
+
+Classification vérifiée par script exhaustif (24 routes protégées, 28
+laissées ouvertes à raison : jetons joueur, inscription publique, offres
+d'échange protégées par leur propre jeton, `/unlock` lui-même).
+
+**2. Les diffusions WebSocket n'étaient pas cloisonnées par partie.**
+`broadcast()` envoyait chaque message à TOUTES les connexions ouvertes sur le
+serveur, quelle que soit la partie suivie - un filtrage purement côté client
+(`if (String(msg.gameId) !== String(state.gameId)) return;`, donc
+contournable) faisait le tri. Sans conséquence tant qu'une seule partie
+tourne à la fois sur le réseau local d'un atelier, mais un vrai risque de
+fuite de données entre parties dès qu'un serveur en héberge plusieurs
+simultanément. Corrigé : `Set<WsContext> mSessions` remplacé par
+`Map<WsContext, Integer> mSessionGameIds` (session -> partie suivie),
+alimentée soit par un paramètre `?gameId=` à la connexion (joueur, qui reste
+toujours sur la même partie pendant toute sa session), soit par un message
+`{"type":"subscribe","gameId":X}` envoyé par le client à chaque changement de
+partie consultée (animateur - `connectWs()` reste ouvert en continu au
+travers de plusieurs navigations, contrairement au joueur). `broadcast()` ne
+cible plus que les sessions associées à la bonne partie.
+
+**Trouvaille en creusant ce second point** : la diffusion `game_recomputed`
+(déclenchée après CHAQUE action animateur) véhiculait `GameDetailDto`, qui
+inclut le PIN en clair - un joueur de la même partie (qui connaît forcément
+l'identifiant de partie, donc peut se connecter directement à `/ws?gameId=X`
+sans passer par l'interface) aurait pu y lire le PIN sans jamais le deviner,
+contournant entièrement la protection tout juste ajoutée. Vérifié que le
+client n'utilise cette diffusion QUE comme signal pour redemander l'état à
+jour via un appel REST classique (déjà authentifié) - jamais lue directement
+- avant de retirer le PIN de la charge utile diffusée (`stripPin()`, une
+copie du DTO avec pin -> null, jamais des données REST classiques,
+uniquement les diffusions).
+
+**3. Aucune limitation de débit n'existait nulle part.** Un PIN à 6 chiffres
+ou un code d'échange QR à 6 caractères (32^6 combinaisons), même peu probables
+à deviner en un seul essai, restent vulnérables à un grand nombre de
+tentatives automatisées sans un tel frein - un vrai risque à l'échelle
+d'internet, absent sur un réseau local isolé. Implémentée volontairement
+SANS nouvelle dépendance Maven (impossible de vérifier qu'une bibliothèque
+tierce se télécharge/compile correctement sans accès réseau dans cet
+environnement de développement) : une fenêtre glissante simple, en mémoire,
+par adresse IP et par point sensible (`allowRequest()`) - appliquée au PIN
+(10 tentatives/minute) et aux codes d'échange QR, consultation et rédemption
+confondues (30/minute).
+
+**Limite assumée et signalée à l'utilisateur** : l'ajout de `ws.onMessage()`
+côté serveur (réception du message `subscribe`) utilise `Context.message()` -
+une méthode de l'API Javalin qui n'a pas pu être vérifiée avec certitude
+absolue (aucune dépendance en cache localement, réseau bloqué pour un test de
+compilation réel). Tout le reste de cette passe a été vérifié soit par
+exécution directe (`bash -n`, `node -c`), soit par simulation de la logique
+en Python (comptage exhaustif des routes classifiées, filtrage `broadcast()`,
+correspondance champ à champ de `stripPin()`, fenêtre glissante testée sur 4
+scénarios) - ce point précis reste la seule zone d'incertitude réelle de
+cette session.
+
+**Hors périmètre de cette passe, volontairement** (remonté par l'utilisateur
+comme des questions distinctes, pas encore tranchées) : les routes
+d'administration GLOBALE du serveur (liste/création de parties, plugins,
+réglages, catalogues, langues) restent sans authentification - une question
+différente de la protection PAR PARTIE traitée ici, qui nécessiterait un vrai
+concept de compte administrateur si un serveur venait à héberger des parties
+de plusieurs organisations indépendantes sans lien entre elles.
+
 ### Autres correctifs (retours utilisateur)
 
 - **Actions conditionnelles dans le bilan des joueurs endettés** : "Rembourse

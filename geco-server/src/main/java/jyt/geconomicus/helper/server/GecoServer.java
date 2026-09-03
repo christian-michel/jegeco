@@ -2,11 +2,11 @@ package jyt.geconomicus.helper.server;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.javalin.Javalin;
 import io.javalin.http.BadRequestResponse;
+import io.javalin.http.Context;
 import io.javalin.http.ForbiddenResponse;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.http.staticfiles.Location;
@@ -61,7 +61,16 @@ public class GecoServer
 	// Connexions WebSocket actives, pour diffuser les mises à jour en temps réel.
 	// ConcurrentHashMap.newKeySet() : plusieurs clients peuvent se (dé)connecter en parallèle
 	// (un thread Javalin par requête), il faut donc une structure thread-safe.
-	private final Set<WsContext> mSessions = ConcurrentHashMap.newKeySet();
+	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement
+	// internet) : chaque session ne recevait auparavant AUCUN filtrage
+	// serveur - toutes les diffusions (voir broadcast() plus bas) étaient
+	// envoyées à TOUTES les connexions ouvertes, quelle que soit la partie
+	// suivie, un filtrage purement côté client (donc contournable) faisait
+	// le tri. Remplace Set<WsContext> par une association session -> partie
+	// suivie (voir gameId, transmis en paramètre de requête à la connexion,
+	// voir pApp.ws ci-dessous) : broadcast() peut désormais ne cibler QUE
+	// les sessions réellement concernées par la partie en question.
+	private final java.util.Map<WsContext, Integer> mSessionGameIds = new ConcurrentHashMap<>();
 
 	// Le service métier est injecté plutôt qu'instancié ici : ça permet de le tester
 	// indépendamment du serveur HTTP (pas besoin de démarrer Javalin pour tester GameService).
@@ -635,6 +644,14 @@ public class GecoServer
 		// requêtes suivantes concernant cette partie).
 		pApp.post("/api/games/{id}/unlock", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			// Remonté par un utilisateur (02/09/2026) : limite les tentatives de
+			// PIN à 10 par minute par adresse IP - un PIN à 6 chiffres reste
+			// bien trop facile à deviner par force brute sans un tel frein.
+			if (!allowRequest(ctx, "unlock", 10, 60)) //$NON-NLS-1$
+			{
+				ctx.status(429).json(java.util.Map.of("error", "Trop de tentatives, réessayez dans un instant.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
 			final Dtos.UnlockRequest req = ctx.bodyAsClass(Dtos.UnlockRequest.class);
 			if (mGameService.verifyGamePin(id, req.pin()))
 				ctx.status(204);
@@ -686,9 +703,24 @@ public class GecoServer
 				ctx.status(400).json(java.util.Map.of("error", "Paramètre 'ids' manquant ou vide")); //$NON-NLS-1$ //$NON-NLS-2$
 				return;
 			}
+			// Remonté par un utilisateur (02/09/2026, anticipation d'un
+			// hébergement internet) : cette route acceptant PLUSIEURS
+			// identifiants de partie à la fois (pas un simple {id} de chemin),
+			// requireGamePin() ne s'applique pas directement - un seul en-tête
+			// X-Game-Pin est reçu pour toute la requête, potentiellement
+			// insuffisant si les parties comparées ont des PIN différents.
+			// Plutôt que de tout rejeter dans ce cas (l'animateur voulait
+			// peut-être comparer des parties SANS protection, ou partageant le
+			// même PIN - les deux cas fonctionnent déjà), chaque partie est
+			// filtrée INDIVIDUELLEMENT : incluse seulement si non protégée ou
+			// si le PIN fourni lui correspond, jamais de fuite vers une partie
+			// dont le PIN ne correspond pas.
 			final List<Game> games = java.util.Arrays.stream(idsParam.split(",")) //$NON-NLS-1$
 					.map(String::trim).filter(s -> !s.isEmpty()).map(Integer::parseInt).map(mGameService::getGame)
-					.filter(java.util.Objects::nonNull).toList();
+					.filter(java.util.Objects::nonNull)
+					.filter(g -> !mAppSettings.isProtectionEnabled()
+							|| mGameService.verifyGamePin(g.getId(), ctx.header("X-Game-Pin"))) //$NON-NLS-1$
+					.toList();
 			if (games.isEmpty())
 			{
 				ctx.status(404).json(java.util.Map.of("error", "Aucune des parties demandées n'a été trouvée")); //$NON-NLS-1$ //$NON-NLS-2$
@@ -714,6 +746,7 @@ public class GecoServer
 
 		pApp.get("/api/games/{id}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.getGame(id);
 			if (game == null)
 			{
@@ -732,6 +765,7 @@ public class GecoServer
 		// inventer un format d'export séparé à maintenir en double.
 		pApp.get("/api/games/{id}/export", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.getGame(id);
 			if (game == null)
 			{
@@ -750,6 +784,7 @@ public class GecoServer
 		// événements) - proposée depuis l'écran "Parties récentes" du front.
 		pApp.delete("/api/games/{id}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			mGameService.deleteGame(id);
 			ctx.status(204);
 		});
@@ -760,6 +795,7 @@ public class GecoServer
 		// d'événements (quelques centaines au plus), le recalcul est quasi instantané.
 		pApp.get("/api/games/{id}/stats", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.getGame(id);
 			if (game == null)
 			{
@@ -774,6 +810,7 @@ public class GecoServer
 		// création de la partie (remonté par un utilisateur).
 		pApp.post("/api/games/{id}/start", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.startGame(id);
 			broadcast(id, "game_started", null); //$NON-NLS-1$
 			ctx.json(GameDetailDto.from(game));
@@ -783,6 +820,7 @@ public class GecoServer
 		// départ du tour, ce qui allonge le temps restant pour tous les clients connectés.
 		pApp.post("/api/games/{id}/turn/extend", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final String secondsParam = ctx.queryParam("seconds"); //$NON-NLS-1$
 			final int deltaSeconds = secondsParam != null ? Integer.parseInt(secondsParam) : 30;
 			final Game game = mGameService.extendCurrentTurn(id, deltaSeconds);
@@ -796,12 +834,14 @@ public class GecoServer
 		// stocké côté serveur plutôt qu'un simple indicateur local au navigateur.
 		pApp.post("/api/games/{id}/turn/pause", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.pauseTurn(id);
 			broadcast(id, "turn_paused", null); //$NON-NLS-1$
 			ctx.json(GameDetailDto.from(game));
 		});
 		pApp.post("/api/games/{id}/turn/resume", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.resumeTurn(id);
 			broadcast(id, "turn_resumed", null); //$NON-NLS-1$
 			ctx.json(GameDetailDto.from(game));
@@ -811,6 +851,7 @@ public class GecoServer
 		// écart-type, indice de Gini) et histogramme de répartition finale des richesses.
 		pApp.get("/api/games/{id}/report", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.getGame(id);
 			if (game == null)
 			{
@@ -828,6 +869,7 @@ public class GecoServer
 		// plus emprunté, brassé le plus de volume) + volume global de transactions.
 		pApp.get("/api/games/{id}/activity", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.getGame(id);
 			if (game == null)
 			{
@@ -841,6 +883,7 @@ public class GecoServer
 		// Galilée" de la TRM : convergence des comptes vers la moyenne).
 		pApp.get("/api/games/{id}/wealth-over-time", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final Game game = mGameService.getGame(id);
 			if (game == null)
 			{
@@ -865,6 +908,7 @@ public class GecoServer
 		// voir apparaître un joueur qui vient de rejoindre depuis son smartphone.
 		pApp.post("/api/games/{id}/players", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final AddPlayerRequest req = ctx.bodyAsClass(AddPlayerRequest.class);
 			final Player player = mGameService.addPlayer(id, req.name());
 			broadcast(id, "player_added", PlayerDto.from(player, 0)); //$NON-NLS-1$
@@ -1020,6 +1064,7 @@ public class GecoServer
 		// Liste des demandes en attente - écran animateur, protégée par le PIN normalement.
 		pApp.get("/api/games/{id}/credit-requests", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			ctx.json(mCreditRequestService.listPending(id).stream().map(Dtos.CreditRequestDto::from).toList());
 		});
 
@@ -1029,6 +1074,7 @@ public class GecoServer
 		// chemin d'écriture dans le moteur.
 		pApp.post("/api/games/{id}/credit-requests/{requestId}/approve", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final int requestId = Integer.parseInt(ctx.pathParam("requestId")); //$NON-NLS-1$
 			final CreditRequestService.Request request = mCreditRequestService.get(requestId);
 			if ((request == null) || (request.gameId() != id) || !"pending".equals(request.status())) //$NON-NLS-1$
@@ -1053,6 +1099,7 @@ public class GecoServer
 		// Refus - la demande passe simplement à "declined", rien d'autre à faire.
 		pApp.post("/api/games/{id}/credit-requests/{requestId}/decline", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final int requestId = Integer.parseInt(ctx.pathParam("requestId")); //$NON-NLS-1$
 			final CreditRequestService.Request request = mCreditRequestService.get(requestId);
 			if ((request == null) || (request.gameId() != id) || !"pending".equals(request.status())) //$NON-NLS-1$
@@ -1097,10 +1144,11 @@ public class GecoServer
 		// puisque la suppression peut affecter la masse monétaire et d'autres joueurs.
 		pApp.delete("/api/games/{id}/players/{playerId}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final int playerId = Integer.parseInt(ctx.pathParam("playerId")); //$NON-NLS-1$
 			mGameService.deletePlayer(id, playerId);
 			final Game updated = mGameService.getGame(id);
-			broadcast(id, "game_recomputed", GameDetailDto.from(updated)); //$NON-NLS-1$
+			broadcast(id, "game_recomputed", stripPin(GameDetailDto.from(updated))); //$NON-NLS-1$
 			ctx.status(204);
 		});
 
@@ -1109,13 +1157,14 @@ public class GecoServer
 		// côté serveur (pas de copie locale à synchroniser côté client).
 		pApp.put("/api/games/{id}/players/{playerId}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final int playerId = Integer.parseInt(ctx.pathParam("playerId")); //$NON-NLS-1$
 			final AddPlayerRequest req = ctx.bodyAsClass(AddPlayerRequest.class);
 			try
 			{
 				mGameService.renamePlayer(id, playerId, req.name());
 				final Game updated = mGameService.getGame(id);
-				broadcast(id, "game_recomputed", GameDetailDto.from(updated)); //$NON-NLS-1$
+				broadcast(id, "game_recomputed", stripPin(GameDetailDto.from(updated))); //$NON-NLS-1$
 				ctx.status(200).json(GameDetailDto.from(updated));
 			}
 			catch (final GameService.DuplicatePlayerNameException e)
@@ -1160,6 +1209,7 @@ public class GecoServer
 		// dans EventTypeConverter (ex: "J" pour JOIN, "C" pour NEW_CREDIT...).
 		pApp.post("/api/games/{id}/events", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final RecordEventRequest req = ctx.bodyAsClass(RecordEventRequest.class);
 			final Event event = mGameService.recordEvent(id, req.type(), req.playerId(), req.principal(),
 					req.interest(), req.weakCards(), req.mediumCards(), req.strongCards(),
@@ -1245,6 +1295,7 @@ public class GecoServer
 		// (StatsService.computeWealthOverTime notamment) - pas encore construit.
 		pApp.get("/api/games/{id}/transactions", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			ctx.json(mGameService.listTransactions(id).stream().map(Dtos.TransactionDto::from).toList());
 		});
 
@@ -1254,6 +1305,7 @@ public class GecoServer
 		// l'application de l'animateur lors de l'entre-deux tour".
 		pApp.get("/api/games/{id}/squares", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			ctx.json(mGameService.listGameSquares(id).stream().map(Dtos.CardSquareEventDto::from).toList());
 		});
 
@@ -1297,6 +1349,13 @@ public class GecoServer
 		// permet d'afficher l'écran de confirmation avant paiement.
 		pApp.get("/api/games/{id}/trade-offers/{code}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			// Même surface de devinette de code que la rédemption juste en
+			// dessous (voir son commentaire) - même limite.
+			if (!allowRequest(ctx, "redeem", 30, 60)) //$NON-NLS-1$
+			{
+				ctx.status(429).json(java.util.Map.of("error", "Trop de tentatives, réessayez dans un instant.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
 			final TradeOfferService.Offer offer = mTradeOfferService.peek(ctx.pathParam("code")); //$NON-NLS-1$
 			if ((offer == null) || (offer.gameId() != id))
 			{
@@ -1309,6 +1368,16 @@ public class GecoServer
 		pApp.post("/api/games/{id}/trade-offers/{code}/redeem", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			final String code = ctx.pathParam("code"); //$NON-NLS-1$
+			// Remonté par un utilisateur (02/09/2026) : limite les tentatives de
+			// rédemption à 30 par minute par adresse IP - un code à 6
+			// caractères (32^6 combinaisons) reste théoriquement soumis à une
+			// force brute automatisée sur sa fenêtre de validité de 90
+			// secondes sans un tel frein, même si peu probable en un seul essai.
+			if (!allowRequest(ctx, "redeem", 30, 60)) //$NON-NLS-1$
+			{
+				ctx.status(429).json(java.util.Map.of("error", "Trop de tentatives, réessayez dans un instant.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
 			final Dtos.RedeemTradeOfferRequest req = ctx.bodyAsClass(Dtos.RedeemTradeOfferRequest.class);
 			final Game game = mGameService.getGame(id);
 			if (game == null)
@@ -1400,16 +1469,18 @@ public class GecoServer
 		// peuvent avoir changé en cascade pour d'autres joueurs.
 		pApp.delete("/api/games/{id}/events/{eventId}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final int eventId = Integer.parseInt(ctx.pathParam("eventId")); //$NON-NLS-1$
 			mGameService.deleteEvent(id, eventId);
 			final Game updated = mGameService.getGame(id);
-			broadcast(id, "game_recomputed", GameDetailDto.from(updated)); //$NON-NLS-1$
+			broadcast(id, "game_recomputed", stripPin(GameDetailDto.from(updated))); //$NON-NLS-1$
 			ctx.status(204);
 		});
 
 		// Édition d'un événement (principal/intérêt/date/prénom pour JOIN), avec le même recalcul intégral.
 		pApp.put("/api/games/{id}/events/{eventId}", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final int eventId = Integer.parseInt(ctx.pathParam("eventId")); //$NON-NLS-1$
 			final EditEventRequest req = ctx.bodyAsClass(EditEventRequest.class);
 			java.util.Date tstamp = null;
@@ -1419,7 +1490,7 @@ public class GecoServer
 			}
 			mGameService.editEvent(id, eventId, req.principal(), req.interest(), tstamp, req.name());
 			final Game updated = mGameService.getGame(id);
-			broadcast(id, "game_recomputed", GameDetailDto.from(updated)); //$NON-NLS-1$
+			broadcast(id, "game_recomputed", stripPin(GameDetailDto.from(updated))); //$NON-NLS-1$
 			ctx.status(200).json(GameDetailDto.from(updated));
 		});
 
@@ -1428,6 +1499,7 @@ public class GecoServer
 		// (partie vide de tout événement).
 		pApp.post("/api/games/{id}/undo", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			final boolean undone = mGameService.undoLastEvent(id);
 			if (!undone)
 			{
@@ -1435,7 +1507,7 @@ public class GecoServer
 				return;
 			}
 			final Game updated = mGameService.getGame(id);
-			broadcast(id, "game_recomputed", GameDetailDto.from(updated)); //$NON-NLS-1$
+			broadcast(id, "game_recomputed", stripPin(GameDetailDto.from(updated))); //$NON-NLS-1$
 			ctx.status(200).json(GameDetailDto.from(updated));
 		});
 
@@ -1445,16 +1517,57 @@ public class GecoServer
 		// tour, avant que l'animateur ne fasse sa propre sélection.
 		pApp.get("/api/games/{id}/suggested-deaths", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
 			ctx.json(mGameService.suggestDeaths(id));
 		});
 
 		// --- WebSocket : diffusion temps reel (ecran de stats, futurs clients smartphones) ---
-		// On se contente ici d'enregistrer/désenregistrer la session dans mSessions ; c'est la
-		// méthode broadcast() ci-dessous qui envoie effectivement les messages. Le client (app.js)
-		// n'a pas besoin d'envoyer de messages au serveur pour l'instant, seulement de recevoir.
+		// Chaque connexion transmet la partie qu'elle suit en paramètre de requête
+		// (?gameId=X, voir connectWs()/connectPlayerWs() côté client) - c'est cette
+		// association qui permet à broadcast() de ne cibler QUE les sessions
+		// réellement concernées, plutôt que toutes les connexions ouvertes sur le
+		// serveur (voir le commentaire au-dessus de mSessionGameIds).
 		pApp.ws("/ws", ws -> { //$NON-NLS-1$
-			ws.onConnect(mSessions::add);
-			ws.onClose(mSessions::remove);
+			ws.onConnect(ctx -> {
+				final String gameIdParam = ctx.queryParam("gameId"); //$NON-NLS-1$
+				if (gameIdParam != null)
+				{
+					try
+					{
+						mSessionGameIds.put(ctx, Integer.parseInt(gameIdParam));
+					}
+					catch (final NumberFormatException e)
+					{
+						// Paramètre invalide (ne devrait jamais arriver avec un client à jour) :
+						// la session reste simplement non associée à une partie, aucune
+						// diffusion ne lui parviendra plutôt que de planter la connexion.
+					}
+				}
+			});
+			ws.onClose(ctx -> mSessionGameIds.remove(ctx));
+			// Remonté par un utilisateur (02/09/2026) : côté animateur (voir
+			// connectWs dans app.js), la partie suivie peut changer EN COURS
+			// DE SESSION (navigation entre plusieurs parties, connexion WS
+			// restée ouverte) - un simple paramètre à la connexion (ci-dessus,
+			// suffisant côté joueur, voir connectPlayerWs) ne peut pas
+			// refléter ce changement. Le client envoie alors un message
+			// {"type":"subscribe","gameId":X} à chaque changement, reçu ici.
+			ws.onMessage(ctx -> {
+				try
+				{
+					final java.util.Map<String, Object> msg = new com.fasterxml.jackson.databind.ObjectMapper()
+							.readValue(ctx.message(), java.util.Map.class);
+					if ("subscribe".equals(msg.get("type")) && (msg.get("gameId") != null)) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+					{
+						mSessionGameIds.put(ctx, ((Number) msg.get("gameId")).intValue()); //$NON-NLS-1$
+					}
+				}
+				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+				{
+					// Message mal formé (ne devrait jamais arriver avec un client à jour) :
+					// ignoré silencieusement plutôt que de fermer la connexion pour si peu.
+				}
+			});
 		});
 	}
 
@@ -1463,12 +1576,108 @@ public class GecoServer
 	 * qui, a l'etape 3, permettra a chaque smartphone connecte de voir en temps reel
 	 * les actions des autres joueurs et de l'animateur.
 	 */
+	/**
+	 * Vérifie que la requête porte le bon PIN (en-tête X-Game-Pin) pour une
+	 * route ANIMATEUR - jamais les routes joueur, protégées par leur propre
+	 * jeton d'accès individuel (voir Player.accessToken), un mécanisme
+	 * entièrement différent et déjà correct. Lève ForbiddenResponse (403) si
+	 * la protection est activée globalement (réglage Paramètres) ET que le
+	 * PIN fourni ne correspond pas à celui de la partie - le client (voir
+	 * api() dans app.js) sait déjà réagir à ce code : il redemande le PIN via
+	 * une invite et réessaie automatiquement la requête d'origine, ce
+	 * mécanisme existait déjà côté client, seule la vérification serveur
+	 * manquait.
+	 *
+	 * Remonté par un utilisateur (02/09/2026, en anticipation d'un
+	 * hébergement accessible depuis internet) : AUCUNE route de
+	 * données/administration d'une partie ne vérifiait le PIN jusqu'ici (à
+	 * l'exception de la route /unlock elle-même, qui ne fait QUE le
+	 * vérifier) - n'importe qui connaissant (ou devinant, les identifiants
+	 * de partie étant séquentiels) un identifiant de partie pouvait lire ou
+	 * modifier n'importe quelle donnée, PIN ou pas, correct ou non. Sans
+	 * conséquence tant que seul un réseau local isolé y avait accès, mais un
+	 * vrai risque dès qu'un serveur devient joignable depuis internet.
+	 */
+	private void requireGamePin(final Context pCtx, final int pGameId)
+	{
+		if (!mAppSettings.isProtectionEnabled())
+			return; // protection désactivée globalement : comportement historique inchangé, aucune installation existante affectée
+		if (!mGameService.verifyGamePin(pGameId, pCtx.header("X-Game-Pin"))) //$NON-NLS-1$
+			throw new ForbiddenResponse("PIN de partie requis ou incorrect."); //$NON-NLS-1$
+	}
+
+	/**
+	 * Copie d'un GameDetailDto avec le PIN retiré (champ pin -> null) - voir
+	 * broadcast() et le raisonnement complet à son sujet : les diffusions
+	 * WebSocket "game_recomputed" ne servent au client (voir ws.onmessage
+	 * dans app.js) que de SIGNAL pour redemander l'état à jour via un appel
+	 * REST classique, déjà authentifié (voir requireGamePin) - jamais lues
+	 * directement, le PIN qu'elles véhiculaient jusqu'ici n'avait donc aucune
+	 * utilité pour le client mais restait visible à quiconque écoutait le
+	 * canal WebSocket de cette partie (voir mSessionGameIds : un joueur de la
+	 * même partie, qui connaît forcément l'identifiant de partie, aurait pu
+	 * s'y connecter directement pour y lire le PIN sans jamais le
+	 * deviner). Remonté par un utilisateur (02/09/2026, anticipation d'un
+	 * hébergement internet).
+	 */
+	private static Dtos.GameDetailDto stripPin(final Dtos.GameDetailDto pDto)
+	{
+		return new Dtos.GameDetailDto(pDto.id(), pDto.description(), pDto.moneySystem(), pDto.turnNumber(),
+				pDto.nbTurnsPlanned(), pDto.moneyMass(), pDto.interestGained(), pDto.activePlayersCount(),
+				pDto.avgAge(), pDto.totalCreditsOutstanding(), pDto.turnDurationSeconds(),
+				pDto.turnStartedAtEpochMs(), pDto.players(), pDto.events(), pDto.moneyCardsFactor(),
+				pDto.weakCoinValue(), pDto.animatorPseudo(), pDto.seizedValues(), pDto.moneyInvestBank(),
+				pDto.cardsInvestBank(), pDto.pausedRemainingSeconds(), pDto.startingGoods(), pDto.strictTrm(), null);
+	}
+
+	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement
+	// internet) : aucune limitation de débit n'existait nulle part - un PIN à
+	// 6 chiffres ou un code d'échange à 6 caractères, même peu probables à
+	// deviner en un seul essai, deviennent vulnérables à un grand nombre de
+	// tentatives automatisées sans aucun frein. Implémentation volontairement
+	// SANS nouvelle dépendance Maven (impossible de vérifier ici qu'une
+	// bibliothèque tierce se télécharge/compile correctement sans accès
+	// réseau) : une fenêtre glissante en mémoire, par adresse IP.
+	private final java.util.Map<String, java.util.List<Long>> mRateLimitHits = new ConcurrentHashMap<>();
+
+	/**
+	 * Autorise ou refuse une requête selon une fenêtre glissante simple (au
+	 * plus pMaxRequests requêtes par pWindowSeconds secondes, par adresse IP
+	 * ET par pBucketKey - deux points sensibles différents ne partagent
+	 * jamais le même compteur). Retourne true si la requête est autorisée.
+	 */
+	private boolean allowRequest(final Context pCtx, final String pBucketKey, final int pMaxRequests,
+			final int pWindowSeconds)
+	{
+		final String key = pBucketKey + ':' + pCtx.ip();
+		final long now = System.currentTimeMillis();
+		final long windowStart = now - (pWindowSeconds * 1000L);
+		final java.util.List<Long> hits = mRateLimitHits.computeIfAbsent(key,
+				k -> java.util.Collections.synchronizedList(new java.util.ArrayList<>()));
+		synchronized (hits)
+		{
+			hits.removeIf(t -> t < windowStart);
+			if (hits.size() >= pMaxRequests)
+				return false;
+			hits.add(now);
+			return true;
+		}
+	}
+
 	private void broadcast(final int pGameId, final String pType, final Object pPayload)
 	{
 		final WsBroadcastMessage msg = new WsBroadcastMessage(pType, pGameId, pPayload);
-		for (final WsContext session : mSessions)
+		// Ne cible que les sessions suivant CETTE partie (voir mSessionGameIds,
+		// alimentée à la connexion) - avant : envoyé à TOUTES les sessions
+		// ouvertes sur le serveur, quelle que soit la partie suivie, filtrées
+		// uniquement côté client (donc contournable). Sans effet sur une
+        // installation locale à une seule partie à la fois (comportement
+        // identique), mais nécessaire dès que plusieurs parties tournent en
+        // même temps sur le même serveur.
+		for (final java.util.Map.Entry<WsContext, Integer> entry : mSessionGameIds.entrySet())
 		{
-			session.send(msg);
+			if (entry.getValue() == pGameId)
+				entry.getKey().send(msg);
 		}
 	}
 

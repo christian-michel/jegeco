@@ -270,7 +270,18 @@ function connectWs() {
 	const ws = new WebSocket(`${proto}://${location.host}/ws`);
 	state.ws = ws;
 
-	ws.onopen = () => setConnStatus(true);
+	ws.onopen = () => {
+		setConnStatus(true);
+		// Remonté par un utilisateur (02/09/2026) : si une partie est déjà
+		// sélectionnée au moment où la connexion s'ouvre (ex. rechargement de
+		// page en cours de consultation), il faut le signaler tout de suite -
+		// sinon aucune diffusion ne parvient tant qu'aucun changement de
+		// partie n'a eu lieu (voir openGame(), où ce même message est envoyé
+		// à chaque navigation).
+		if (state.currentGameId != null) {
+			ws.send(JSON.stringify({ type: "subscribe", gameId: state.currentGameId }));
+		}
+	};
 	ws.onclose = () => { setConnStatus(false); setTimeout(connectWs, 2000); };
 	ws.onerror = () => ws.close();
 
@@ -1905,6 +1916,15 @@ async function renderGameDetail(gameId) {
 	// n'auraient pas de sens à ce moment précis.
 	if (state.currentGameId !== gameId) state.turnEnded = false;
 	state.currentGameId = gameId;
+	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement
+	// internet) : la connexion WebSocket reste ouverte en continu (voir
+	// connectWs, connectée une seule fois au démarrage) - sans ce message,
+	// le serveur ne saurait jamais qu'on vient de changer de partie
+	// consultée, et continuerait à filtrer les diffusions selon l'ANCIENNE
+	// partie (voir GecoServer.mSessionGameIds côté serveur).
+	if (state.ws && (state.ws.readyState === WebSocket.OPEN)) {
+		state.ws.send(JSON.stringify({ type: "subscribe", gameId }));
+	}
 	showView("view-game");
 	el("navHome").classList.add("hidden");
 	el("navGame").classList.remove("hidden");
