@@ -256,6 +256,21 @@ async function refreshPlayer() {
 		if (!res.ok) throw new Error("not found");
 		state.player = await res.json();
 		el("viewError").classList.add("hidden");
+		// Remonté par l'utilisateur (02/09/2026) : "quand le tour se termine,
+		// il faut qu'une infobulle apparaisse 3 secondes" - détecté par
+		// transition de tradingAllowed (true -> false), pas par un événement
+		// dédié qui n'existe pas pour l'expiration NATURELLE du minuteur (voir
+		// GameService.isTradingAllowed, qui couvre aussi la pause explicite et
+		// la fin de partie - même infobulle dans ces cas, une distinction plus
+        // fine demanderait d'exposer le détail de la raison, pas nécessaire ici).
+		// Comparaison stricte à true (pas juste "vrai") : au tout premier
+		// chargement, state.previousTradingAllowed vaut undefined, jamais
+		// une fausse transition détectée sur une partie déjà en pause à
+		// l'arrivée du joueur.
+		if ((state.previousTradingAllowed === true) && (state.player.tradingAllowed === false)) {
+			showToast(t("playerView.turn_ended_toast"));
+		}
+		state.previousTradingAllowed = state.player.tradingAllowed;
 		// Bouton "Demander un crédit" : monnaie dette uniquement (voir isDebtGame()).
 		el("btnOpenCreditRequest").classList.toggle("hidden", !isDebtGame());
 		const details = el("playerDetails");
@@ -1602,8 +1617,20 @@ async function confirmPurchase() {
 		}
 		refreshPlayer();
 	} catch (err) {
-		el("scanConfirmError").textContent = err.message;
-		el("scanConfirmError").classList.remove("hidden");
+		// Remonté par l'utilisateur (02/09/2026) : "quand un joueur tente
+		// d'acheter une carte mais qu'il n'a plus suffisamment de jetons...
+		// il faut qu'une infobulle apparaisse 3 secondes" - message dédié,
+		// plus clair pour le joueur que le texte technique renvoyé par le
+		// serveur (voir GameService.recordTransaction, "Solde insuffisant
+		// pour cet achat.") - détecté par correspondance de CE message précis
+		// (le nôtre, pas un texte tiers fragile) plutôt qu'un code d'erreur
+		// dédié, pour rester simple.
+		if (err.message.includes("Solde insuffisant")) {
+			showToast(t("trade.insufficient_balance_toast"));
+		} else {
+			el("scanConfirmError").textContent = err.message;
+			el("scanConfirmError").classList.remove("hidden");
+		}
 	} finally {
 		btn.disabled = false;
 		btn.textContent = t("trade.btn_confirm_buy");
@@ -1767,6 +1794,23 @@ async function startOnce() {
 // exposés au joueur). Secours synthétisé identique si la lecture du
 // fichier échoue (ex. navigateur exigeant une interaction préalable).
 let mPlayerAudioCtx = null;
+// Infobulle temporaire (3 secondes) - remonté par l'utilisateur
+// (02/09/2026) : "solde insuffisant" pendant un achat, "fin du tour" à
+// l'expiration du minuteur. Plusieurs infobulles peuvent s'empiler
+// brièvement (conteneur en colonne, voir .toast-container) plutôt que de
+// s'écraser les unes les autres - chacune gère sa propre disparition,
+// indépendamment des autres.
+function showToast(pMessage) {
+	const toast = document.createElement("div");
+	toast.className = "toast";
+	toast.textContent = pMessage;
+	el("toastContainer").appendChild(toast);
+	setTimeout(() => {
+		toast.classList.add("toast-hide");
+		setTimeout(() => toast.remove(), 250); // laisse l'animation de sortie se jouer avant de retirer l'élément
+	}, 3000);
+}
+
 function playPlayerWhistle() {
 	try {
 		const audio = new Audio("/sounds/whistle.mp3");

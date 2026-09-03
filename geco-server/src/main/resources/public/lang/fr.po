@@ -1945,3 +1945,10 @@ msgstr "Carré encaissé ! 🎉"
 
 msgid "playerView.square_anim_detail"
 msgstr "4× {cashed} échangées contre 1× {promoted}"
+
+# ============ Infobulles temporaires (02/09/2026) ============
+msgid "trade.insufficient_balance_toast"
+msgstr "Vous n'avez pas assez d'unités monétaires"
+
+msgid "playerView.turn_ended_toast"
+msgstr "Fin du tour"

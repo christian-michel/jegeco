@@ -1941,3 +1941,10 @@ msgstr "Square completed! 🎉"
 
 msgid "playerView.square_anim_detail"
 msgstr "4× {cashed} traded for 1× {promoted}"
+
+# ============ Temporary toast notifications (02/09/2026) ============
+msgid "trade.insufficient_balance_toast"
+msgstr "You don't have enough currency units"
+
+msgid "playerView.turn_ended_toast"
+msgstr "Turn ended"

@@ -233,6 +233,12 @@
 	     automatiquement dès la réception de l'événement WebSocket "square"
 	     (voir connectPlayerWs), dure 3-4 secondes, puis referme et affiche
 	     "Mes cartes". -->
+	<!-- Infobulles temporaires (3 secondes) - remonté par l'utilisateur
+	     (02/09/2026) : "solde insuffisant" et "fin du tour". Voir
+	     showToast() dans player-view.js - conteneur toujours présent, vide
+	     tant qu'aucune infobulle n'est affichée. -->
+	<div class="toast-container" id="toastContainer"></div>
+
 	<div class="square-anim-overlay" id="squareAnimOverlay">
 		<div class="square-anim-title" id="squareAnimTitle"></div>
 		<div class="square-anim-board" id="squareAnimBoard"></div>
