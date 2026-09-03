@@ -32,3 +32,11 @@
 # Artefacts de build Maven standards.
 target/
 *.class
+
+# JDK/Maven portables (voir l'en-tête de run.sh/run.bat) - décompressés
+# manuellement par un utilisateur à côté de ces scripts sur un poste sans
+# droits d'installation, pour ne jamais toucher au Java système en place.
+# Des archives volumineuses (~200 Mo chacune), propres à CHAQUE poste,
+# jamais des fichiers source du projet.
+/jdk-portable/
+/maven-portable/
