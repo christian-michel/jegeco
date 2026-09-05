@@ -389,7 +389,7 @@ public class GameService
 					try
 					{
 						pilesByLevel = new com.fasterxml.jackson.databind.ObjectMapper().readValue(smartphonePileJson,
-								new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, java.util.LinkedHashMap<String, Integer>>>()
+								new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.Map<String, Integer>>>()
 								{
 								});
 					}
