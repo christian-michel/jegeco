@@ -356,12 +356,86 @@ public class GameService
 					throw new PlayerNotFoundException(String.valueOf(pCounterpartyPlayerId));
 			}
 			em.getTransaction().begin();
+			// Remonté par l'utilisateur (05/09/2026) : "quand un joueur meurt et
+			// renaît, il doit perdre ses cartes... il faudrait aussi que le
+			// smartphone remonte le nombre de cartes de valeur faible/moyenne/
+			// forte/très forte qu'il avait au moment de sa mort." Découverte en
+			// creusant : pWeakCards/pMediumCards/pStrongCards (paramètres déjà
+			// existants de cette méthode) alimentent DÉJÀ exactement le bon
+			// calcul de richesse pour la monnaie libre (voir
+			// StatsService.computeGain, pondération identique 1/2/4) - jusqu'ici
+			// jamais renseignés automatiquement pour un joueur suivi par
+			// smartphone (l'animateur les saisit normalement à la main pour un
+			// joueur classique). Calculés ICI à partir du VRAI inventaire du
+			// smartphone au moment de la mort, avant qu'il ne soit remis à
+			// zéro juste en dessous - "tresforte" replié dans "strongCards"
+			// (aucune 4e dénomination dans ce calcul historique de richesse,
+			// une approximation assumée plutôt que d'ajouter un champ de plus
+			// à une méthode déjà utilisée par de nombreux appelants).
+			int weakCardsForEvent = pWeakCards;
+			int mediumCardsForEvent = pMediumCards;
+			int strongCardsForEvent = pStrongCards;
+			final boolean isLibreSmartphoneDeath = (type == EventType.DEATH)
+					&& (game.getMoneySystem() == Game.MONEY_LIBRE) && (player != null)
+					&& (player.getStartingCardsJson() != null);
+			if (isLibreSmartphoneDeath)
+			{
+				final java.util.Map<String, Integer> inventoryAtDeath = computePlayerCardInventory(em, pGameId,
+						pPlayerId);
+				final String smartphonePileJson = game.getSmartphoneCardPileJson();
+				java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel = new java.util.LinkedHashMap<>();
+				if (smartphonePileJson != null)
+				{
+					try
+					{
+						pilesByLevel = new com.fasterxml.jackson.databind.ObjectMapper().readValue(smartphonePileJson,
+								new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, java.util.LinkedHashMap<String, Integer>>>()
+								{
+								});
+					}
+					catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+					{
+						// Donnée corrompue (ne devrait jamais arriver) : on continue avec des
+						// pioches vides plutôt que de faire échouer tout l'enregistrement de
+						// la mort - la renaissance se fera alors sans nouvelle dotation
+						// (repli assumé), mais l'événement DEATH lui-même reste enregistré.
+					}
+				}
+				int weakCount = 0;
+				int mediumCount = 0;
+				int strongCount = 0;
+				for (final java.util.Map.Entry<String, Integer> e : inventoryAtDeath.entrySet())
+				{
+					final String level = findLevelOfCard(pilesByLevel, e.getKey());
+					if ("faible".equals(level)) //$NON-NLS-1$
+						weakCount += e.getValue();
+					else if ("moyenne".equals(level)) //$NON-NLS-1$
+						mediumCount += e.getValue();
+					else if ("forte".equals(level) || "tresforte".equals(level)) //$NON-NLS-1$ //$NON-NLS-2$
+						strongCount += e.getValue(); // tresforte repliée ici, voir le commentaire ci-dessus
+				}
+				weakCardsForEvent = weakCount;
+				mediumCardsForEvent = mediumCount;
+				strongCardsForEvent = strongCount;
+
+				// Renaissance : nouvelle dotation de 4 cartes faibles, comme au
+				// tout début du jeu - "il renaît avec une nouvelle pioche de 4
+				// cartes, comme au tout début du jeu". Tout Transaction/
+				// CardSquareEvent ANTÉRIEUR à CET INSTANT ne comptera plus
+				// jamais (voir Player.cardInventoryResetAt, filtré par
+				// computePlayerCardInventory).
+				final java.util.Map<String, Integer> freshHand = dealFreshHandForPlayer(pilesByLevel);
+				final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+				writeJsonQuietly(mapper, freshHand, player::setStartingCardsJson);
+				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
+				player.setCardInventoryResetAt(new java.util.Date());
+			}
 			final Event event = new Event(game, type, player);
 			event.setPrincipal(pPrincipal);
 			event.setInterest(pInterest);
-			event.setWeakCards(pWeakCards);
-			event.setMediumCards(pMediumCards);
-			event.setStrongCards(pStrongCards);
+			event.setWeakCards(weakCardsForEvent);
+			event.setMediumCards(mediumCardsForEvent);
+			event.setStrongCards(strongCardsForEvent);
 			// Remonté par un utilisateur : distinct des cartes ci-dessus - nécessaire
 			// pour que StatsService.computeGain() calcule correctement la richesse
 			// d'un joueur en monnaie libre à sa mort/sortie (jetons ET cartes comptent
@@ -626,84 +700,112 @@ public class GameService
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
 		{
-			final java.util.Map<String, Integer> inventory = new java.util.LinkedHashMap<>();
-			// Point de départ : la dotation initiale (voir
-			// dealStartingHandsForLibreIfNeeded/Player.startingCardsJson) -
-			// avant ce correctif (28/08/2026), cet inventaire partait toujours
-			// de zéro, ignorant les 4 cartes reçues à la mise en place.
-			final Player player = em.find(Player.class, pPlayerId);
-			if ((player != null) && (player.getStartingCardsJson() != null))
-			{
-				try
-				{
-					final java.util.Map<String, Integer> startingHand = new com.fasterxml.jackson.databind.ObjectMapper()
-							.readValue(player.getStartingCardsJson(),
-									new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Integer>>()
-									{
-									});
-					inventory.putAll(startingHand);
-				}
-				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
-				{
-					// Donnée corrompue (ne devrait jamais arriver) : on continue avec
-					// un inventaire vide plutôt que de faire échouer tout l'écran.
-				}
-			}
-			final List<Transaction> txs = em.createQuery(
-					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid)", //$NON-NLS-1$
-					Transaction.class)
-					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
-					.getResultList();
-			for (final Transaction t : txs)
-			{
-				if (t.getBuyer().getId().equals(pPlayerId))
-					inventory.merge(t.getCardTypeId(), 1, Integer::sum);
-				if (t.getSeller().getId().equals(pPlayerId))
-					inventory.merge(t.getCardTypeId(), -1, Integer::sum);
-			}
-			// Historique des carrés déjà encaissés (voir CardSquareEvent,
-			// checkAndCashInSquares) : les 4 cartes défaussées quittent
-			// l'inventaire, la carte promue et les 4 cartes de remplacement y
-			// entrent - un carré n'est PAS une Transaction (pas d'échange entre
-			// deux joueurs, une interaction avec la pioche partagée), d'où ce
-			// second journal, rejoué séparément ici.
-			final List<CardSquareEvent> squareEvents = em.createQuery(
-					"SELECT s FROM CardSquareEvent s WHERE s.game.id = :gameId AND s.player.id = :pid", //$NON-NLS-1$
-					CardSquareEvent.class)
-					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
-					.getResultList();
-			for (final CardSquareEvent square : squareEvents)
-			{
-				inventory.merge(square.getCashedCardTypeId(), -4, Integer::sum);
-				inventory.merge(square.getPromotedCardTypeId(), 1, Integer::sum);
-				try
-				{
-					final java.util.List<String> replenished = new com.fasterxml.jackson.databind.ObjectMapper()
-							.readValue(square.getReplenishedCardIdsJson(),
-									new com.fasterxml.jackson.core.type.TypeReference<java.util.ArrayList<String>>()
-									{
-									});
-					for (final String cardId : replenished)
-						inventory.merge(cardId, 1, Integer::sum);
-				}
-				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
-				{
-					// Donnée corrompue (ne devrait jamais arriver) : on ignore ce
-					// carré précis plutôt que de faire échouer tout l'inventaire.
-				}
-			}
-			// Ne devrait normalement jamais arriver (on ne peut pas vendre une carte
-			// qu'on n'a pas), mais on nettoie par sécurité plutôt que d'afficher un
-			// nombre négatif absurde - ex. cartes détenues avant l'usage du
-			// smartphone, vendues ensuite via lui (voir la limite assumée
-			// ci-dessus).
-			inventory.values().removeIf(v -> v <= 0);
-			return inventory;
+			return computePlayerCardInventory(em, pGameId, pPlayerId);
 		}
 		finally
 		{
 			em.close();
 		}
+	}
+
+	/**
+	 * Cœur partagé de {@link #computePlayerCardInventory(int, int)},
+	 * réutilisable dans une transaction déjà ouverte - nécessaire pour la
+	 * mort d'un joueur en monnaie libre (voir recordEvent()) : il faut
+	 * connaître son inventoire ACTUEL avant de le remettre à zéro, dans la
+	 * MÊME transaction que cette remise à zéro (une EntityManager ne peut
+	 * pas imbriquer deux transactions actives à la fois).
+	 */
+	private java.util.Map<String, Integer> computePlayerCardInventory(final EntityManager em, final int pGameId,
+			final int pPlayerId)
+	{
+		final java.util.Map<String, Integer> inventory = new java.util.LinkedHashMap<>();
+		// Point de départ : la dotation initiale (voir
+		// dealStartingHandsForLibreIfNeeded/Player.startingCardsJson) -
+		// avant ce correctif (28/08/2026), cet inventaire partait toujours
+		// de zéro, ignorant les 4 cartes reçues à la mise en place. Depuis
+		// le 05/09/2026, cette dotation peut aussi être celle d'une
+		// RENAISSANCE (voir Player.cardInventoryResetAt) plutôt que la toute
+		// première mise en place.
+		final Player player = em.find(Player.class, pPlayerId);
+		if ((player != null) && (player.getStartingCardsJson() != null))
+		{
+			try
+			{
+				final java.util.Map<String, Integer> startingHand = new com.fasterxml.jackson.databind.ObjectMapper()
+						.readValue(player.getStartingCardsJson(),
+								new com.fasterxml.jackson.core.type.TypeReference<java.util.LinkedHashMap<String, Integer>>()
+								{
+								});
+				inventory.putAll(startingHand);
+			}
+			catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+			{
+				// Donnée corrompue (ne devrait jamais arriver) : on continue avec
+				// un inventaire vide plutôt que de faire échouer tout l'écran.
+			}
+		}
+		// Remonté par l'utilisateur (05/09/2026) : "il doit perdre ses cartes
+		// lorsqu'il meurt" - tout Transaction/CardSquareEvent ANTÉRIEUR à la
+		// dernière renaissance de ce joueur (voir cardInventoryResetAt) est
+		// désormais ignoré, ce qui s'est passé AVANT sa mort ne doit plus
+		// compter dans son inventaire ACTUEL. null (jamais mort) : tout
+		// l'historique compte, comportement inchangé par rapport à avant ce
+		// correctif.
+		final java.util.Date resetAt = (player != null) ? player.getCardInventoryResetAt() : null;
+		final List<Transaction> txs = em.createQuery(
+				"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid) " //$NON-NLS-1$
+						+ "AND (:resetAt IS NULL OR t.tstamp > :resetAt)", //$NON-NLS-1$
+				Transaction.class)
+				.setParameter("gameId", pGameId).setParameter("pid", pPlayerId).setParameter("resetAt", resetAt) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				.getResultList();
+		for (final Transaction t : txs)
+		{
+			if (t.getBuyer().getId().equals(pPlayerId))
+				inventory.merge(t.getCardTypeId(), 1, Integer::sum);
+			if (t.getSeller().getId().equals(pPlayerId))
+				inventory.merge(t.getCardTypeId(), -1, Integer::sum);
+		}
+		// Historique des carrés déjà encaissés (voir CardSquareEvent,
+		// checkAndCashInSquares) : les 4 cartes défaussées quittent
+		// l'inventaire, la carte promue et les 4 cartes de remplacement y
+		// entrent - un carré n'est PAS une Transaction (pas d'échange entre
+		// deux joueurs, une interaction avec la pioche partagée), d'où ce
+		// second journal, rejoué séparément ici. Même filtre par
+		// cardInventoryResetAt que ci-dessus.
+		final List<CardSquareEvent> squareEvents = em.createQuery(
+				"SELECT s FROM CardSquareEvent s WHERE s.game.id = :gameId AND s.player.id = :pid " //$NON-NLS-1$
+						+ "AND (:resetAt IS NULL OR s.tstamp > :resetAt)", //$NON-NLS-1$
+				CardSquareEvent.class)
+				.setParameter("gameId", pGameId).setParameter("pid", pPlayerId).setParameter("resetAt", resetAt) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				.getResultList();
+		for (final CardSquareEvent square : squareEvents)
+		{
+			inventory.merge(square.getCashedCardTypeId(), -4, Integer::sum);
+			inventory.merge(square.getPromotedCardTypeId(), 1, Integer::sum);
+			try
+			{
+				final java.util.List<String> replenished = new com.fasterxml.jackson.databind.ObjectMapper()
+						.readValue(square.getReplenishedCardIdsJson(),
+								new com.fasterxml.jackson.core.type.TypeReference<java.util.ArrayList<String>>()
+								{
+								});
+				for (final String cardId : replenished)
+					inventory.merge(cardId, 1, Integer::sum);
+			}
+			catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+			{
+				// Donnée corrompue (ne devrait jamais arriver) : on ignore ce
+				// carré précis plutôt que de faire échouer tout l'inventaire.
+			}
+		}
+		// Ne devrait normalement jamais arriver (on ne peut pas vendre une carte
+		// qu'on n'a pas), mais on nettoie par sécurité plutôt que d'afficher un
+		// nombre négatif absurde - ex. cartes détenues avant l'usage du
+		// smartphone, vendues ensuite via lui (voir la limite assumée
+		// ci-dessus).
+		inventory.values().removeIf(v -> v <= 0);
+		return inventory;
 	}
 
 	/**
@@ -916,6 +1018,44 @@ public class GameService
 		{
 			em.close();
 		}
+	}
+
+	/**
+	 * Distribue une NOUVELLE dotation de départ de 4 cartes faibles à UN SEUL
+	 * joueur (voir {@link #dealStartingHandsForLibreIfNeeded} pour la version
+	 * "tous les joueurs" utilisée à la toute première mise en place) -
+	 * réutilisée pour la RENAISSANCE d'un joueur mort en monnaie libre (voir
+	 * recordEvent(), remonté par l'utilisateur le 05/09/2026 : "il renaît
+	 * avec une nouvelle pioche de 4 cartes, comme au tout début du jeu").
+	 * Pioche directement dans la pioche PARTAGÉE déjà établie (voir
+	 * pPilesByLevel, tirée de Game.smartphoneCardPileJson), jamais une
+	 * nouvelle sélection de modèles - même garde-fou anti-carré-tout-fait que
+	 * la mise en place initiale ("ne pas distribuer de carré tout prêt").
+	 * pPilesByLevel est modifiée EN PLACE (la pioche "faible" diminue de 4).
+	 */
+	private java.util.Map<String, Integer> dealFreshHandForPlayer(
+			final java.util.Map<String, java.util.Map<String, Integer>> pPilesByLevel)
+	{
+		final java.util.Map<String, Integer> hand = new java.util.LinkedHashMap<>();
+		final java.util.Map<String, Integer> faiblePile = pPilesByLevel.get("faible"); //$NON-NLS-1$
+		if (faiblePile == null)
+			return hand; // configuration absente (ne devrait jamais arriver si la mise en place a eu lieu)
+		for (int i = 0; i < 4; i++)
+		{
+			// Même garde-fou anti-carré que dealStartingHandsForLibreIfNeeded :
+			// cherche une carte qui NE complèterait PAS un carré pour ce joueur.
+			final java.util.List<String> candidates = faiblePile.entrySet().stream()
+					.filter(e -> (e.getValue() > 0) && (hand.getOrDefault(e.getKey(), 0) < 3))
+					.map(java.util.Map.Entry::getKey).toList();
+			final String cardId = !candidates.isEmpty()
+					? candidates.get(new java.util.Random().nextInt(candidates.size()))
+					: pickRandomAvailable(faiblePile); // repli : tout le reste correspond à un modèle déjà à 3 (cas extrême)
+			if (cardId == null)
+				break; // pioche faible entièrement épuisée (cas extrême)
+			faiblePile.merge(cardId, -1, Integer::sum);
+			hand.merge(cardId, 1, Integer::sum);
+		}
+		return hand;
 	}
 
 	// Ordre fixe des niveaux (modèle SIMPLIFIÉ confirmé par l'utilisateur, voir

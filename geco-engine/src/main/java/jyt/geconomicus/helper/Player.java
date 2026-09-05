@@ -101,6 +101,28 @@ public class Player implements Serializable
 	@Lob
 	private String startingCardsJson;
 
+	// Étape 3, monnaie libre, mode smartphone : horodatage de la dernière
+	// mort/renaissance de ce joueur (remonté par l'utilisateur, 05/09/2026 :
+	// "il doit perdre ses cartes lorsqu'il meurt. Et il renaît avec une
+	// nouvelle pioche de 4 cartes, comme au tout début du jeu") - startingCardsJson
+	// ci-dessus est alors REMPLACÉ par cette nouvelle donne de 4 cartes, et
+	// GameService.computePlayerCardInventory ignore désormais tout
+	// Transaction/CardSquareEvent antérieur à cet horodatage (l'ancien
+	// inventaire, d'avant la mort, ne doit plus jamais compter). Nullable :
+	// reste à null tant que ce joueur n'est jamais mort (tout l'historique
+	// compte alors, comportement inchangé par rapport à avant ce correctif).
+	private java.util.Date cardInventoryResetAt;
+
+	public java.util.Date getCardInventoryResetAt()
+	{
+		return cardInventoryResetAt;
+	}
+
+	public void setCardInventoryResetAt(final java.util.Date pCardInventoryResetAt)
+	{
+		cardInventoryResetAt = pCardInventoryResetAt;
+	}
+
 	public String getStartingCardsJson()
 	{
 		return startingCardsJson;

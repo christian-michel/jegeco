@@ -431,7 +431,29 @@ async function renderProfile() {
 	} else {
 		el("statCoinsBreakdown").innerHTML = "";
 	}
-	el("statCards").textContent = state.player.goodsCount || 0;
+	// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026, captures d'écran à
+	// l'appui - écart entre "Profil" et "Mes cartes") : goodsCount est un
+	// champ EXPLICITEMENT documenté comme propre au système TROC (voir
+	// Player.java : "toujours = weakGoods + mediumGoods + strongGoods"),
+	// jamais mis à jour par les échanges en MONNAIE LIBRE (qui dérivent
+	// l'inventaire réel de l'historique des transactions/carrés, voir
+	// GameService.computePlayerCardInventory - exactement ce qu'utilise déjà
+	// "Mes cartes") - il restait donc bloqué à sa valeur de départ (la
+	// donne initiale), au lieu de refléter les échanges effectués. Corrigé :
+	// en monnaie libre, on récupère le VRAI inventaire (même route que "Mes
+	// cartes") et on en fait la somme - goodsCount reste utilisé tel quel
+	// pour les autres systèmes (troc/dette), où il est correctement
+	// maintenu.
+	if (isLibreGame()) {
+		try {
+			const inventory = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`).then((r) => r.json());
+			el("statCards").textContent = Object.values(inventory).reduce((sum, n) => sum + n, 0);
+		} catch (err) {
+			el("statCards").textContent = state.player.goodsCount || 0; // repli prudent, mieux vaut un chiffre approximatif qu'un écran cassé
+		}
+	} else {
+		el("statCards").textContent = state.player.goodsCount || 0;
+	}
 
 	let txs = [];
 	try {

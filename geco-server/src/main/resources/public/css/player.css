@@ -241,10 +241,26 @@ body {
 	background: var(--mist); font-size: 0.78rem; font-family: inherit; color: var(--text);
 }
 .avatar-gallery {
-	display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem;
+	display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(90px, auto); gap: 0.6rem;
 	max-height: 260px; overflow-y: auto; padding: 0.2rem;
 }
-.avatar-gallery-item { aspect-ratio: 1; border-radius: 16px; border: 2.5px solid var(--border); cursor: pointer; overflow: hidden; background: var(--mist); display: flex; align-items: center; justify-content: center; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.avatar-gallery-item {
+	aspect-ratio: 1; border-radius: 16px; border: 2.5px solid var(--border); cursor: pointer; overflow: hidden;
+	background: var(--mist); display: flex; align-items: center; justify-content: center;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	/* Remonté par l'utilisateur (05/09/2026, capture d'écran iPad) : les
+	   vignettes apparaissaient écrasées/aplaties - aspect-ratio combiné à
+	   une grille CSS avec défilement (overflow-y) est connu pour se
+	   calculer de façon incohérente sur certaines versions de Safari
+	   (iPadOS en particulier). min-height agit comme filet de sécurité,
+	   indépendant du calcul d'aspect-ratio : même si celui-ci échoue, la
+	   vignette ne peut jamais s'écraser sous cette hauteur. 90px correspond
+	   à peu près à la largeur d'une colonne sur 4 dans ce conteneur
+	   (max-width: 460px, voir .join-shell) - un carré approximatif, pas
+	   besoin d'être pixel-parfait pour un simple filet de sécurité.
+	*/
+	min-height: 90px;
+}
 .avatar-gallery-item.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,111,238,0.25); }
 .avatar-gallery-item img, .avatar-gallery-item svg { width: 100%; height: 100%; object-fit: cover; }
 .avatar-gallery-empty { grid-column: 1 / -1; text-align: center; color: var(--text-dim); font-size: 0.82rem; padding: 1.5rem 0.5rem; }
