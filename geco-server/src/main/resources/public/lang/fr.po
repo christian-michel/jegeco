@@ -1952,3 +1952,7 @@ msgstr "Vous n'avez pas assez d'unités monétaires"
 
 msgid "playerView.turn_ended_toast"
 msgstr "Fin du tour"
+
+# ============ Infobulle debut de tour (05/09/2026) ============
+msgid "playerView.turn_started_toast"
+msgstr "Nouveau tour"

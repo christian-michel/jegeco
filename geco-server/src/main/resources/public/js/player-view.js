@@ -748,6 +748,17 @@ function openCardModal(item) {
 function closeCardModal() {
 	el("cardModalOverlay").classList.remove("active");
 	clearCardModalCountdown();
+	// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026) : state.cardModalOffer
+	// n'était JAMAIS remis à null ici - une fois qu'un joueur avait ouvert sa
+	// modal de vente UNE SEULE FOIS (très fréquent, c'est le moyen principal
+	// de vendre une carte), cet état restait "vrai" indéfiniment, bloquant en
+	// permanence la bascule automatique vers "Mes cartes" au début du tour
+	// suivant (voir connectPlayerWs : "!state.cardModalOffer" ne devenait
+	// alors plus jamais vrai) - le sifflet jouait quand même (inconditionnel),
+	// ce qui explique exactement le symptôme observé ("j'ai bien le sifflet
+	// mais... je n'ai pas vu" la bascule d'écran).
+	state.cardModalOffer = null;
+	state.cardModalItem = null;
 	// Laisse le temps à l'animation de fermeture de se jouer avant de
 	// réinitialiser le retournement - même principe que le reste de l'app
 	// (voir .stepDone-exit dans player.css).
@@ -1841,7 +1852,25 @@ function playSynthesizedPlayerWhistle() {
 	}
 }
 
+let mPlayerWs = null;
 function connectPlayerWs() {
+	// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026 : "plusieurs coups de
+	// sifflet consécutifs") : rien ne fermait jamais une connexion PRÉCÉDENTE
+	// avant d'en ouvrir une nouvelle - sur un vrai smartphone (verrouillage
+	// d'écran, changement WiFi/4G, longue partie...), une connexion peut
+	// rester "fantôme" côté serveur pendant qu'une nouvelle se rétablit en
+	// parallèle. Plusieurs connexions vivantes pouvaient alors s'accumuler
+	// au fil de la partie, CHACUNE recevant et rejouant indépendamment toute
+	// diffusion (chaque nouveau tour, autant de sifflets que de connexions
+	// vivantes accumulées). Corrigé : au plus UNE connexion volontairement
+	// ouverte à la fois - toute connexion précédente est explicitement
+	// fermée avant d'en établir une nouvelle (onclose neutralisé sur
+	// l'ancienne pour éviter qu'elle ne déclenche elle-même une reconnexion
+	// en cascade).
+	if (mPlayerWs) {
+		mPlayerWs.onclose = null;
+		mPlayerWs.close();
+	}
 	const proto = location.protocol === "https:" ? "wss" : "ws";
 	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement
 	// internet) : un joueur reste toujours sur LA MÊME partie pendant toute
@@ -1851,6 +1880,7 @@ function connectPlayerWs() {
 	// message dédié), il suffit ici de transmettre gameId une seule fois, en
 	// paramètre de connexion.
 	const ws = new WebSocket(`${proto}://${location.host}/ws?gameId=${encodeURIComponent(state.gameId)}`);
+	mPlayerWs = ws;
 	ws.onclose = () => setTimeout(connectPlayerWs, 2000);
 	ws.onerror = () => ws.close();
 	ws.onmessage = (evt) => {
@@ -1878,6 +1908,10 @@ function connectPlayerWs() {
 		// à la bascule d'écran juste en dessous, elle bien gardée).
 		if ((msg.type === "event") && (msg.payload.type === "TURN")) {
 			playPlayerWhistle();
+			// Remonté par l'utilisateur (05/09/2026) : une infobulle doit
+			// aussi accompagner le début de tour, en plus du sifflet - même
+			// mécanisme que "solde insuffisant"/"fin du tour" (voir showToast).
+			showToast(t("playerView.turn_started_toast"));
 			if (!state.cardModalOffer && !state.scanStream) {
 				renderMyCards();
 				setActiveNav("navBtnCards");

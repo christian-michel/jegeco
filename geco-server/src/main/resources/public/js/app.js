@@ -266,6 +266,15 @@ let mBackgroundRefreshDepth = 0;
 
 // ---------- WebSocket temps réel ----------
 function connectWs() {
+	// Même protection que côté smartphone (voir connectPlayerWs dans
+	// player-view.js) : ferme toute connexion précédente avant d'en ouvrir
+	// une nouvelle, pour ne jamais en accumuler plusieurs vivantes en
+	// parallèle (onclose neutralisé sur l'ancienne pour éviter une
+	// reconnexion en cascade qu'elle déclencherait elle-même).
+	if (state.ws) {
+		state.ws.onclose = null;
+		state.ws.close();
+	}
 	const proto = location.protocol === "https:" ? "wss" : "ws";
 	const ws = new WebSocket(`${proto}://${location.host}/ws`);
 	state.ws = ws;

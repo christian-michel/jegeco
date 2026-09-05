@@ -1948,3 +1948,7 @@ msgstr "You don't have enough currency units"
 
 msgid "playerView.turn_ended_toast"
 msgstr "Turn ended"
+
+# ============ Turn started toast (05/09/2026) ============
+msgid "playerView.turn_started_toast"
+msgstr "New turn"

@@ -1036,10 +1036,29 @@ public class GameService
 				samePile.merge(squareCardId, 4, Integer::sum);
 
 				// Pioche 1 carte au hasard dans le niveau supérieur.
-				final String promotedCardId = pickRandomAvailable(nextPile);
+				// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026) : si cette
+				// pioche est épuisée (plausible avec peu de joueurs/modèles,
+				// après plusieurs carrés en chaîne qui l'ont progressivement
+				// vidée), la fonction abandonnait ICI purement et simplement -
+				// AVANT que les 4 cartes ne soient retirées de l'inventaire du
+				// joueur (aucun CardSquareEvent n'était encore créé à ce
+				// stade) - le joueur restait alors bloqué indéfiniment avec
+				// ses cartes en carré, sans qu'aucun signal ne l'indique :
+				// "je me suis retrouvé avec 5 cartes identiques très fortes
+				// sans que cela ne déclenche de carré". Corrigé : si le
+				// niveau supérieur est vraiment épuisé, le carré s'encaisse
+				// quand même (jamais bloqué indéfiniment) - la carte
+				// "promue" est alors piochée dans LE MÊME niveau que celui
+				// défaussé plutôt que le niveau supérieur (aucune promotion
+				// réelle cette fois, mais le joueur reçoit tout de même 5
+				// nouvelles cartes en échange des 4 données, jamais perdant).
+				final boolean nextPileExhausted = nextPile.values().stream().allMatch(v -> v <= 0);
+				final java.util.Map<String, Integer> promotionSourcePile = nextPileExhausted ? samePile : nextPile;
+				final String promotedCardId = pickRandomAvailable(promotionSourcePile);
 				if (promotedCardId == null)
-					return cashedInThisCall; // pioche supérieure épuisée (cas limite, ne devrait pas arriver avec 5×(N+1) exemplaires)
-				nextPile.merge(promotedCardId, -1, Integer::sum);
+					return cashedInThisCall; // les DEUX pioches (même niveau ET niveau supérieur) sont épuisées - cas extrême, rien à distribuer
+				promotionSourcePile.merge(promotedCardId, -1, Integer::sum);
+				final String promotedLevel = nextPileExhausted ? squareLevel : nextLevel;
 
 				// Pioche 4 nouvelles cartes dans LE MÊME niveau que celui
 				// défaussé (peut inclure à nouveau le modèle qu'on vient de
@@ -1061,8 +1080,10 @@ public class GameService
 
 				// Rupture technologique : la toute première fois qu'une carte
 				// "tresforte" entre en jeu pour CETTE partie (voir le
-				// raisonnement complet ci-dessus).
-				final boolean isFirstBreakthrough = "tresforte".equals(nextLevel) //$NON-NLS-1$
+				// raisonnement complet ci-dessus) - jamais si la promotion a
+				// dû se replier sur le même niveau (nextPileExhausted),
+				// aucune vraie carte tresforte n'ayant alors été gagnée.
+				final boolean isFirstBreakthrough = !nextPileExhausted && "tresforte".equals(nextLevel) //$NON-NLS-1$
 						&& (em.createQuery(
 								"SELECT COUNT(s) FROM CardSquareEvent s WHERE s.game.id = :gameId AND s.promotedLevel = :lvl", //$NON-NLS-1$
 								Long.class)
@@ -1073,7 +1094,7 @@ public class GameService
 				em.getTransaction().begin();
 				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
 				final CardSquareEvent squareEvent = new CardSquareEvent(game, player, squareCardId, squareLevel,
-						promotedCardId, nextLevel, toJsonQuietly(mapper, replenished), isFirstBreakthrough);
+						promotedCardId, promotedLevel, toJsonQuietly(mapper, replenished), isFirstBreakthrough);
 				em.persist(squareEvent);
 				em.getTransaction().commit();
 				cashedInThisCall.add(squareEvent);
