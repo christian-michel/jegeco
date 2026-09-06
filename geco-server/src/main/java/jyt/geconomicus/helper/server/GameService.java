@@ -1275,8 +1275,13 @@ public class GameService
 				final String promotedCardId;
 				if (nextPileExhausted)
 				{
+					// squareCardId n'est pas "effectively final" (réassignée dans la
+					// boucle de détection plus haut) - une lambda ne peut capturer
+					// qu'une variable finale ou effectivement finale, d'où cette
+					// copie dédiée juste pour le filtre ci-dessous.
+					final String squareCardIdForFilter = squareCardId;
 					final java.util.List<String> candidatesExcludingSquareCard = promotionSourcePile.entrySet().stream()
-							.filter(e -> (e.getValue() > 0) && !e.getKey().equals(squareCardId))
+							.filter(e -> (e.getValue() > 0) && !e.getKey().equals(squareCardIdForFilter))
 							.map(java.util.Map.Entry::getKey).toList();
 					promotedCardId = !candidatesExcludingSquareCard.isEmpty()
 							? candidatesExcludingSquareCard.get(new java.util.Random().nextInt(candidatesExcludingSquareCard.size()))
