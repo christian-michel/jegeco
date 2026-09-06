@@ -1450,8 +1450,6 @@ public class GecoServer
 				// l'un des deux peut avoir complété un carré par cet échange précis.
 				if (game.getMoneySystem() == Game.MONEY_LIBRE)
 				{
-					System.out.println("[DIAG carré] transaction terminée (vendeur=" + offer.sellerPlayerId() //$NON-NLS-1$
-							+ " acheteur=" + req.buyerPlayerId() + "), vérification des carrés déclenchée pour les deux."); //$NON-NLS-1$ //$NON-NLS-2$
 					for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, offer.sellerPlayerId()))
 						broadcast(id, "square", Dtos.CardSquareEventDto.from(square)); //$NON-NLS-1$
 					for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, req.buyerPlayerId()))

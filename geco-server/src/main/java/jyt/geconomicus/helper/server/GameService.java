@@ -1150,15 +1150,18 @@ public class GameService
 	public java.util.List<CardSquareEvent> checkAndCashInSquares(final int pGameId, final int pPlayerId)
 	{
 		final java.util.List<CardSquareEvent> cashedInThisCall = new java.util.ArrayList<>();
-		// Trace de diagnostic temporaire (05/09/2026) - remonté par l'utilisateur :
-		// des carrés en cascade ne se déclenchent plus après le premier, sans
-		// exception ni erreur visible nulle part (journaux serveur propres,
-		// console navigateur sans erreur applicative). Plutôt que de deviner un
-		// correctif de plus sans preuve, ces lignes permettront de voir
-        // EXACTEMENT ce que cette méthode trouve/décide à chaque appel - à
-        // retirer une fois la cause confirmée avec certitude.
-		System.out.println("[DIAG carré] checkAndCashInSquares appelée : partie=" + pGameId + " joueur=" + pPlayerId); //$NON-NLS-1$ //$NON-NLS-2$
-		while (true)
+		// FILET DE SÉCURITÉ ABSOLU (remonté par l'utilisateur, 06/09/2026, preuve
+		// concrète obtenue via les traces ci-dessus : une BOUCLE INFINIE
+		// paralysait le serveur - voir le commentaire détaillé plus bas, au
+		// niveau du repli qui en était la cause précise). Quelle que soit la
+		// cause exacte, présente ou future, cette boucle tourne DÉSORMAIS AU
+		// PLUS 50 fois (généreusement plus que n'importe quelle cascade
+		// légitime de carrés en une seule requête) avant de s'arrêter de force
+		// - jamais un blocage du serveur, quitte à laisser un carré non
+		// encaissé dans un cas vraiment dégénéré plutôt que de figer toute
+		// l'application pour tout le monde.
+		int safetyIterations = 0;
+		while (safetyIterations++ < 50)
 		{
 			final EntityManager em = mEntityManagerFactory.createEntityManager();
 			try
@@ -1185,7 +1188,6 @@ public class GameService
 				// l'inventaire ACTUEL (déjà rejoué : dotation + transactions +
 				// carrés précédents) - le premier trouvé, peu importe l'ordre.
 				final java.util.Map<String, Integer> inventory = computePlayerCardInventory(pGameId, pPlayerId);
-				System.out.println("[DIAG carré] inventaire recalculé pour joueur=" + pPlayerId + " : " + inventory); //$NON-NLS-1$ //$NON-NLS-2$
 				String squareCardId = null;
 				String squareLevel = null;
 				for (final java.util.Map.Entry<String, Integer> e : inventory.entrySet())
@@ -1199,11 +1201,8 @@ public class GameService
 					}
 				}
 				if (squareCardId == null)
-				{
-					System.out.println("[DIAG carré] aucun modèle à 4+ trouvé - rien à encaisser, arrêt de la boucle."); //$NON-NLS-1$
 					return cashedInThisCall; // rien à encaisser, on s'arrête là
-				}
-				System.out.println("[DIAG carré] carré détecté : carte=" + squareCardId + " niveau=" + squareLevel); //$NON-NLS-1$ //$NON-NLS-2$
+				
 
 				final int levelIndex = LEVEL_ORDER.indexOf(squareLevel);
 				if ((levelIndex < 0) || (levelIndex >= LEVEL_ORDER.size() - 1))
@@ -1254,7 +1253,39 @@ public class GameService
 				// nouvelles cartes en échange des 4 données, jamais perdant).
 				final boolean nextPileExhausted = nextPile.values().stream().allMatch(v -> v <= 0);
 				final java.util.Map<String, Integer> promotionSourcePile = nextPileExhausted ? samePile : nextPile;
-				final String promotedCardId = pickRandomAvailable(promotionSourcePile);
+				// BUG CRITIQUE TROUVÉ (remonté par l'utilisateur, 06/09/2026, via les
+				// traces de diagnostic ajoutées à la session précédente - la preuve
+				// concrète manquante jusque-là) : BOUCLE INFINIE. Quand le repli
+				// ci-dessus pioche dans samePile (pioche du MÊME niveau que celui
+				// défaussé) et que squareCardId est DEVENU LE SEUL modèle encore
+				// disponible dans cette pioche (tous les autres épuisés), TOUS les
+				// tirages suivants - la carte "promue" ET les 4 cartes de
+				// remplacement - retombent alors nécessairement sur squareCardId
+				// lui-même : le carré s'encaisse mais redonne exactement ce qu'il
+				// vient de retirer, l'inventaire ne change JAMAIS, et le carré se
+				// re-détecte à l'identique indéfiniment (voir les traces :
+				// "carte=carte_013 -> promue=carte_013", répété à l'infini, serveur
+				// bloqué). Corrigé : dans ce repli spécifique (jamais le cas normal
+				// où promotionSourcePile = nextPile, un niveau DIFFÉRENT ne pouvant
+				// jamais contenir squareCardId), on exclut explicitement
+				// squareCardId des candidats - ne l'autorisant QUE si vraiment
+				// aucun autre modèle n'est disponible (cas extrême assumé,
+				// entraînerait alors un arrêt normal via promotedCardId == null
+				// juste en dessous, jamais une boucle qui ne progresse pas).
+				final String promotedCardId;
+				if (nextPileExhausted)
+				{
+					final java.util.List<String> candidatesExcludingSquareCard = promotionSourcePile.entrySet().stream()
+							.filter(e -> (e.getValue() > 0) && !e.getKey().equals(squareCardId))
+							.map(java.util.Map.Entry::getKey).toList();
+					promotedCardId = !candidatesExcludingSquareCard.isEmpty()
+							? candidatesExcludingSquareCard.get(new java.util.Random().nextInt(candidatesExcludingSquareCard.size()))
+							: pickRandomAvailable(promotionSourcePile); // repli ultime : vraiment plus rien d'autre (cas extrême)
+				}
+				else
+				{
+					promotedCardId = pickRandomAvailable(promotionSourcePile);
+				}
 				if (promotedCardId == null)
 					return cashedInThisCall; // les DEUX pioches (même niveau ET niveau supérieur) sont épuisées - cas extrême, rien à distribuer
 				promotionSourcePile.merge(promotedCardId, -1, Integer::sum);
@@ -1298,8 +1329,6 @@ public class GameService
 				em.persist(squareEvent);
 				em.getTransaction().commit();
 				cashedInThisCall.add(squareEvent);
-				System.out.println("[DIAG carré] carré encaissé avec succès : carte=" + squareCardId + " -> promue=" //$NON-NLS-1$ //$NON-NLS-2$
-						+ promotedCardId + " niveau=" + promotedLevel + " - reboucle pour vérifier un carré en cascade."); //$NON-NLS-1$ //$NON-NLS-2$
 
 				if (isFirstBreakthrough)
 				{
@@ -1324,9 +1353,19 @@ public class GameService
 			}
 			// On reboucle : les 4 cartes de remplacement pourraient, en théorie,
 			// compléter immédiatement un second carré (voir le commentaire de
-			// tête de méthode) - la boucle s'arrêtera d'elle-même dès que
-			// computePlayerCardInventory ne trouve plus aucun modèle à 4+.
+			// tête de méthode) - la boucle s'arrête d'elle-même dès que
+			// computePlayerCardInventory ne trouve plus aucun modèle à 4+, ou
+			// au bout de 50 itérations au maximum (voir le filet de sécurité
+			// en tête de méthode - safetyIterations).
 		}
+		// Atteint uniquement si le filet de sécurité (50 itérations) a mis fin
+		// à la boucle sans qu'un "return" interne n'ait déjà eu lieu - un cas
+		// dégénéré qui ne devrait plus jamais se produire depuis la correction
+		// de la cause racine (exclusion de squareCardId dans le repli), mais
+		// on retourne quand même proprement ce qui a été encaissé jusque-là
+		// plutôt que de laisser le code ne pas compiler (toute méthode
+		// non-void doit retourner sur TOUS les chemins).
+		return cashedInThisCall;
 	}
 
 	// Dans quel niveau (clé de pPilesByLevel) ce modèle de carte apparaît-il -
