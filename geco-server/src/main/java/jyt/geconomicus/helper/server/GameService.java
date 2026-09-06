@@ -991,14 +991,19 @@ public class GameService
 					pilesByLevel.put(level, new java.util.LinkedHashMap<>());
 					continue;
 				}
-				// Remonté par l'utilisateur (31/08/2026), modification de la règle
-				// de mise en place : en dessous de 6 joueurs, N modèles (pas N+1) -
-				// "Si on a moins de 6 joueurs... nombre de joueurs × 5 cartes de
-				// chaque modèle... Donc si on a 2 joueurs on ne met pas 3 modèles
-				// de cartes mais 2. Mais si on a 8 joueurs, on met 9 modèles."
-				// À partir de 6 joueurs (inclus), la règle N+1 déjà en place reste
-				// inchangée.
-				final int nbModels = Math.min((nbPlayers < 6) ? nbPlayers : (nbPlayers + 1), available.size());
+				// Remonté par l'utilisateur (06/09/2026) : la règle "en dessous de 6
+				// joueurs, N modèles au lieu de N+1" (introduite le 31/08/2026) est
+				// ABANDONNÉE - avec trop peu de modèles en circulation, la pioche
+				// se retrouve rapidement à court de variété, jusqu'à ce qu'un seul
+				// modèle reste disponible pour la promotion d'un carré : exactement
+				// la pénurie qui a mené à la boucle infinie corrigée juste avant
+				// (voir checkAndCashInSquares, le repli quand la pioche supérieure
+				// est épuisée). Retour à N+1 modèles EN PERMANENCE, quel que soit le
+				// nombre de joueurs - "à partir de maintenant il faut mettre en
+				// permanence le nombre de modèles de cartes = nombre de joueurs + 1
+				// - par exemple, si on a 2 joueurs, on met en jeu 3 modèles de
+				// cartes x 5 cartes".
+				final int nbModels = Math.min(nbPlayers + 1, available.size());
 				final java.util.List<String> shuffledModels = new java.util.ArrayList<>(available);
 				java.util.Collections.shuffle(shuffledModels);
 				final java.util.List<String> selectedModels = shuffledModels.subList(0, nbModels);
