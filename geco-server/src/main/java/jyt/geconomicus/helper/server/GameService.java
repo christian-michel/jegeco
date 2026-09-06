@@ -656,20 +656,67 @@ public class GameService
 		try
 		{
 			final Player player = em.find(Player.class, pPlayerId);
-			// Dotation de départ (voir dealStartingHandsForLibreIfNeeded) : 1
-			// jeton faible + 1 moyen + 1 fort = valeur 7, une CONSTANTE fixée
-			// par les règles (geconomicus.glibre.org/libre_money.html) - jamais
-			// stockée séparément, juste ajoutée dès que ce joueur a bien reçu
-			// sa mise en place (startingCardsJson non nul, posé au même
-			// moment). Avant ce correctif (28/08/2026), tout joueur partait
-			// systématiquement de 0, ignorant cette dotation initiale.
-			final int startingValue = ((player != null) && (player.getStartingCardsJson() != null)) ? 7 : 0;
-			final List<Transaction> txs = em.createQuery(
-					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid)", //$NON-NLS-1$
-					Transaction.class)
+			// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026 : écart entre le
+			// solde affiché sur les smartphones et celui que l'assistant de fin
+			// de tour affiche/enregistre, "à partir du second entre-deux-tour",
+			// PEU IMPORTE que "strict TRM" soit coché ou non - ce réglage
+			// n'affecte que la masse monétaire à la SORTIE d'un joueur, sans
+			// aucun rapport avec ce calcul) : ce calcul ignorait complètement
+			// les points de contrôle WEALTH_CHECKPOINT posés par l'assistant à
+			// CHAQUE tour (voir renderStepOtherDU/renderStep4 dans app.js), qui
+			// distribue un nouveau DU (création monétaire) à CHAQUE joueur
+			// vivant à CHAQUE tour - jamais reflété ici, qui ne comptait que la
+			// dotation de départ fixe (+7, UNE SEULE FOIS) et tout l'historique
+			// de transactions depuis le tout début. Corrigé en reprenant EXACTEMENT
+			// la même logique que le pré-remplissage de l'assistant côté client
+			// (voir computeLastKnownLibreCoins/computeLibrePrefill dans app.js) :
+			// cherche le DERNIER point de contrôle posé (WEALTH_CHECKPOINT/DEATH/
+			// QUIT), l'utilise comme nouvelle base (DU inclus, puisque l'assistant
+			// l'y a déjà intégré avant de l'enregistrer), puis n'ajoute que les
+			// transactions POSTÉRIEURES à ce point - jamais un double comptage de
+			// ce qui est déjà inclus dans le point de contrôle lui-même. Filtre par
+			// TYPE d'événement fait en Java (pas en JPQL) : évite toute
+			// hypothèse sur le nom exact de la propriété gérée par JPA pour ce
+			// champ enum, jamais vérifiée ailleurs dans ce fichier.
+			final List<Event> allPlayerEvents = em.createQuery(
+					"SELECT e FROM Event e WHERE e.game.id = :gameId AND e.player.id = :pid ORDER BY e.tstamp DESC", //$NON-NLS-1$
+					Event.class)
 					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
 					.getResultList();
-			int balance = startingValue;
+			final Event latestCheckpoint = allPlayerEvents.stream()
+					.filter(e -> (e.getEvt() == EventType.WEALTH_CHECKPOINT) || (e.getEvt() == EventType.DEATH)
+							|| (e.getEvt() == EventType.QUIT))
+					.findFirst() // déjà trié par date décroissante ci-dessus : le premier trouvé est le plus récent
+					.orElse(null);
+
+			int baseline;
+			java.util.Date sinceTstamp = null;
+			if (latestCheckpoint != null)
+			{
+				baseline = latestCheckpoint.getWeakCoins() + (2 * latestCheckpoint.getMediumCoins())
+						+ (4 * latestCheckpoint.getStrongCoins());
+				sinceTstamp = latestCheckpoint.getTstamp();
+			}
+			else
+			{
+				// Aucun point de contrôle encore posé (typiquement : avant le tout
+				// premier passage de l'assistant) - dotation de départ (voir
+				// dealStartingHandsForLibreIfNeeded) : 1 jeton faible + 1 moyen + 1
+				// fort = valeur 7, une CONSTANTE fixée par les règles
+				// (geconomicus.glibre.org/libre_money.html) - jamais stockée
+				// séparément, juste ajoutée dès que ce joueur a bien reçu sa mise
+				// en place (startingCardsJson non nul, posé au même moment).
+				baseline = ((player != null) && (player.getStartingCardsJson() != null)) ? 7 : 0;
+			}
+
+			final List<Transaction> txs = em.createQuery(
+					"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid) " //$NON-NLS-1$
+							+ "AND (:sinceTstamp IS NULL OR t.tstamp > :sinceTstamp)", //$NON-NLS-1$
+					Transaction.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.setParameter("sinceTstamp", sinceTstamp) //$NON-NLS-1$
+					.getResultList();
+			int balance = baseline;
 			for (final Transaction t : txs)
 			{
 				if (t.getSeller().getId().equals(pPlayerId))
