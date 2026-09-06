@@ -1150,6 +1150,14 @@ public class GameService
 	public java.util.List<CardSquareEvent> checkAndCashInSquares(final int pGameId, final int pPlayerId)
 	{
 		final java.util.List<CardSquareEvent> cashedInThisCall = new java.util.ArrayList<>();
+		// Trace de diagnostic temporaire (05/09/2026) - remonté par l'utilisateur :
+		// des carrés en cascade ne se déclenchent plus après le premier, sans
+		// exception ni erreur visible nulle part (journaux serveur propres,
+		// console navigateur sans erreur applicative). Plutôt que de deviner un
+		// correctif de plus sans preuve, ces lignes permettront de voir
+        // EXACTEMENT ce que cette méthode trouve/décide à chaque appel - à
+        // retirer une fois la cause confirmée avec certitude.
+		System.out.println("[DIAG carré] checkAndCashInSquares appelée : partie=" + pGameId + " joueur=" + pPlayerId); //$NON-NLS-1$ //$NON-NLS-2$
 		while (true)
 		{
 			final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -1177,6 +1185,7 @@ public class GameService
 				// l'inventaire ACTUEL (déjà rejoué : dotation + transactions +
 				// carrés précédents) - le premier trouvé, peu importe l'ordre.
 				final java.util.Map<String, Integer> inventory = computePlayerCardInventory(pGameId, pPlayerId);
+				System.out.println("[DIAG carré] inventaire recalculé pour joueur=" + pPlayerId + " : " + inventory); //$NON-NLS-1$ //$NON-NLS-2$
 				String squareCardId = null;
 				String squareLevel = null;
 				for (final java.util.Map.Entry<String, Integer> e : inventory.entrySet())
@@ -1190,7 +1199,11 @@ public class GameService
 					}
 				}
 				if (squareCardId == null)
+				{
+					System.out.println("[DIAG carré] aucun modèle à 4+ trouvé - rien à encaisser, arrêt de la boucle."); //$NON-NLS-1$
 					return cashedInThisCall; // rien à encaisser, on s'arrête là
+				}
+				System.out.println("[DIAG carré] carré détecté : carte=" + squareCardId + " niveau=" + squareLevel); //$NON-NLS-1$ //$NON-NLS-2$
 
 				final int levelIndex = LEVEL_ORDER.indexOf(squareLevel);
 				if ((levelIndex < 0) || (levelIndex >= LEVEL_ORDER.size() - 1))
@@ -1285,6 +1298,8 @@ public class GameService
 				em.persist(squareEvent);
 				em.getTransaction().commit();
 				cashedInThisCall.add(squareEvent);
+				System.out.println("[DIAG carré] carré encaissé avec succès : carte=" + squareCardId + " -> promue=" //$NON-NLS-1$ //$NON-NLS-2$
+						+ promotedCardId + " niveau=" + promotedLevel + " - reboucle pour vérifier un carré en cascade."); //$NON-NLS-1$ //$NON-NLS-2$
 
 				if (isFirstBreakthrough)
 				{
