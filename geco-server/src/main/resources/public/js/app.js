@@ -3660,18 +3660,29 @@ async function openEndOfTurnWizard() {
 		el("wizNextDeathDU").onclick = async () => {
 			// Enregistré comme un vrai événement de mort (même principe que
 			// l'inventaire des morts en monnaie dette), pas seulement un calcul.
-			// Remonté par un utilisateur : les jetons viennent de l'étape précédente
-			// (allPlayersMoneyInventory, déjà collectés et vérifiés) - seules les
-			// cartes sont saisies ici.
+			// BUG TROUVÉ (remonté par l'utilisateur, 07/09/2026 : "les résultats
+			// sont tous faux dès le premier tour" + "la valeur du DU me semble
+			// par moment très faible pour les joueurs qui renaissent") :
+			// weakCoins/mediumCoins/strongCoins réenregistraient le solde
+			// D'AVANT LA MORT (coins.weak/medium/strong, tel que collecté à
+			// l'étape précédente) au lieu du DU affiché juste au-dessus comme
+			// suggestion (computeTokenBreakdown(du, ...)) - contredisant
+			// exactement ce qui est documenté et avait été testé
+			// (docs/03-architecture-technique.md : "un joueur qui meurt...
+			// doit repartir avec le DU seul = 3, pas 12") : la renaissance
+			// n'effaçait donc jamais réellement l'ancien solde, qui continuait
+			// de se propager tel quel dans tous les calculs suivants
+			// (computeLastKnownLibreCoins/computeTradeBalance) comme si la mort
+			// n'avait aucun effet monétaire.
+			const duBreakdown = computeTokenBreakdown(du, game.weakCoinValue);
 			for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
-				const coins = allPlayersMoneyInventory[playerId] || { weak: 0, medium: 0, strong: 0 };
 				const weakCards = parseInt(fieldset.querySelector(".duCardWeak").value || "0", 10);
 				const mediumCards = parseInt(fieldset.querySelector(".duCardMedium").value || "0", 10);
 				const strongCards = parseInt(fieldset.querySelector(".duCardStrong").value || "0", 10);
 				await Api.recordEvent(state.currentGameId, {
 					type: "D", playerId, principal: 0, interest: 0,
-					weakCoins: coins.weak, mediumCoins: coins.medium, strongCoins: coins.strong,
+					weakCoins: duBreakdown.weak, mediumCoins: duBreakdown.medium, strongCoins: duBreakdown.strong,
 					weakCards, mediumCards, strongCards,
 				});
 			}
