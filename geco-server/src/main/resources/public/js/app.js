@@ -3455,7 +3455,20 @@ async function openEndOfTurnWizard() {
 	function computeLibrePrefill(playerId) {
 		const last = computeLastKnownLibreCoins(playerId);
 		const lastValue = (last.weak + (2 * last.medium) + (4 * last.strong)) * game.weakCoinValue;
-		const total = Math.max(0, lastValue + computeThisTurnTransactionDelta(playerId));
+		// BUG TROUVÉ (remonté par l'utilisateur, 07/09/2026, confirmé par
+		// correspondance numérique exacte sur 4 joueurs d'une vraie partie) :
+		// computeThisTurnTransactionDelta() renvoie une valeur en unités
+		// ABSTRAITES (voir Transaction.totalCoinsValue - jamais mise à
+		// l'échelle nulle part, le système d'échange smartphone opère
+		// entièrement dans cet espace abstrait) - alors que lastValue,
+		// juste au-dessus, est déjà multipliée par weakCoinValue. Les
+		// additionner telles quelles mélangeait deux échelles différentes :
+		// sans incidence quand un joueur n'avait fait AUCUN échange ce
+		// tour (delta=0, d'où "Anne"/"CC" corrects dans le rapport), mais
+		// un écart exactement égal à ce delta dès qu'un échange avait eu
+		// lieu (confirmé algébriquement : écart = delta, vérifié exact
+		// pour les 4 joueurs du rapport - "Franck" +6, "Céline" -4).
+		const total = Math.max(0, lastValue + (computeThisTurnTransactionDelta(playerId) * game.weakCoinValue));
 		return computeTokenBreakdown(total, game.weakCoinValue);
 	}
 
