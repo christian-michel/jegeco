@@ -1930,6 +1930,15 @@ function connectPlayerWs() {
 		// à la bascule d'écran juste en dessous, elle bien gardée).
 		if ((msg.type === "event") && (msg.payload.type === "TURN")) {
 			playPlayerWhistle();
+			// Remonté par l'utilisateur (06/09/2026) : "les carrés s'enchaînent
+			// même pendant l'entre-deux-tours. L'animation ne s'arrête plus." -
+			// purge tout ce qui restait en file d'attente (voir
+			// clearSquareAnimQueueOnNewTurn, plus bas) - un ancien carré du tour
+			// précédent n'a plus le même intérêt une fois le nouveau tour
+			// démarré. L'animation ACTUELLEMENT en cours, s'il y en a une,
+			// continue naturellement jusqu'à sa fin - jamais interrompue en
+			// plein milieu, seules les suivantes en attente sont annulées.
+			clearSquareAnimQueueOnNewTurn();
 			// Remonté par l'utilisateur (05/09/2026) : une infobulle doit
 			// aussi accompagner le début de tour, en plus du sifflet - même
 			// mécanisme que "solde insuffisant"/"fin du tour" (voir showToast).
@@ -1974,19 +1983,56 @@ function handleOwnSaleCompleted(transactionDto) {
 // apparaître un mélange des deux jeux de cartes à l'écran. Corrigé : chaque
 // carré reçu est mis en file, un seul à la fois joue réellement, les
 // suivants attendent que le précédent soit terminé.
+//
+// PLAFOND ajouté le 06/09/2026 - remonté par l'utilisateur : "les carrés
+// s'enchaînent même pendant l'entre-deux-tours. L'animation ne s'arrête
+// plus." Cause : avec un jeu de cartes trop restreint (avant le retour à la
+// règle N+1 modèles), un grand nombre de carrés a pu s'enchaîner en peu de
+// temps côté serveur - chacun individuellement borné (voir le filet de
+// sécurité de checkAndCashInSquares), mais TOUS diffusés et empilés ici SANS
+// LIMITE. Résultat : la file continue de se vider séquentiellement
+// (~3,3 secondes par carré) bien après la fin du tour, INDÉPENDAMMENT de
+// l'écran affiché - y compris pendant l'assistant de fin de tour, qui
+// n'a pourtant aucun rapport avec cette file. Deux mesures :
+// - MAX_QUEUED : au-delà de ce nombre de carrés en attente, les plus
+//   anciens sont directement ESCAMOTÉS (jamais animés un par un) - seuls
+//   les plus récents restent affichés, avec un total additionné dans le
+//   sous-titre pour ne pas perdre l'information de ce qui a été gagné.
+// - clearSquareAnimQueueOnNewTurn() : purge tout ce qui reste en attente
+//   dès qu'un nouveau tour démarre (voir son appel dans connectPlayerWs) -
+//   plus aucune "rediffusion" d'anciens carrés une fois le tour suivant
+//   commencé, l'information n'a plus le même intérêt à ce stade.
+const MAX_QUEUED_SQUARE_ANIMS = 3;
 let mSquareAnimQueue = [];
 let mSquareAnimRunning = false;
+let mSquareAnimSkippedCount = 0;
 function enqueueSquareAnimation(squareDto) {
 	mSquareAnimQueue.push(squareDto);
+	while (mSquareAnimQueue.length > MAX_QUEUED_SQUARE_ANIMS) {
+		mSquareAnimQueue.shift(); // le plus ancien en attente est escamoté, jamais animé individuellement
+		mSquareAnimSkippedCount++;
+	}
 	if (!mSquareAnimRunning) drainSquareAnimQueue();
 }
 async function drainSquareAnimQueue() {
 	mSquareAnimRunning = true;
 	while (mSquareAnimQueue.length > 0) {
 		const next = mSquareAnimQueue.shift();
-		await playSquareAnimation(next); // toujours attendu en entier avant le suivant - jamais deux animations en même temps
+		// Capture puis remet à zéro AVANT de lancer l'animation - le nombre
+		// escamoté depuis la dernière animation jouée est transmis pour être
+		// mentionné dans le sous-titre (voir playSquareAnimation), plutôt que
+		// de perdre silencieusement cette information.
+		const skippedSinceLast = mSquareAnimSkippedCount;
+		mSquareAnimSkippedCount = 0;
+		await playSquareAnimation(next, skippedSinceLast); // toujours attendu en entier avant le suivant - jamais deux animations en même temps
 	}
 	mSquareAnimRunning = false;
+}
+// Purge tout ce qui reste en file (jamais l'animation DÉJÀ en cours, qui
+// continue naturellement jusqu'à sa fin) - appelée à chaque nouveau tour.
+function clearSquareAnimQueueOnNewTurn() {
+	mSquareAnimQueue = [];
+	mSquareAnimSkippedCount = 0;
 }
 
 // ============================================================
@@ -2002,7 +2048,7 @@ async function drainSquareAnimQueue() {
 // UNIQUEMENT depuis drainSquareAnimQueue() ci-dessus - jamais directement,
 // pour garantir qu'une seule animation ne joue à la fois (voir le
 // commentaire au-dessus).
-async function playSquareAnimation(squareDto) {
+async function playSquareAnimation(squareDto, pSkippedCount) {
 	if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
 	if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
 
@@ -2099,7 +2145,15 @@ async function playSquareAnimation(squareDto) {
 	// PHASE E : apparition des 5 nouvelles cartes - les VRAIES cartes reçues
 	// (4 de remplacement au même niveau + 1 promue, mise en valeur par un
 	// liseré doré, voir .square-anim-card.promoted).
-	el("squareAnimSubtitle").textContent = t("playerView.square_anim_detail", { cashed: cashed.label, promoted: promoted.label });
+	// pSkippedCount > 0 (voir MAX_QUEUED_SQUARE_ANIMS/drainSquareAnimQueue) :
+	// d'autres carrés ont été encaissés entre-temps sans animation dédiée
+	// (file d'attente trop chargée) - mentionné ici plutôt que perdu
+	// silencieusement, pour que le joueur sache qu'il a gagné plus que ce
+	// qu'il voit à l'écran.
+	const detailText = t("playerView.square_anim_detail", { cashed: cashed.label, promoted: promoted.label });
+	el("squareAnimSubtitle").textContent = pSkippedCount > 0
+		? detailText + " " + t("playerView.square_anim_skipped", { count: pSkippedCount })
+		: detailText;
 	const revealItems = [...squareDto.replenishedCardIds.map((id) => ({ id, promotedFlag: false })),
 		{ id: squareDto.promotedCardTypeId, promotedFlag: true }];
 	const newEls = revealItems.map((item) => {

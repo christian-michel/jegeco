@@ -1956,3 +1956,7 @@ msgstr "Fin du tour"
 # ============ Infobulle debut de tour (05/09/2026) ============
 msgid "playerView.turn_started_toast"
 msgstr "Nouveau tour"
+
+# ============ Carres escamotes (file d'attente saturee, 06/09/2026) ============
+msgid "playerView.square_anim_skipped"
+msgstr "(+{count} autre(s) carré(s) encaissé(s) entre-temps)"
