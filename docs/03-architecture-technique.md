@@ -1392,3 +1392,37 @@ pour la fiabilité des résultats produits par le jeu.
   complète des crédits/remboursements).
 - Étape 3 : routes d'inscription joueur via QR code, gestion de sessions
   multi-clients, script d'installation Docker.
+
+### Note d'architecture (06/09/2026) : ce qui sera commun à troc/dette, ce qui sera propre à chacun
+
+Remontée par l'utilisateur en prévision de l'extension du smartphone aux
+systèmes troc et dette (pas encore commencée à cette date) - à garder à
+l'esprit pour ne pas coder ces mécanismes de façon trop spécifique à la
+monnaie libre, ce qui compliquerait leur réutilisation plus tard :
+
+**Mécanismes COMMUNS aux trois systèmes monétaires (déjà construits pour la
+monnaie libre, à réutiliser tels quels)** :
+- La pioche de cartes et l'encaissement automatique des carrés (voir
+  `CardSquareEvent`, `GameService.checkAndCashInSquares`,
+  `computePlayerCardInventory`) - un mécanisme de cartes, indépendant de la
+  façon dont on les paie.
+- La synchronisation avec le compte à rebours de tour (voir
+  `GameService.isTradingAllowed`, qui bloque les échanges hors tour actif -
+  ne dépend d'aucun système monétaire).
+- Le comptage/l'affichage des cartes détenues (`Player.startingCardsJson`,
+  `cardInventoryResetAt`, l'écran "Mes cartes" et son regroupement par
+  valeur/catégorie/quantité).
+
+**Le comptage des jetons (`computeTradeBalance`, la lecture des points de
+contrôle `WEALTH_CHECKPOINT`)** est un mécanisme de la monnaie LIBRE, mais
+sera AUSSI commun à la monnaie DETTE (qui utilise elle aussi des jetons entre
+joueurs, contrairement au troc).
+
+**Ce qui sera PROPRE à chaque système, jamais partagé** :
+- Monnaie dette : tout ce qui touche à la banque et aux crédits (émission,
+  remboursement, intérêts) - un mécanisme entièrement absent de la monnaie
+  libre et du troc.
+- Troc : un système d'échange de cartes SANS jetons - une transaction "carte
+  contre carte(s)" directe, à part entière, sans passer par
+  `computeTradeBalance` ni aucun calcul de valeur en jetons.
+
