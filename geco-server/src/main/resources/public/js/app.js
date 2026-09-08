@@ -3328,6 +3328,23 @@ async function openEndOfTurnWizard() {
 	if (state.wizardOpen) return;
 	state.wizardOpen = true;
 
+	// BUG TROUVÉ (remonté par l'utilisateur, 07/09/2026 : "les résultats sont
+	// tous faux dès le premier tour", touchant TOUS les joueurs à la fois, pas
+	// un joueur en particulier) : cette fonction lisait state.currentGame
+	// directement, sans jamais le rafraîchir à cet instant précis - avec des
+	// tours courts (3 minutes dans le cas testé), le minuteur du NOUVEAU tour
+	// peut retomber à 0 et redéclencher automatiquement cet assistant AVANT que
+	// la diffusion temps réel du tour précédent (qui vient tout juste
+	// d'enregistrer les points de contrôle WEALTH_CHECKPOINT de chaque joueur,
+	// voir renderStep4) n'ait eu le temps de rafraîchir state.currentGame côté
+	// client - computeLastKnownLibreCoins() travaillait alors sur un
+	// game.events INCOMPLET, manquant les tout derniers points de contrôle,
+	// pour TOUS les joueurs à la fois (pas un seul en particulier, cohérent
+	// avec le symptôme observé). Corrigé : une récupération fraîche explicite
+	// ici, avant tout calcul de pré-remplissage - jamais de dépendance à un
+	// état potentiellement pas encore synchronisé.
+	state.currentGame = await Api.getGame(state.currentGameId);
+
 	const game = state.currentGame;
 	const dlg = el("dlg");
 	const t = window.GecoI18n.t;
