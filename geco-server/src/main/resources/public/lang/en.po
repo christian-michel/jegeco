@@ -1956,3 +1956,7 @@ msgstr "New turn"
 # ============ Skipped squares (queue saturated, 06/09/2026) ============
 msgid "playerView.square_anim_skipped"
 msgstr "(+{count} more square(s) cashed in the meantime)"
+
+# ============ Pause toast (distinct from turn ended, 07/09/2026) ============
+msgid "playerView.turn_paused_toast"
+msgstr "Paused"

@@ -256,19 +256,21 @@ async function refreshPlayer() {
 		if (!res.ok) throw new Error("not found");
 		state.player = await res.json();
 		el("viewError").classList.add("hidden");
-		// Remonté par l'utilisateur (02/09/2026) : "quand le tour se termine,
-		// il faut qu'une infobulle apparaisse 3 secondes" - détecté par
-		// transition de tradingAllowed (true -> false), pas par un événement
-		// dédié qui n'existe pas pour l'expiration NATURELLE du minuteur (voir
-		// GameService.isTradingAllowed, qui couvre aussi la pause explicite et
-		// la fin de partie - même infobulle dans ces cas, une distinction plus
-        // fine demanderait d'exposer le détail de la raison, pas nécessaire ici).
+		// Remonté par l'utilisateur (02/09/2026, précisé le 07/09/2026 : "quand
+		// on met le compte à rebours en pause, l'info bulle indique fin de tour
+		// au lieu de pause") : détecté par transition de tradingAllowed (true ->
+		// false) - GameService.isTradingAllowed couvre aussi bien la pause
+		// explicite que l'expiration naturelle du minuteur ET la fin de partie,
+		// un seul indicateur ne permettait donc pas de distinguer ces cas -
+		// limite assumée à l'époque, levée ici via le nouveau champ isPaused
+		// (PlayerSelfViewDto), qui indique précisément si c'est une pause
+		// explicite plutôt qu'une vraie fin de tour.
 		// Comparaison stricte à true (pas juste "vrai") : au tout premier
 		// chargement, state.previousTradingAllowed vaut undefined, jamais
 		// une fausse transition détectée sur une partie déjà en pause à
 		// l'arrivée du joueur.
 		if ((state.previousTradingAllowed === true) && (state.player.tradingAllowed === false)) {
-			showToast(t("playerView.turn_ended_toast"));
+			showToast(t(state.player.isPaused ? "playerView.turn_paused_toast" : "playerView.turn_ended_toast"));
 		}
 		state.previousTradingAllowed = state.player.tradingAllowed;
 		// Bouton "Demander un crédit" : monnaie dette uniquement (voir isDebtGame()).
