@@ -123,6 +123,57 @@ public class Player implements Serializable
 		cardInventoryResetAt = pCardInventoryResetAt;
 	}
 
+	// Étape 3, monnaie libre (et bientôt dette, voir la note d'architecture du
+	// 06/09/2026) : compte RÉEL et MUTABLE de jetons par dénomination -
+	// remonté par l'utilisateur (07/09/2026) : "il faut que chaque jeton en
+	// circulation puisse être traçable et à un seul endroit à la fois."
+	// Remplace l'ancien système (GameService.computeTradeBalance, une simple
+	// VALEUR reconstruite après coup depuis l'historique des transactions,
+	// puis redécomposée en jetons via un algorithme "grosses coupures
+	// d'abord" totalement déconnecté de la réalité physique - deux joueurs
+	// pouvaient ainsi, une fois additionnés, faire apparaître ou disparaître
+	// des jetons qui n'existaient nulle part). Mis à jour directement et
+	// atomiquement à chaque mouvement réel (distribution initiale, DU à
+	// chaque tour, achat/vente) - jamais recalculé après coup à partir d'un
+	// historique. Voir GameService.dealStartingHandsForLibreIfNeeded (mise en
+	// place), GameService.recordEvent (DU, sur un WEALTH_CHECKPOINT/DEATH),
+	// GameService.recordTransaction (achat/vente, qui devient depuis ce
+	// correctif la seule mécanique la mouvant réellement plutôt qu'un simple
+	// contrôle de solde).
+	private int jetonWeak;
+	private int jetonMedium;
+	private int jetonStrong;
+
+	public int getJetonWeak()
+	{
+		return jetonWeak;
+	}
+
+	public void setJetonWeak(final int pJetonWeak)
+	{
+		jetonWeak = pJetonWeak;
+	}
+
+	public int getJetonMedium()
+	{
+		return jetonMedium;
+	}
+
+	public void setJetonMedium(final int pJetonMedium)
+	{
+		jetonMedium = pJetonMedium;
+	}
+
+	public int getJetonStrong()
+	{
+		return jetonStrong;
+	}
+
+	public void setJetonStrong(final int pJetonStrong)
+	{
+		jetonStrong = pJetonStrong;
+	}
+
 	public String getStartingCardsJson()
 	{
 		return startingCardsJson;

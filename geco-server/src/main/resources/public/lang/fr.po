@@ -1964,3 +1964,7 @@ msgstr "(+{count} autre(s) carré(s) encaissé(s) entre-temps)"
 # ============ Infobulle pause (distincte de fin de tour, 07/09/2026) ============
 msgid "playerView.turn_paused_toast"
 msgstr "Pause"
+
+# ============ Rendu de monnaie impossible (07/09/2026) ============
+msgid "trade.cannot_make_change_toast"
+msgstr "Impossible de rendre la monnaie"

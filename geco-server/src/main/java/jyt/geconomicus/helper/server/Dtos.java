@@ -27,7 +27,7 @@ public class Dtos
 	public record PlayerDto(Integer id, String name, boolean active, int curDebt, int curInterest,
 			boolean visitedBank, int age, Integer declaredAge, String favoriteColor, String avatarConfigJson,
 			int goodsCount, String accessToken, int weakGoods, int mediumGoods, int strongGoods,
-			boolean hasStartingAllocation)
+			boolean hasStartingAllocation, int jetonWeak, int jetonMedium, int jetonStrong)
 	{
 		static PlayerDto from(final Player p, final int pAge)
 		{
@@ -45,7 +45,17 @@ public class Dtos
 					// GameService.dealStartingHandsForLibreIfNeeded). Sans lui,
 					// computeLibrePrefill (app.js) ne saurait jamais que le tout
 					// premier tour d'un joueur libre part d'un solde de 7, pas de 0.
-					p.getStartingCardsJson() != null);
+					p.getStartingCardsJson() != null,
+					// jetonWeak/mediumJeton/strongJeton : ajoutés le 07/09/2026, remonté
+					// par l'utilisateur ("il faut que chaque jeton en circulation
+					// puisse être traçable et à un seul endroit à la fois") - le VRAI
+					// compte par dénomination de ce joueur (voir Player.jetonWeak&co),
+					// pour que l'assistant puisse enfin LIRE la réalité au lieu de la
+					// RECONSTRUIRE après coup depuis une simple valeur (voir
+					// computeTokenBreakdown côté client, désormais réservé à la seule
+					// distribution d'une NOUVELLE création monétaire, jamais à
+					// l'affichage d'un solde déjà existant).
+					p.getJetonWeak(), p.getJetonMedium(), p.getJetonStrong());
 		}
 	}
 
@@ -58,7 +68,8 @@ public class Dtos
 	public record PlayerSelfViewDto(Integer id, String name, boolean active, int curDebt, int curInterest,
 			boolean visitedBank, Integer declaredAge, String favoriteColor, String avatarConfigJson,
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
-			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused)
+			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused, int jetonWeak,
+			int jetonMedium, int jetonStrong)
 	{
 		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
 				final boolean pTradingAllowed, final double pWeakCoinValue, final boolean pIsPaused)
@@ -66,7 +77,8 @@ public class Dtos
 			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
 					p.getGoodsCount(), p.getAccessToken(), pTradeBalance, p.getWeakGoods(), p.getMediumGoods(),
-					p.getStrongGoods(), pMoneySystem, pTradingAllowed, pWeakCoinValue, pIsPaused);
+					p.getStrongGoods(), pMoneySystem, pTradingAllowed, pWeakCoinValue, pIsPaused, p.getJetonWeak(),
+					p.getJetonMedium(), p.getJetonStrong());
 		}
 	}
 
@@ -101,15 +113,22 @@ public class Dtos
 	// raisonnement complet et sa portée volontairement limitée à ce stade.
 	public record TransactionDto(Integer id, String uuid, Integer sellerPlayerId, String sellerPlayerName,
 			Integer buyerPlayerId, String buyerPlayerName, int turnNumber, long timestamp, String cardTypeId,
-			String cardLevel, int weakCoins, int mediumCoins, int strongCoins, int totalCoinsValue,
-			int buyerWeakGoods, int buyerMediumGoods, int buyerStrongGoods, boolean isGoodsTrade, int totalGoodsValue)
+			String cardLevel, int weakCoins, int mediumCoins, int strongCoins, int weakChangeCoins,
+			int mediumChangeCoins, int strongChangeCoins, int totalCoinsValue, int buyerWeakGoods,
+			int buyerMediumGoods, int buyerStrongGoods, boolean isGoodsTrade, int totalGoodsValue)
 	{
 		static TransactionDto from(final jyt.geconomicus.helper.Transaction t)
 		{
 			return new TransactionDto(t.getId(), t.getUuid(), t.getSeller().getId(), t.getSeller().getName(),
 					t.getBuyer().getId(), t.getBuyer().getName(), t.getTurnNumber(),
 					t.getTstamp() == null ? 0 : t.getTstamp().getTime(), t.getCardTypeId(), t.getCardLevel(),
-					t.getWeakCoins(), t.getMediumCoins(), t.getStrongCoins(), t.totalCoinsValue(),
+					t.getWeakCoins(), t.getMediumCoins(), t.getStrongCoins(),
+					// weakChangeCoins&co : ajoutés le 07/09/2026, remonté par
+					// l'utilisateur ("chaque jeton en circulation doit être
+					// traçable") - la monnaie rendue par le VENDEUR à l'acheteur,
+					// pour une traçabilité complète de l'historique (voir
+					// Transaction.java, GameService.findPaymentWithChange).
+					t.getWeakChangeCoins(), t.getMediumChangeCoins(), t.getStrongChangeCoins(), t.totalCoinsValue(),
 					t.getBuyerWeakGoods(), t.getBuyerMediumGoods(), t.getBuyerStrongGoods(), t.isGoodsTrade(),
 					t.totalGoodsValue());
 		}

@@ -3598,11 +3598,19 @@ async function openEndOfTurnWizard() {
 			<p>${t("wiz.all_players_money_intro")}</p>
 			<p class="galilee-explainer">${t("wiz.all_players_money_prefill_note")}</p>
 			${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
-				// Étape 3, monnaie libre : pré-rempli à partir du dernier solde connu
-				// + des transactions smartphone de ce tour (voir computeLibrePrefill) -
-				// l'animateur n'a plus qu'à valider, ou corriger si la réalité
-				// physique diffère (voir la note d'explication ci-dessus).
-				const prefill = computeLibrePrefill(p.id);
+				// Remonté par l'utilisateur (07/09/2026) : "il faut que chaque
+				// jeton en circulation puisse être traçable et à un seul endroit
+				// à la fois" - en monnaie libre suivie par smartphone, on lit
+				// désormais le VRAI compte par dénomination du joueur (voir
+				// PlayerDto.jetonWeak&co, tenu à jour en direct côté serveur à
+				// chaque mouvement réel), jamais une reconstruction après coup
+				// depuis une simple valeur (computeLibrePrefill, qui pouvait
+				// faire apparaître ou disparaître des jetons une fois plusieurs
+				// joueurs additionnés - conservé ci-dessous comme repli pour un
+				// joueur pas encore suivi par smartphone, ou en dette).
+				const prefill = p.hasStartingAllocation
+					? { weak: p.jetonWeak, medium: p.jetonMedium, strong: p.jetonStrong }
+					: computeLibrePrefill(p.id);
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}</legend>

@@ -137,6 +137,18 @@ public class Transaction implements Serializable
 	private int mediumCoins;
 	private int strongCoins;
 
+	// Monnaie rendue par le VENDEUR à l'acheteur, par dénomination - remonté
+	// par l'utilisateur (07/09/2026) : "si l'acheteur a un montant supérieur
+	// mais qu'il n'a pas le compte exact... il faut que le vendeur ait de
+	// quoi lui rendre la monnaie avec la pièce exacte, comme dans la vraie
+	// vie." weakCoins&co ci-dessus restent toujours ce que l'ACHETEUR donne
+	// (jamais négatifs) ; ces trois champs-ci sont ce que le VENDEUR rend en
+	// retour - toujours à 0 si le paiement tombait déjà juste, sans quoi la
+	// carte coûterait plus cher que sa valeur réelle pour tout achat exact.
+	private int weakChangeCoins;
+	private int mediumChangeCoins;
+	private int strongChangeCoins;
+
 	// Troc uniquement (voir Game.MONEY_TROC) : cartes données par l'ACHETEUR
 	// en échange, par niveau - jamais de jetons en troc (règle 3 de
 	// docs/10-etape-plugins-troc.md, "jamais de monnaie ni de jeton d'aucune
@@ -156,12 +168,13 @@ public class Transaction implements Serializable
 		super();
 	}
 
-	/** Constructeur pour une transaction monnaie (dette/libre) : carte contre jetons. */
+	/** Constructeur pour une transaction monnaie (dette/libre) : carte contre jetons, sans rendu de monnaie. */
 	public Transaction(final Game pGame, final Player pSeller, final Player pBuyer, final String pCardTypeId,
 			final String pCardLevel, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
 			final String pNonce)
 	{
-		this(pGame, pSeller, pBuyer, pCardTypeId, pCardLevel, pWeakCoins, pMediumCoins, pStrongCoins, 0, 0, 0, pNonce);
+		this(pGame, pSeller, pBuyer, pCardTypeId, pCardLevel, pWeakCoins, pMediumCoins, pStrongCoins, 0, 0, 0, 0, 0, 0,
+				pNonce);
 	}
 
 	/**
@@ -169,10 +182,12 @@ public class Transaction implements Serializable
 	 * StrongGoods valent alors 0) OU carte contre cartes (troc, weakCoins/
 	 * mediumCoins/strongCoins valent alors 0). Jamais les deux à la fois : un
 	 * système de jeu utilise l'un ou l'autre, jamais un mélange (voir
-	 * Game.moneySystem).
+	 * Game.moneySystem). pWeakChangeCoins&co (07/09/2026) : monnaie rendue par
+	 * le vendeur, toujours à 0 hors monnaie libre avec rendu de monnaie.
 	 */
 	public Transaction(final Game pGame, final Player pSeller, final Player pBuyer, final String pCardTypeId,
 			final String pCardLevel, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
+			final int pWeakChangeCoins, final int pMediumChangeCoins, final int pStrongChangeCoins,
 			final int pBuyerWeakGoods, final int pBuyerMediumGoods, final int pBuyerStrongGoods, final String pNonce)
 	{
 		super();
@@ -188,9 +203,27 @@ public class Transaction implements Serializable
 		weakCoins = pWeakCoins;
 		mediumCoins = pMediumCoins;
 		strongCoins = pStrongCoins;
+		weakChangeCoins = pWeakChangeCoins;
+		mediumChangeCoins = pMediumChangeCoins;
+		strongChangeCoins = pStrongChangeCoins;
 		buyerWeakGoods = pBuyerWeakGoods;
 		buyerMediumGoods = pBuyerMediumGoods;
 		buyerStrongGoods = pBuyerStrongGoods;
+	}
+
+	public int getWeakChangeCoins()
+	{
+		return weakChangeCoins;
+	}
+
+	public int getMediumChangeCoins()
+	{
+		return mediumChangeCoins;
+	}
+
+	public int getStrongChangeCoins()
+	{
+		return strongChangeCoins;
 	}
 
 	public String getNonce()
@@ -282,7 +315,14 @@ public class Transaction implements Serializable
 	/** Valeur totale en jetons payée, dans la même convention que le reste du moteur (1/2/4). */
 	public int totalCoinsValue()
 	{
-		return weakCoins + 2 * mediumCoins + 4 * strongCoins;
+		// Remonté par l'utilisateur (07/09/2026) : reflète désormais la valeur
+		// NETTE réellement transférée du vendeur vers l'acheteur (paiement
+		// moins monnaie rendue) - avant l'ajout du rendu de monnaie, weakCoins&co
+		// représentaient déjà cette valeur nette (aucun rendu n'existait),
+		// cette formule reste donc identique quand weakChangeCoins&co valent 0
+		// (comportement inchangé pour toute transaction sans rendu).
+		return (weakCoins - weakChangeCoins) + (2 * (mediumCoins - mediumChangeCoins))
+				+ (4 * (strongCoins - strongChangeCoins));
 	}
 
 	/**

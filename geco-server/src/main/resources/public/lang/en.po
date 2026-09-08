@@ -1960,3 +1960,7 @@ msgstr "(+{count} more square(s) cashed in the meantime)"
 # ============ Pause toast (distinct from turn ended, 07/09/2026) ============
 msgid "playerView.turn_paused_toast"
 msgstr "Paused"
+
+# ============ Cannot make change (07/09/2026) ============
+msgid "trade.cannot_make_change_toast"
+msgstr "Cannot make change"

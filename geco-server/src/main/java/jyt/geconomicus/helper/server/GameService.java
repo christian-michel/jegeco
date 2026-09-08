@@ -445,6 +445,25 @@ public class GameService
 			event.setWeakCoins(pWeakCoins);
 			event.setMediumCoins(pMediumCoins);
 			event.setStrongCoins(pStrongCoins);
+			// Remonté par l'utilisateur (07/09/2026) : "il faut que chaque jeton en
+			// circulation puisse être traçable et à un seul endroit à la fois" -
+			// sur un WEALTH_CHECKPOINT (chaque tour) OU un DEATH (renaissance),
+			// pour un joueur en monnaie libre suivi par smartphone, les valeurs
+			// CONFIRMÉES par l'animateur (pWeakCoins/pMediumCoins/pStrongCoins -
+			// déjà correctes pour DEATH depuis le correctif précédent : le DU
+			// seul, jamais l'ancien solde) devi​ennent la nouvelle vérité pour
+			// Player.jetonWeak&co - jamais recalculées après coup depuis
+			// l'historique, contrairement à l'ancien système
+			// (GameService.computeTradeBalance, maintenant remplacé par une
+			// simple lecture directe de ces trois champs).
+			if (((type == EventType.WEALTH_CHECKPOINT) || (type == EventType.DEATH))
+					&& (game.getMoneySystem() == Game.MONEY_LIBRE) && (player != null)
+					&& (player.getStartingCardsJson() != null))
+			{
+				player.setJetonWeak(pWeakCoins);
+				player.setJetonMedium(pMediumCoins);
+				player.setJetonStrong(pStrongCoins);
+			}
 			event.setCounterpartyPlayer(counterpartyPlayer);
 			event.setGoodsFromPlayer(pGoodsFromPlayer);
 			event.setGoodsFromCounterparty(pGoodsFromCounterparty);
@@ -524,29 +543,95 @@ public class GameService
 				throw new IllegalArgumentException("Ce QR code a déjà été utilisé."); //$NON-NLS-1$
 			if (System.currentTimeMillis() > pExpiresAtEpochMs)
 				throw new IllegalArgumentException("Ce QR code a expiré, demandez-en un nouveau au vendeur."); //$NON-NLS-1$
-			// Remonté par l'utilisateur (31/08/2026) : "au scan, on vérifie que
-			// l'acheteur ait le montant en jetons et si c'est bon, la
-			// transaction est faite automatiquement" - jusqu'ici, RIEN ne
-			// vérifiait que l'acheteur avait réellement de quoi payer (un vrai
-			// trou : n'importe quel achat passait, même à solde insuffisant).
-			// Sans effet en troc (prix toujours à 0 en jetons dans ce système,
-			// voir Transaction.isGoodsTrade()) : le contrôle passe alors
-			// trivialement (0 <= n'importe quel solde).
 			final int price = pWeakCoins + (2 * pMediumCoins) + (4 * pStrongCoins);
-			if (price > 0)
+			// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 07/09/2026) :
+			// "il faut que chaque jeton en circulation puisse être traçable et à
+			// un seul endroit à la fois... il faut avoir le montant et le
+			// compte exact avec les jetons exacts, ou de quoi rendre la monnaie
+			// et tomber sur le compte exact. Si le vendeur n'a pas de quoi
+			// rendre la monnaie... la transaction est annulée." En monnaie
+			// libre, le "prix" n'est plus une combinaison de jetons fixée à
+			// l'avance par le vendeur (pWeakCoins&co, reçus du client, ne sont
+			// alors PLUS utilisés) : seule la VALEUR requise par le niveau de
+			// la carte compte (voir LEVEL_VALUE ci-dessous, même correspondance
+			// que côté client) - le paiement RÉEL, avec rendu de monnaie si
+			// besoin, est recalculé ICI à partir des VRAIS jetons détenus par
+			// l'acheteur ET le vendeur au moment précis de la rédemption (voir
+			// findPaymentWithChange) - jamais une combinaison choisie à
+			// l'avance, qui pouvait être physiquement impossible à honorer.
+			int actualWeakCoins = pWeakCoins;
+			int actualMediumCoins = pMediumCoins;
+			int actualStrongCoins = pStrongCoins;
+			int actualWeakChange = 0;
+			int actualMediumChange = 0;
+			int actualStrongChange = 0;
+			if (game.getMoneySystem() == Game.MONEY_LIBRE)
+			{
+				final int requiredValue = levelValue(pCardLevel);
+				final int buyerValue = buyer.getJetonWeak() + (2 * buyer.getJetonMedium())
+						+ (4 * buyer.getJetonStrong());
+				// Remonté par l'utilisateur (07/09/2026) : "il faut que l'acheteur
+				// ait le montant exact ou supérieur pour payer" - vérifié
+				// D'ABORD, séparément de la recherche de paiement/rendu
+				// ci-dessous : sans cette vérification préalable, un acheteur
+				// n'ayant simplement PAS ASSEZ en valeur totale recevrait le
+				// même message que celui qui a bien assez mais dont aucune
+				// combinaison de jetons ne tombe juste - deux causes
+				// différentes, deux messages différents pour le joueur.
+				if (buyerValue < requiredValue)
+					throw new IllegalArgumentException("Solde insuffisant pour cet achat."); //$NON-NLS-1$
+				final int[][] solution = findPaymentWithChange(buyer.getJetonWeak(), buyer.getJetonMedium(),
+						buyer.getJetonStrong(), seller.getJetonWeak(), seller.getJetonMedium(),
+						seller.getJetonStrong(), requiredValue);
+				if (solution == null)
+				{
+					// Ici, l'acheteur a bien assez en VALEUR totale (vérifié
+					// juste au-dessus) - le problème est uniquement que ni lui
+					// ni le vendeur n'ont la PIÈCE PRÉCISE nécessaire pour
+					// tomber sur le compte exact, comme dans la vraie vie.
+					throw new IllegalArgumentException("Impossible de rendre la monnaie pour cet achat."); //$NON-NLS-1$
+				}
+				actualWeakCoins = solution[0][0];
+				actualMediumCoins = solution[0][1];
+				actualStrongCoins = solution[0][2];
+				actualWeakChange = solution[1][0];
+				actualMediumChange = solution[1][1];
+				actualStrongChange = solution[1][2];
+			}
+			else if (price > 0)
 			{
 				final int buyerBalance = computeTradeBalance(pGameId, pBuyerPlayerId);
 				if (buyerBalance < price)
 					throw new IllegalArgumentException("Solde insuffisant pour cet achat."); //$NON-NLS-1$
 			}
 			em.getTransaction().begin();
-			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, pCardLevel, pWeakCoins,
-					pMediumCoins, pStrongCoins, pBuyerWeakGoods, pBuyerMediumGoods, pBuyerStrongGoods, pNonce);
+			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, pCardLevel,
+					actualWeakCoins, actualMediumCoins, actualStrongCoins, actualWeakChange, actualMediumChange,
+					actualStrongChange, pBuyerWeakGoods, pBuyerMediumGoods, pBuyerStrongGoods, pNonce);
 			em.persist(transaction);
-			// Troc uniquement (voir Transaction.isGoodsTrade()) : contrairement aux
-			// jetons (dette/libre - jamais un solde stocké sur Player, toujours
-			// recalculé depuis l'historique, voir GameService.computeTradeBalance),
-			// les biens troc SONT suivis en direct sur Player.weakGoods/
+			// Déplace RÉELLEMENT les jetons, dénomination par dénomination -
+			// jamais recalculé après coup (voir le commentaire ci-dessus) :
+			// l'acheteur donne le PAIEMENT et reçoit la MONNAIE RENDUE ; le
+			// vendeur reçoit le PAIEMENT et donne la MONNAIE RENDUE.
+			// Conservation garantie par construction : aucun jeton n'est
+			// jamais créé ni détruit par une transaction, seulement déplacé
+			// d'un compte à l'autre (et, pour le rendu, dans les deux sens).
+			if (game.getMoneySystem() == Game.MONEY_LIBRE)
+			{
+				buyer.setJetonWeak(buyer.getJetonWeak() - actualWeakCoins + actualWeakChange);
+				buyer.setJetonMedium(buyer.getJetonMedium() - actualMediumCoins + actualMediumChange);
+				buyer.setJetonStrong(buyer.getJetonStrong() - actualStrongCoins + actualStrongChange);
+				seller.setJetonWeak(seller.getJetonWeak() + actualWeakCoins - actualWeakChange);
+				seller.setJetonMedium(seller.getJetonMedium() + actualMediumCoins - actualMediumChange);
+				seller.setJetonStrong(seller.getJetonStrong() + actualStrongCoins - actualStrongChange);
+			}
+			// Troc uniquement (voir Transaction.isGoodsTrade()) : les jetons en
+			// monnaie libre sont désormais suivis en direct eux aussi (voir
+			// juste au-dessus, Player.jetonWeak&co) - la dette, pas encore
+			// concernée par ce compte réel (voir la note d'architecture du
+			// 06/09/2026), reste pour l'instant sur l'ancien système
+			// (GameService.computeTradeBalance). Les biens troc SONT suivis en
+			// direct sur Player.weakGoods/
 			// mediumGoods/strongGoods (voir Event.applyEvent(), cas GOODS_TRADE,
 			// et le correctif du 28/08/2026 qui a comblé ce même suivi pour
 			// l'échange classique). Une transaction smartphone doit donc mettre à
@@ -656,6 +741,25 @@ public class GameService
 		try
 		{
 			final Player player = em.find(Player.class, pPlayerId);
+			final Game game = em.find(Game.class, pGameId);
+			// Remonté par l'utilisateur (07/09/2026) : "il faut que chaque jeton
+			// en circulation puisse être traçable et à un seul endroit à la
+			// fois" - en monnaie libre suivie par smartphone, le solde n'est
+			// plus RECONSTRUIT après coup depuis l'historique (l'ancien système
+			// ci-dessous, dont la seule VALEUR totale ne garantissait jamais
+			// que la RÉPARTITION par dénomination reste cohérente une fois
+			// plusieurs joueurs additionnés) - il se LIT directement depuis le
+			// compte réel et mutable de ce joueur (voir Player.jetonWeak&co,
+			// tenu à jour par recordTransaction/recordEvent à chaque mouvement
+			// réel). Ancien système conservé tel quel pour la dette (pas encore
+			// concernée par ce compte réel, voir la note d'architecture du
+			// 06/09/2026) et comme repli si, pour une raison quelconque, ce
+			// joueur n'a pas encore de compte réel initialisé.
+			if ((game != null) && (game.getMoneySystem() == Game.MONEY_LIBRE) && (player != null)
+					&& (player.getStartingCardsJson() != null))
+			{
+				return player.getJetonWeak() + (2 * player.getJetonMedium()) + (4 * player.getJetonStrong());
+			}
 			// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026 : écart entre le
 			// solde affiché sur les smartphones et celui que l'assistant de fin
 			// de tour affiche/enregistre, "à partir du second entre-deux-tour",
@@ -1061,6 +1165,17 @@ public class GameService
 						faiblePile.merge(cardId, -1, Integer::sum); // retiré de la pioche, remis en main du joueur
 					}
 					writeJsonQuietly(mapper, hand, player::setStartingCardsJson);
+					// Dotation initiale en JETONS (voir Player.jetonWeak&co, remonté
+					// par l'utilisateur le 07/09/2026) - même formule que la donne de
+					// cartes ci-dessus, mais pour les jetons : valeur 7, une constante
+					// fixée par les règles (geconomicus.glibre.org/libre_money.html),
+					// décomposée en jetons PHYSIQUES selon "Valeur d'une pièce faible"
+					// (game.weakCoinValue) - jamais recalculée après coup, ce compte
+					// devient la SEULE source de vérité pour ce joueur désormais.
+					final int[] startingJetons = computeTokenBreakdown(7, game.getWeakCoinValue());
+					player.setJetonWeak(startingJetons[0]);
+					player.setJetonMedium(startingJetons[1]);
+					player.setJetonStrong(startingJetons[2]);
 				}
 			}
 			writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
@@ -1388,6 +1503,125 @@ public class GameService
 			if (e.getValue().containsKey(pCardTypeId))
 				return e.getKey();
 		return null;
+	}
+
+	/**
+	 * Portage Java EXACT de computeTokenBreakdown() côté client (app.js) - même
+	 * algorithme, mêmes arrondis, jamais divergent entre les deux : décompose
+	 * une VALEUR réelle (déjà mise à l'échelle par pWeakCoinValue) en un
+	 * décompte de jetons physiques faible/moyen/fort, en privilégiant les
+	 * grosses coupures. Utilisée UNIQUEMENT pour calculer QUOI DISTRIBUER lors
+	 * d'une création monétaire (mise en place, DU à chaque tour) - jamais pour
+	 * RECONSTRUIRE après coup le solde d'un joueur à partir d'une simple
+	 * valeur (voir la note d'architecture du 07/09/2026 sur Player.jetonWeak
+	 * &co : c'est justement cette reconstruction après coup, faite à la fois
+	 * ici et côté client, qui empêchait toute conservation réelle des
+	 * dénominations une fois plusieurs joueurs additionnés).
+	 */
+	private int[] computeTokenBreakdown(final double pTotalValue, final double pWeakCoinValue)
+	{
+		final double divisor = (pWeakCoinValue == 0) ? 1 : pWeakCoinValue;
+		int units = (int) Math.max(0, Math.round(pTotalValue / divisor));
+		final int strong = units / 4;
+		units -= strong * 4;
+		final int medium = units / 2;
+		units -= medium * 2;
+		return new int[] { units, medium, strong }; // {weak, medium, strong}
+	}
+
+	/**
+	 * Essaie de rendre EXACTEMENT pTarget en jetons parmi ceux DISPONIBLES -
+	 * toujours les grosses coupures d'abord. Renvoie null si aucune
+	 * combinaison EXACTE n'existe avec ce qui est disponible.
+	 *
+	 * Le choix "glouton" (toujours privilégier la plus grosse coupure
+	 * possible) trouve TOUJOURS une combinaison exacte quand il en existe
+	 * une, pour cette suite de dénominations précise (1, 2, 4 - chaque
+	 * coupure est un multiple entier de la précédente) : une propriété
+	 * mathématique connue des systèmes de pièces "canoniques", qui ne tient
+	 * pas pour un système de dénominations quelconque.
+	 */
+	private int[] tryMakeChange(final int pAvailWeak, final int pAvailMedium, final int pAvailStrong,
+			final int pTarget)
+	{
+		if (pTarget < 0)
+			return null;
+		int remaining = pTarget;
+		final int strong = Math.min(pAvailStrong, remaining / 4);
+		remaining -= strong * 4;
+		final int medium = Math.min(pAvailMedium, remaining / 2);
+		remaining -= medium * 2;
+		final int weak = Math.min(pAvailWeak, remaining);
+		remaining -= weak;
+		if (remaining != 0)
+			return null; // pas de combinaison exacte possible avec ce qui est disponible
+		return new int[] { weak, medium, strong };
+	}
+
+	/**
+	 * Trouve une combinaison de PAIEMENT (dans les jetons de l'ACHETEUR) et de
+	 * MONNAIE RENDUE (dans les jetons du VENDEUR) qui règle EXACTEMENT
+	 * pRequiredValue - remonté par l'utilisateur (07/09/2026) : "il faut
+	 * avoir le montant et le compte exact avec les jetons exacts, ou de quoi
+	 * rendre la monnaie et tomber sur le compte exact. Si le vendeur n'a pas
+	 * de quoi rendre la monnaie... la transaction est annulée." Essaie
+	 * TOUTES les combinaisons de paiement possibles chez l'acheteur (recherche
+	 * exhaustive mais bornée par ses avoirs, toujours minuscule en pratique -
+	 * quelques dizaines de jetons au plus dans une vraie partie), et retient
+	 * celle dont le VENDEUR peut rendre la différence EXACTEMENT, en
+	 * préférant toujours le paiement le plus proche du compte exact (jamais
+	 * un dépassement inutile si un paiement exact existe déjà). Renvoie null
+	 * si AUCUNE combinaison ne fonctionne - "impossible de rendre la
+	 * monnaie", la transaction doit alors être refusée.
+	 */
+	private int[][] findPaymentWithChange(final int pBuyerWeak, final int pBuyerMedium, final int pBuyerStrong,
+			final int pSellerWeak, final int pSellerMedium, final int pSellerStrong, final int pRequiredValue)
+	{
+		int[] bestPayment = null;
+		int[] bestChange = null;
+		int bestOverpayment = Integer.MAX_VALUE;
+		for (int strong = 0; strong <= pBuyerStrong; strong++)
+			for (int medium = 0; medium <= pBuyerMedium; medium++)
+				for (int weak = 0; weak <= pBuyerWeak; weak++)
+				{
+					final int paid = weak + (2 * medium) + (4 * strong);
+					if (paid < pRequiredValue)
+						continue; // ce paiement ne suffit pas, jamais candidat
+					final int overpayment = paid - pRequiredValue;
+					if (overpayment >= bestOverpayment)
+						continue; // déjà une meilleure solution trouvée (plus proche du compte exact)
+					final int[] change = tryMakeChange(pSellerWeak, pSellerMedium, pSellerStrong, overpayment);
+					if (change != null)
+					{
+						bestPayment = new int[] { weak, medium, strong };
+						bestChange = change;
+						bestOverpayment = overpayment;
+					}
+				}
+		return (bestPayment == null) ? null : new int[][] { bestPayment, bestChange };
+	}
+
+	/**
+	 * Valeur (unités abstraites faible/moyenne/forte, jamais mise à l'échelle
+	 * par weakCoinValue) d'une carte selon son niveau - même correspondance
+	 * EXACTE que LEVEL_VALUE côté client (player-view.js), reprise ici pour
+	 * que le serveur puisse calculer le vrai prix d'un achat en monnaie
+	 * libre (voir findPaymentWithChange) sans dépendre d'un prix fixé à
+	 * l'avance par le client. Valeurs fixées par les règles officielles
+	 * (geconomicus.glibre.org/libre_money.html : "3, 6, 12" - tresforte à 24
+	 * extrapolée, absente des règles à 3 niveaux).
+	 */
+	private int levelValue(final String pLevel)
+	{
+		if ("faible".equals(pLevel)) //$NON-NLS-1$
+			return 3;
+		if ("moyenne".equals(pLevel)) //$NON-NLS-1$
+			return 6;
+		if ("forte".equals(pLevel)) //$NON-NLS-1$
+			return 12;
+		if ("tresforte".equals(pLevel)) //$NON-NLS-1$
+			return 24;
+		return 0; // niveau inconnu (ne devrait jamais arriver) : prix nul plutôt qu'une exception
 	}
 
 	// Tire un modèle au hasard parmi ceux ENCORE disponibles (count > 0) dans

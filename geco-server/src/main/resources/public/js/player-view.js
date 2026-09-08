@@ -1662,6 +1662,15 @@ async function confirmPurchase() {
 		// dédié, pour rester simple.
 		if (err.message.includes("Solde insuffisant")) {
 			showToast(t("trade.insufficient_balance_toast"));
+		} else if (err.message.includes("Impossible de rendre la monnaie")) {
+			// Remonté par l'utilisateur (07/09/2026) : "si le vendeur n'a pas
+			// de quoi rendre la monnaie... la transaction est annulée. Une
+			// info bulle apparaît 3 secondes impossible de rendre la
+			// monnaie." Cas DISTINCT du solde insuffisant ci-dessus :
+			// l'acheteur a largement assez en valeur totale, mais ni lui ni
+			// le vendeur n'ont la pièce précise nécessaire pour tomber sur le
+			// compte exact (voir GameService.findPaymentWithChange).
+			showToast(t("trade.cannot_make_change_toast"));
 		} else {
 			el("scanConfirmError").textContent = err.message;
 			el("scanConfirmError").classList.remove("hidden");
