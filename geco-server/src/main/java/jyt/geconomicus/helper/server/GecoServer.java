@@ -1367,8 +1367,10 @@ public class GecoServer
 		});
 
 		pApp.post("/api/games/{id}/trade-offers/{code}/redeem", ctx -> { //$NON-NLS-1$
+			final long diagStart = System.currentTimeMillis();
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			final String code = ctx.pathParam("code"); //$NON-NLS-1$
+			System.out.println("[DIAG achat] requête reçue : partie=" + id + " code=" + code); //$NON-NLS-1$ //$NON-NLS-2$
 			// Remonté par un utilisateur (02/09/2026) : limite les tentatives de
 			// rédemption à 30 par minute par adresse IP - un code à 6
 			// caractères (32^6 combinaisons) reste théoriquement soumis à une
@@ -1452,6 +1454,8 @@ public class GecoServer
 			}
 			// À ce stade, la transaction devrait réussir - on consomme l'offre
 			// (atomique, voir le commentaire ci-dessous) seulement maintenant.
+			System.out.println("[DIAG achat] pré-contrôles passés (" + (System.currentTimeMillis() - diagStart) //$NON-NLS-1$
+					+ "ms écoulées) - consommation du QR."); //$NON-NLS-1$
 			final TradeOfferService.Offer offer = mTradeOfferService.redeem(code);
 			if ((offer == null) || (offer.gameId() != id))
 			{
@@ -1461,10 +1465,14 @@ public class GecoServer
 				throw new BadRequestResponse("Le vendeur et l'acheteur ne peuvent pas être le même joueur."); //$NON-NLS-1$
 			try
 			{
+				System.out.println("[DIAG achat] appel de recordTransaction (" + (System.currentTimeMillis() - diagStart) //$NON-NLS-1$
+						+ "ms écoulées)"); //$NON-NLS-1$
 				final Transaction transaction = mGameService.recordTransaction(id, offer.sellerPlayerId(),
 						req.buyerPlayerId(), offer.cardTypeId(), offer.cardLevel(), offer.weakCoins(),
 						offer.mediumCoins(), offer.strongCoins(), offer.weakGoodsWanted(), offer.mediumGoodsWanted(),
 						offer.strongGoodsWanted(), code, offer.expiresAtEpochMs());
+				System.out.println("[DIAG achat] transaction enregistrée avec succès (" //$NON-NLS-1$
+						+ (System.currentTimeMillis() - diagStart) + "ms écoulées)"); //$NON-NLS-1$
 				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
 				// Encaissement automatique des carrés (voir checkAndCashInSquares) -
 				// ICI plutôt que dans GameService (remonté par l'utilisateur,
@@ -1485,6 +1493,8 @@ public class GecoServer
 			}
 			catch (final IllegalArgumentException | PlayerNotFoundException e)
 			{
+				System.out.println("[DIAG achat] exception attrapée : " + e.getClass().getSimpleName() + " - " //$NON-NLS-1$ //$NON-NLS-2$
+						+ e.getMessage());
 				throw new BadRequestResponse(e.getMessage());
 			}
 		});

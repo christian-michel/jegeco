@@ -1620,24 +1620,33 @@ function renderScanConfirm(offer) {
 }
 
 async function confirmPurchase() {
+	// Trace de diagnostic temporaire (08/09/2026) - remonté par l'utilisateur :
+	// clic sur "Confirmer l'achat" sans aucun effet visible, sans erreur dans
+	// la console. But : confirmer que cette fonction est bien appelée, et voir
+	// EXACTEMENT où le flux s'arrête - à retirer une fois la cause confirmée.
+	console.log("[DIAG achat] confirmPurchase() appelée, offer =", state.pendingOffer); //$NON-NLS-1$
 	const offer = state.pendingOffer;
 	const btn = el("btnConfirmBuy");
 	btn.disabled = true;
 	btn.textContent = t("trade.btn_confirming");
 	try {
+		console.log("[DIAG achat] envoi de la requête vers", `/api/games/${state.gameId}/trade-offers/${offer.code}/redeem`); //$NON-NLS-1$
 		const res = await fetch(`/api/games/${state.gameId}/trade-offers/${offer.code}/redeem`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ buyerPlayerId: state.player.id, buyerAccessToken: state.token }),
 		});
+		console.log("[DIAG achat] réponse reçue, status =", res.status, "ok =", res.ok); //$NON-NLS-1$ //$NON-NLS-2$
 		if (!res.ok) {
 			const body = await res.json().catch(() => ({}));
+			console.log("[DIAG achat] echec, corps de la reponse =", body); //$NON-NLS-1$
 			throw new Error(body.error || body.msg || t("join.generic_error", { status: res.status }));
 		}
 		// Le prix qui fait foi est celui renvoyé par le serveur (TransactionDto.
 		// totalCoinsValue), pas une estimation côté client - même s'ils
 		// coïncident presque toujours en pratique.
 		const transaction = await res.json();
+		console.log("[DIAG achat] transaction reussie =", transaction); //$NON-NLS-1$
 		const cardName = catalogTextValue(offer.cardName) || offer.cardTypeId;
 		if (isTrocGame()) {
 			// Pas de solde en jetons à annoncer en troc - juste la confirmation
@@ -1652,6 +1661,7 @@ async function confirmPurchase() {
 		}
 		refreshPlayer();
 	} catch (err) {
+		console.log("[DIAG achat] exception attrapee =", err.message, err); //$NON-NLS-1$
 		// Remonté par l'utilisateur (02/09/2026) : "quand un joueur tente
 		// d'acheter une carte mais qu'il n'a plus suffisamment de jetons...
 		// il faut qu'une infobulle apparaisse 3 secondes" - message dédié,
@@ -1793,6 +1803,7 @@ function initTradeUI() {
 	el("btnSubmitManualCode").addEventListener("click", submitManualCode);
 	el("manualCodeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") submitManualCode(); });
 
+	console.log("[DIAG achat] cablage du bouton, element trouve =", el("btnConfirmBuy")); //$NON-NLS-1$
 	el("btnConfirmBuy").addEventListener("click", confirmPurchase);
 	el("btnCancelBuy").addEventListener("click", () => showScreen("viewContent"));
 	// btnTradeResultBack a été retiré du HTML le 31/08/2026 (remonté par
