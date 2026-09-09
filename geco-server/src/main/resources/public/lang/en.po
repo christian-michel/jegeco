@@ -1968,3 +1968,10 @@ msgstr "Cannot make change"
 # ============ Single tokens field (08/09/2026) ============
 msgid "wiz.field_tokens_simple"
 msgstr "Tokens"
+
+# ============ Smartphone debug panel (09/09/2026) ============
+msgid "playerView.debug_log_title"
+msgstr "Debug log"
+
+msgid "playerView.debug_log_copy"
+msgstr "Copy"

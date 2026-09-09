@@ -123,6 +123,64 @@ function buildProfileAvatarHtml(pAvatarConfigJson) {
 
 
 const params = new URLSearchParams(window.location.search);
+// Remonté par l'utilisateur (09/09/2026) : "un ou plusieurs moyens à mettre
+// en œuvre... pour ne plus avoir d'erreur silencieuse et toujours avoir des
+// logs ou des pistes en cas de problème... aussi bien sur le serveur que sur
+// les applications smartphone des joueurs" - suite directe de plusieurs
+// sessions de débogage ralenties par l'absence d'outils de développement sur
+// smartphone (impossible d'ouvrir la console du navigateur). Journal
+// PERSISTANT en mémoire (survit à la navigation entre écrans, jamais à un
+// rechargement complet de la page - un choix délibéré : pas besoin de
+// stockage local, juste assez pour couvrir "quelque chose vient de mal se
+// passer, montre-moi quoi" sans configuration ni permission supplémentaire).
+// Consultable/copiable via un petit bouton dédié (voir wireDebugPanel plus
+// bas) - jamais visible tant qu'aucune anomalie n'a été capturée, pour ne
+// pas encombrer l'écran d'un joueur dont la partie se déroule normalement.
+const debugLog = [];
+const MAX_DEBUG_LOG_ENTRIES = 100; // borne raisonnable : assez pour reconstituer un incident, jamais une fuite mémoire sur une longue partie
+function pushDebugLog(pLevel, ...pArgs) {
+	const text = pArgs.map((a) => {
+		if (a instanceof Error) return `${a.message}\n${a.stack || ""}`;
+		if (typeof a === "object") { try { return JSON.stringify(a); } catch { return String(a); } }
+		return String(a);
+	}).join(" ");
+	debugLog.push(`[${new Date().toISOString().slice(11, 19)}] ${pLevel}: ${text}`);
+	if (debugLog.length > MAX_DEBUG_LOG_ENTRIES) debugLog.shift();
+	// Affiche aussi dans la vraie console, pour ne rien perdre sur un appareil
+	// où elle EST accessible (PC de test, débogage à distance Chrome/Safari).
+	(pLevel === "ERREUR" ? console.error : console.log)(...pArgs);
+	updateDebugBadge();
+}
+// Capture tout ce qui, autrement, ne serait JAMAIS visible sur un smartphone
+// sans outils de développement : une exception JS non attrapée nulle part
+// (window.onerror) et une Promise rejetée sans .catch (unhandledrejection,
+// le piège le plus courant avec async/await - un oubli facile, silencieux
+// par défaut dans tous les navigateurs).
+window.addEventListener("error", (e) => {
+	pushDebugLog("ERREUR", "Erreur JS non attrapée :", e.error || e.message, "à", `${e.filename}:${e.lineno}`);
+});
+window.addEventListener("unhandledrejection", (e) => {
+	pushDebugLog("ERREUR", "Promesse rejetée non attrapée :", e.reason);
+});
+// Intercepte TOUS les appels fetch() de cette page - journalise automatiquement
+// toute requête réseau qui échoue (statut non-2xx) ou qui ne peut même pas
+// aboutir (serveur injoignable, coupure réseau...), sans avoir à modifier
+// individuellement chaque appel existant ni futur. Le comportement réel
+// (valeur retournée, exception éventuelle) reste EXACTEMENT identique - cette
+// interception n'observe et ne journalise que ce qui se passe, jamais elle ne
+// le modifie.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...pArgs) => {
+	try {
+		const res = await nativeFetch(...pArgs);
+		if (!res.ok) pushDebugLog("ERREUR", "Requête échouée :", pArgs[0], "->", res.status);
+		return res;
+	} catch (err) {
+		pushDebugLog("ERREUR", "Requête réseau impossible :", pArgs[0], "->", err.message);
+		throw err;
+	}
+};
+
 const state = {
 	gameId: params.get("gameId"),
 	token: params.get("token"),
@@ -1803,12 +1861,53 @@ async function startOnce() {
 		state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
 	} catch (err) {
 		// Pas bloquant : buildGameCardHtml sait se replier sur un encadré simple
-		// si le visuel/catalogue attendu n'est pas disponible.
+		// si le visuel/catalogue attendu n'est pas disponible - mais toujours
+		// journalisé (voir pushDebugLog, remonté par l'utilisateur le
+		// 09/09/2026) plutôt qu'avalé en silence comme avant.
+		pushDebugLog("ERREUR", "Échec du chargement des catalogues cartes/visuels :", err);
 	}
+	wireDebugPanel();
 	initTradeUI();
 	refreshPlayer();
 	setInterval(refreshPlayer, 5000);
 	connectPlayerWs();
+}
+
+// Remonté par l'utilisateur (09/09/2026) - voir pushDebugLog en tête de
+// fichier pour le contexte complet. Badge invisible tant que debugLog est
+// vide ; dès la première entrée, réapparaît et affiche le nombre d'entrées
+// capturées - assez pour qu'un joueur ou l'animateur, en regardant par-dessus
+// son épaule, remarque qu'"il s'est passé quelque chose" même sans savoir
+// lire le détail lui-même.
+function updateDebugBadge() {
+	const badge = el("debugLogBadge");
+	if (!badge) return;
+	badge.classList.toggle("hidden", debugLog.length === 0);
+	badge.textContent = debugLog.length > 0 ? `🐞${debugLog.length}` : "🐞";
+}
+
+function wireDebugPanel() {
+	const badge = el("debugLogBadge");
+	const panel = el("debugLogPanel");
+	if (!badge || !panel) return;
+	badge.addEventListener("click", () => {
+		el("debugLogContent").textContent = debugLog.length > 0
+			? debugLog.join("\n")
+			: "(journal vide)";
+		panel.classList.remove("hidden");
+	});
+	el("debugLogCloseBtn").addEventListener("click", () => panel.classList.add("hidden"));
+	el("debugLogCopyBtn").addEventListener("click", async () => {
+		try {
+			await navigator.clipboard.writeText(debugLog.join("\n"));
+			el("debugLogCopyBtn").textContent = "✓";
+			setTimeout(() => { el("debugLogCopyBtn").textContent = t("playerView.debug_log_copy"); }, 1500);
+		} catch (err) {
+			// Presse-papier indisponible (contexte non sécurisé, permission refusée...) -
+			// le contenu reste sélectionnable/copiable à la main dans tous les cas,
+			// ce bouton n'est qu'un raccourci pratique, jamais le seul moyen.
+		}
+	});
 }
 
 // Étape 3 (31/08/2026) : connexion WebSocket - remonté par l'utilisateur en

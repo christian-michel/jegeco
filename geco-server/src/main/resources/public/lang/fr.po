@@ -1972,3 +1972,10 @@ msgstr "Impossible de rendre la monnaie"
 # ============ Champ jetons unique (08/09/2026) ============
 msgid "wiz.field_tokens_simple"
 msgstr "Jetons"
+
+# ============ Panneau de diagnostic smartphone (09/09/2026) ============
+msgid "playerView.debug_log_title"
+msgstr "Journal de diagnostic"
+
+msgid "playerView.debug_log_copy"
+msgstr "Copier"

@@ -446,6 +446,23 @@
 	</nav>
 </div>
 
+	<!-- Remonté par l'utilisateur (09/09/2026) : "toujours avoir des logs...
+	     sur les applications smartphone des joueurs" - pas d'outils de
+	     développement disponibles sur un navigateur de smartphone (voir
+	     player-view.js, pushDebugLog) - ce petit badge reste discret et
+	     invisible tant qu'aucune anomalie n'a été capturée (voir
+	     updateDebugBadge), pour ne jamais gêner une partie qui se déroule
+	     normalement. -->
+	<button type="button" id="debugLogBadge" class="debug-log-badge hidden" aria-label="Journal de diagnostic">🐞</button>
+	<div id="debugLogPanel" class="debug-log-panel hidden">
+		<div class="debug-log-panel-header">
+			<span data-i18n="playerView.debug_log_title">Journal de diagnostic</span>
+			<button type="button" id="debugLogCopyBtn" data-i18n="playerView.debug_log_copy">Copier</button>
+			<button type="button" id="debugLogCloseBtn">✕</button>
+		</div>
+		<pre id="debugLogContent"></pre>
+	</div>
+
 	<!-- Bibliothèques hébergées localement (voir js/vendor/) plutôt qu'en CDN -
 	     remonté par un utilisateur (28/08/2026) : sur un réseau sans accès
 	     internet réel (partage de connexion isolé, atelier hors ligne...), un

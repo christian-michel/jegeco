@@ -38,6 +38,68 @@
 //   Init                    - séquence de démarrage, tout en bas du fichier
 
 
+// Remonté par l'utilisateur (09/09/2026) : "un ou plusieurs moyens... pour ne
+// plus avoir d'erreur silencieuse et toujours avoir des logs... aussi bien
+// sur le serveur que sur... l'application de l'animateur" - même mécanisme
+// que côté smartphone (voir player-view.js, pushDebugLog) : utile si
+// l'animateur utilise une tablette sans accès facile aux outils de
+// développement, en complément (jamais en remplacement) de la vraie console
+// du navigateur quand elle est disponible.
+const debugLog = [];
+const MAX_DEBUG_LOG_ENTRIES = 100;
+function pushDebugLog(pLevel, ...pArgs) {
+	const text = pArgs.map((a) => {
+		if (a instanceof Error) return `${a.message}\n${a.stack || ""}`;
+		if (typeof a === "object") { try { return JSON.stringify(a); } catch { return String(a); } }
+		return String(a);
+	}).join(" ");
+	debugLog.push(`[${new Date().toISOString().slice(11, 19)}] ${pLevel}: ${text}`);
+	if (debugLog.length > MAX_DEBUG_LOG_ENTRIES) debugLog.shift();
+	(pLevel === "ERREUR" ? console.error : console.log)(...pArgs);
+	updateDebugBadge();
+}
+window.addEventListener("error", (e) => {
+	pushDebugLog("ERREUR", "Erreur JS non attrapée :", e.error || e.message, "à", `${e.filename}:${e.lineno}`);
+});
+window.addEventListener("unhandledrejection", (e) => {
+	pushDebugLog("ERREUR", "Promesse rejetée non attrapée :", e.reason);
+});
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...pArgs) => {
+	try {
+		const res = await nativeFetch(...pArgs);
+		if (!res.ok) pushDebugLog("ERREUR", "Requête échouée :", pArgs[0], "->", res.status);
+		return res;
+	} catch (err) {
+		pushDebugLog("ERREUR", "Requête réseau impossible :", pArgs[0], "->", err.message);
+		throw err;
+	}
+};
+function updateDebugBadge() {
+	const badge = document.getElementById("debugLogBadge");
+	if (!badge) return;
+	badge.classList.toggle("hidden", debugLog.length === 0);
+	badge.textContent = debugLog.length > 0 ? `🐞${debugLog.length}` : "🐞";
+}
+function wireDebugPanel() {
+	const badge = document.getElementById("debugLogBadge");
+	const panel = document.getElementById("debugLogPanel");
+	if (!badge || !panel) return;
+	badge.addEventListener("click", () => {
+		document.getElementById("debugLogContent").textContent = debugLog.length > 0 ? debugLog.join("\n") : "(journal vide)";
+		panel.classList.remove("hidden");
+	});
+	document.getElementById("debugLogCloseBtn").addEventListener("click", () => panel.classList.add("hidden"));
+	document.getElementById("debugLogCopyBtn").addEventListener("click", async () => {
+		try {
+			await navigator.clipboard.writeText(debugLog.join("\n"));
+		} catch (err) {
+			// Presse-papier indisponible - le contenu reste sélectionnable à la main.
+		}
+	});
+}
+document.addEventListener("DOMContentLoaded", wireDebugPanel);
+
 const state = {
 	currentGameId: null,
 	currentGame: null,

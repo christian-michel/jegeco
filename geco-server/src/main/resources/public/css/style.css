@@ -538,3 +538,36 @@ body.money-libre .panel-actions .btn.active-mode { background: var(--accent-libr
 	font-family: monospace; font-size: 0.82rem; background: #fff; border: 1px solid var(--border);
 	border-radius: 8px; padding: 0.4rem 0.6rem; word-break: break-all; margin-bottom: 0.7rem;
 }
+
+/* Remonté par l'utilisateur (09/09/2026) : "toujours avoir des logs... sur
+   l'application de l'animateur" - même mécanisme que côté smartphone (voir
+   css/player.css pour l'équivalent), badge discret, invisible tant qu'aucune
+   anomalie n'a été capturée (voir js/app.js, updateDebugBadge). */
+.debug-log-badge {
+	position: fixed; bottom: 14px; right: 14px; z-index: 500;
+	width: 40px; height: 40px; border-radius: 50%; border: none;
+	background: #dc2626; color: #fff; font-size: 1.1rem;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.25); cursor: pointer;
+	display: flex; align-items: center; justify-content: center;
+}
+.debug-log-panel {
+	position: fixed; inset: 0; z-index: 501; background: rgba(0,0,0,0.6);
+	display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+}
+.debug-log-panel.hidden, .debug-log-badge.hidden { display: none; }
+.debug-log-panel-header {
+	display: flex; align-items: center; gap: 0.6rem; padding: 0.8rem 1rem;
+	background: var(--mist, #f4f4f5); font-weight: 600; border-top-left-radius: 14px; border-top-right-radius: 14px;
+	width: 100%; max-width: 480px;
+}
+.debug-log-panel-header span { flex: 1; }
+.debug-log-panel-header button {
+	border: 1.5px solid var(--border, #ddd); background: #fff; border-radius: 8px;
+	padding: 0.3rem 0.7rem; font-size: 0.8rem; cursor: pointer;
+}
+#debugLogContent {
+	background: #111; color: #d1fae5; font-family: monospace; font-size: 0.72rem;
+	padding: 0.8rem 1rem; margin: 0; max-height: 60vh; overflow-y: auto;
+	white-space: pre-wrap; word-break: break-word; width: 100%; max-width: 480px;
+	border-bottom-left-radius: 14px; border-bottom-right-radius: 14px;
+}
