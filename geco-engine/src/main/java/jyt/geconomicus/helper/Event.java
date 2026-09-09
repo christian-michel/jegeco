@@ -494,17 +494,71 @@ public class Event implements Serializable
 					player.setVisitedBank(false);
 			game.incTurnNumber();
 			if (game.getMoneySystem() == Game.MONEY_LIBRE)
-			// The money mass is going towards the average
-			// Note that we don't have the actual data of how much money each player is giving away
-			// We can deal with an average here.
 			{
 				int nbPlayers = 0;
 				for (Player player : game.getPlayers())
 					if (player.isActive())
 						nbPlayers++;
-				final int target = 7 * game.getMoneyCardsFactor() * nbPlayers;
-				final int currentMM = game.getMoneyMass();
-				game.changeMoneyMass((target - currentMM) / 2);
+				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026,
+				// capture d'écran à l'appui : écart persistant entre la masse
+				// monétaire globale et le total réellement saisi par
+				// l'animateur) : ce cas s'appliquait JUSQU'ICI de façon
+				// INCONDITIONNELLE, quel que soit le réglage "Mode strict TRM"
+				// (voir Game.isStrictTrm) - la masse monétaire convergeait vers
+				// une CIBLE STATIQUE (7 × facteur × joueurs actifs) en comblant
+				// la MOITIÉ de l'écart à chaque tour, un calcul totalement
+				// INDÉPENDANT de ce que l'assistant calcule et distribue
+				// RÉELLEMENT à chaque tour (voir computeCurrentDU côté client) -
+				// les deux mécanismes ne pouvaient que diverger l'un de
+				// l'autre, tour après tour. En mode strict TRM spécifiquement
+				// (masse monétaire censée être TOUJOURS CROISSANTE, jamais
+				// "converger" vers quoi que ce soit), la masse monétaire
+				// n'était donc JAMAIS mise à jour pour refléter le DU distribué
+				// à un tour normal (WEALTH_CHECKPOINT, voir plus bas dans cette
+				// méthode, est volontairement sans effet sur elle) - seule une
+				// MORT/un DÉPART la faisait bouger, créant un écart croissant.
+				// Corrigé : en strict TRM, la masse monétaire grandit désormais
+				// EXACTEMENT du DU réellement distribué (même formule EXACTE
+				// que côté client, division entière incluse) - jamais de
+				// convergence vers une cible arbitraire. Le calcul UTILISE la
+				// masse AVANT tout ajout (comme côté client, qui calcule le DU
+				// à partir de la masse encore inchangée à ce moment précis).
+				if (game.isStrictTrm())
+				{
+					// Garde-fou (cas extrême, ne devrait normalement jamais
+					// arriver) : évite une division par zéro si TOUS les
+					// joueurs sont devenus inactifs au moment de ce tour -
+					// aucun DU à distribuer dans ce cas, la masse monétaire
+					// reste alors inchangée plutôt que de faire planter
+					// l'enregistrement de l'événement.
+					//
+					// LIMITE CONNUE (testée par simulation, pas corrigée pour
+					// l'instant, faute de temps pour une solution plus sûre) :
+					// un joueur qui meurt et renaît CE tour reçoit déjà son
+					// propre DU via l'événement DEATH (voir plus haut,
+					// strictTrmExit) - mais nbPlayers ci-dessous le recompte
+					// une seconde fois (il redevient actif juste après sa
+					// renaissance), créant un écart de +1×DU par mort
+					// survenue, qui ne grandit plus ensuite mais ne se
+					// résorbe pas non plus. Sans commune mesure avec le
+					// problème corrigé ici (l'écart précédent grandissait
+					// SANS BORNE, à chaque tour, même sans aucune mort) -
+					// mais pas encore parfait.
+					if (nbPlayers > 0)
+					{
+						final int du = game.getMoneyMass() / (7 * nbPlayers * game.getMoneyCardsFactor());
+						game.changeMoneyMass(du * nbPlayers);
+					}
+				}
+				else
+				// The money mass is going towards the average
+				// Note that we don't have the actual data of how much money each player is giving away
+				// We can deal with an average here.
+				{
+					final int target = 7 * game.getMoneyCardsFactor() * nbPlayers;
+					final int currentMM = game.getMoneyMass();
+					game.changeMoneyMass((target - currentMM) / 2);
+				}
 			}
 			// Remonté par un utilisateur : le troc ne gère plus de jetons de temps
 			// (retirés après un premier essai) - rien à faire ici pour lui, les
