@@ -3581,6 +3581,31 @@ async function openEndOfTurnWizard() {
 		return { weak: units, medium, strong };
 	}
 
+	// Remonté par l'utilisateur (08/09/2026) : "je pense qu'il faut changer la
+	// règle de distribution du DU en commençant par les cartes fortes... il
+	// n'y a qu'à distribuer le DU... qu'avec des jetons dont la valeur vaut 1
+	// unité monétaire." Proposition testée par simulation (voir le fil de la
+	// conversation) : la proposition initiale (jeton dont la valeur = 1 unité
+	// RÉELLE, dépendant de weakCoinValue) AGGRAVAIT en réalité le problème -
+	// simulation sur 5 scénarios : rejets "impossible de rendre la monnaie"
+	// passés de ~9 à ~34 avec weakCoinValue=0.5, car le jeton moyen (seule
+	// dénomination valant alors 1 unité réelle) ne peut JAMAIS composer une
+	// valeur impaire, et le prix d'une carte faible (3, en unités ABSTRAITES,
+	// FIXE quel que soit weakCoinValue) EST impair.
+	// Alternative retenue après cette simulation : le DU est TOUJOURS
+	// distribué en jetons FAIBLES (valeur ABSTRAITE 1, jamais 2 ni 4) -
+	// la SEULE dénomination qui divise exactement tous les prix de carte
+	// (3, 6, 12, 24) quelle que soit weakCoinValue, qui n'intervient que pour
+	// la conversion vers une valeur réelle affichée/comparée à la masse
+	// monétaire, jamais pour le CHOIX de la dénomination elle-même. Vérifié :
+	// 0 rejet "impossible de rendre la monnaie" sur les 5 mêmes scénarios,
+	// contre ~9 avec l'ancien algorithme glouton et ~34 avec la proposition
+	// initiale.
+	function computeDuBreakdown(pDuValue, pWeakCoinValue) {
+		const weak = Math.max(0, Math.round(pDuValue / (pWeakCoinValue || 1)));
+		return { weak, medium: 0, strong: 0 };
+	}
+
 	// Étape 1 (nouvel ordre demandé par un utilisateur) : inventaire en JETONS de
 	// TOUS les joueurs actifs, mourants et survivants confondus - avant même de
 	// déclencher quoi que ce soit. Objectif : établir un contrôle de collecte
@@ -3699,7 +3724,7 @@ async function openEndOfTurnWizard() {
 			// de se propager tel quel dans tous les calculs suivants
 			// (computeLastKnownLibreCoins/computeTradeBalance) comme si la mort
 			// n'avait aucun effet monétaire.
-			const duBreakdown = computeTokenBreakdown(du, game.weakCoinValue);
+			const duBreakdown = computeDuBreakdown(du, game.weakCoinValue);
 			for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
 				const weakCards = parseInt(fieldset.querySelector(".duCardWeak").value || "0", 10);
@@ -3725,7 +3750,7 @@ async function openEndOfTurnWizard() {
 			// Remonté par un utilisateur : préciser l'unité ("3 jetons", pas juste
 			// "3") et détailler concrètement quoi redonner par niveau, plutôt qu'un
 			// total que l'animateur devrait reconvertir de tête.
-			const breakdown = computeTokenBreakdown(du, game.weakCoinValue);
+			const breakdown = computeDuBreakdown(du, game.weakCoinValue);
 			fieldset.querySelector(".du-result").innerHTML =
 				`${escapeHtml(t("wiz.death_du_result", { currentValue, du }))}<br>` +
 				t("wiz.death_du_breakdown", { weak: breakdown.weak, medium: breakdown.medium, strong: breakdown.strong });
@@ -3821,7 +3846,12 @@ async function openEndOfTurnWizard() {
 				const coins = allPlayersMoneyInventory[p.id] || { weak: 0, medium: 0, strong: 0 };
 				const currentValue = (coins.weak + 2 * coins.medium + 4 * coins.strong) * game.weakCoinValue;
 				const total = currentValue + du;
-				const breakdown = computeTokenBreakdown(total, game.weakCoinValue);
+				// Remonté par l'utilisateur (08/09/2026) : cette prévisualisation doit
+				// correspondre EXACTEMENT à ce qui sera réellement enregistré (voir
+				// plus bas, renderStep4) - le DU ajouté en jetons faibles au solde
+				// réel existant, jamais une reconstruction du total combiné.
+				const duBreakdown = computeDuBreakdown(du, game.weakCoinValue);
+				const breakdown = { weak: coins.weak + duBreakdown.weak, medium: coins.medium, strong: coins.strong };
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}</legend>
@@ -4438,11 +4468,20 @@ async function openEndOfTurnWizard() {
 				for (const p of game.players.filter((pl) => pl.active)) {
 					let breakdown;
 					if (selectedDeathIds.includes(p.id)) {
-						breakdown = computeTokenBreakdown(du, game.weakCoinValue);
+						breakdown = computeDuBreakdown(du, game.weakCoinValue);
 					} else {
+						// Remonté par l'utilisateur (08/09/2026) : le DU est désormais
+						// ADDITIONNÉ tel quel (en jetons faibles, voir
+						// computeDuBreakdown) au solde RÉEL déjà détenu par ce joueur -
+						// jamais reconstruit en repartant du TOTAL combiné via
+						// computeTokenBreakdown, qui aurait pu "utilement" convertir
+						// certains jetons faibles existants en plus grosses coupures,
+						// défaisant justement l'objectif recherché (éviter la
+						// fragmentation en dénominations qui ne peuvent plus se rendre
+						// la monnaie entre elles).
 						const coins = allPlayersMoneyInventory[p.id] || { weak: 0, medium: 0, strong: 0 };
-						const currentValue = (coins.weak + (2 * coins.medium) + (4 * coins.strong)) * game.weakCoinValue;
-						breakdown = computeTokenBreakdown(currentValue + du, game.weakCoinValue);
+						const duBreakdown = computeDuBreakdown(du, game.weakCoinValue);
+						breakdown = { weak: coins.weak + duBreakdown.weak, medium: coins.medium, strong: coins.strong };
 					}
 					await Api.recordEvent(state.currentGameId, {
 						type: "W", playerId: p.id, principal: 0, interest: 0,

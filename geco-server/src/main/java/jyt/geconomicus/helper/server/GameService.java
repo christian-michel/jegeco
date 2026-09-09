@@ -1209,7 +1209,7 @@ public class GameService
 					// décomposée en jetons PHYSIQUES selon "Valeur d'une pièce faible"
 					// (game.weakCoinValue) - jamais recalculée après coup, ce compte
 					// devient la SEULE source de vérité pour ce joueur désormais.
-					final int[] startingJetons = computeTokenBreakdown(7, game.getWeakCoinValue());
+					final int[] startingJetons = computeDuBreakdown(7, game.getWeakCoinValue());
 					player.setJetonWeak(startingJetons[0]);
 					player.setJetonMedium(startingJetons[1]);
 					player.setJetonStrong(startingJetons[2]);
@@ -1543,27 +1543,28 @@ public class GameService
 	}
 
 	/**
-	 * Portage Java EXACT de computeTokenBreakdown() côté client (app.js) - même
-	 * algorithme, mêmes arrondis, jamais divergent entre les deux : décompose
-	 * une VALEUR réelle (déjà mise à l'échelle par pWeakCoinValue) en un
-	 * décompte de jetons physiques faible/moyen/fort, en privilégiant les
-	 * grosses coupures. Utilisée UNIQUEMENT pour calculer QUOI DISTRIBUER lors
-	 * d'une création monétaire (mise en place, DU à chaque tour) - jamais pour
-	 * RECONSTRUIRE après coup le solde d'un joueur à partir d'une simple
-	 * valeur (voir la note d'architecture du 07/09/2026 sur Player.jetonWeak
-	 * &co : c'est justement cette reconstruction après coup, faite à la fois
-	 * ici et côté client, qui empêchait toute conservation réelle des
-	 * dénominations une fois plusieurs joueurs additionnés).
+	 * Portage Java EXACT de computeDuBreakdown() côté client (app.js) -
+	 * remonté par l'utilisateur (08/09/2026) : "il faut changer la règle de
+	 * distribution du DU... qu'avec des jetons dont la valeur vaut 1 unité
+	 * monétaire." Proposition affinée après simulation (voir le commentaire
+	 * détaillé côté client) : le DU (toute création monétaire - mise en
+	 * place initiale ET chaque tour) est désormais TOUJOURS distribué en
+	 * jetons FAIBLES (valeur ABSTRAITE 1, jamais 2 ni 4) - la seule
+	 * dénomination qui divise exactement tous les prix de carte (3, 6, 12,
+	 * 24) quelle que soit pWeakCoinValue, qui n'intervient que pour la
+	 * conversion vers une valeur réelle, jamais pour le choix de la
+	 * dénomination elle-même. Simulation : 0 rejet "impossible de rendre la
+	 * monnaie" sur 5 scénarios, contre ~9 avec l'ancien algorithme glouton et
+	 * ~34 avec la proposition initiale (jeton valant 1 unité RÉELLE,
+	 * dépendant de pWeakCoinValue - le jeton moyen dans le cas testé, qui ne
+	 * peut jamais composer une valeur impaire comme le prix d'une carte
+	 * faible).
 	 */
-	private int[] computeTokenBreakdown(final double pTotalValue, final double pWeakCoinValue)
+	private int[] computeDuBreakdown(final double pDuValue, final double pWeakCoinValue)
 	{
 		final double divisor = (pWeakCoinValue == 0) ? 1 : pWeakCoinValue;
-		int units = (int) Math.max(0, Math.round(pTotalValue / divisor));
-		final int strong = units / 4;
-		units -= strong * 4;
-		final int medium = units / 2;
-		units -= medium * 2;
-		return new int[] { units, medium, strong }; // {weak, medium, strong}
+		final int weak = (int) Math.max(0, Math.round(pDuValue / divisor));
+		return new int[] { weak, 0, 0 }; // {weak, medium, strong} - toujours en jetons faibles
 	}
 
 	/**

@@ -261,8 +261,16 @@ public class GecoServer
 		// routes de l'application, pas seulement à l'achat de cartes.
 		// BadRequestResponse et ForbiddenResponse : les deux SEULS types
 		// utilisés dans tout le projet (vérifié par recherche exhaustive).
-		app.exception(BadRequestResponse.class,
-				(e, ctx) -> ctx.status(400).json(java.util.Map.of("error", e.getMessage()))); //$NON-NLS-1$
+		app.exception(BadRequestResponse.class, (e, ctx) -> {
+			// Trace de diagnostic temporaire (08/09/2026) - pour voir EXACTEMENT
+			// quel message est intercepté ici, et sur quelle route, puisque le
+			// journal serveur s'arrêtait net avant d'atteindre ce point lors du
+			// dernier test - à retirer une fois confirmé que les messages
+			// arrivent bien désormais côté client.
+			System.out.println("[DIAG erreur] BadRequestResponse interceptée sur " + ctx.path() + " : " //$NON-NLS-1$ //$NON-NLS-2$
+					+ e.getMessage());
+			ctx.status(400).json(java.util.Map.of("error", e.getMessage())); //$NON-NLS-1$
+		});
 		app.exception(ForbiddenResponse.class,
 				(e, ctx) -> ctx.status(403).json(java.util.Map.of("error", e.getMessage()))); //$NON-NLS-1$
 
