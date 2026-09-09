@@ -851,11 +851,23 @@ async function generateCardModalQr(item) {
 		el("cardModalBackBody").innerHTML = `
 			${priceLine}
 			<div class="qr-container"><div id="cardModalQrBox"></div></div>
+			<p class="qr-code-text" id="cardModalQrCodeText"></p>
 			<p class="qr-instruction">${escapeHtmlLocal(t("trade.qr_instructions"))}</p>
 			<div class="qr-timer"><span aria-hidden="true">⏱️</span><span id="cardModalCountdownValue">01:30</span></div>
 			<button type="button" class="btn-cancel-link" id="cardModalCancelBtn" style="color:#fff;">${escapeHtmlLocal(t("trade.btn_cancel_sell"))}</button>`;
 		// eslint-disable-next-line no-undef
 		new QRCode(el("cardModalQrBox"), { text: offer.code, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
+		// Remonté par l'utilisateur (08/09/2026) : "les navigateurs web sur
+		// smartphone ne permettent pas d'ouvrir des outils de dev... peut-être
+		// faudrait-il ajouter un système de codes à copier-coller sous le QR
+		// code" - déjà présent sur l'AUTRE écran de vente (voir
+		// renderQrAndCountdown/sellQrCodeText plus bas dans ce fichier), mais
+		// manquait ici, sur celui-ci (la modale de carte) - ajouté pour la
+		// cohérence, et pour permettre un test complet achat/vente entièrement
+		// depuis des onglets de navigateur PC (voir aussi la nouvelle saisie
+		// manuelle repérée le même jour, déjà construite - voir manualCodeInput
+		// - mais jusque-là accessible uniquement via ce SECOND écran).
+		el("cardModalQrCodeText").textContent = offer.code;
 		el("cardModalCancelBtn").addEventListener("click", (e) => { e.stopPropagation(); closeCardModal(); });
 		startCardModalCountdown(offer.expiresAt);
 	} catch (err) {
