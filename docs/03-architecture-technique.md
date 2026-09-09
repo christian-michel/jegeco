@@ -1426,3 +1426,29 @@ joueurs, contrairement au troc).
   contre carte(s)" directe, à part entière, sans passer par
   `computeTradeBalance` ni aucun calcul de valeur en jetons.
 
+### Note d'architecture (07/09/2026) : futur choix "mode jetons" vs "mode monnaie numérique"
+
+Remontée par l'utilisateur, à prévoir pour plus tard (pas encore commencée à
+cette date - la priorité reste de finir et tester le mode jetons ci-dessus) :
+sur l'écran des paramètres, pour une partie avec smartphones, l'animateur
+pourra choisir entre deux modes :
+
+- **Mode jetons** (celui qu'on construit actuellement, voir la section
+  "Traçabilité réelle des jetons par dénomination" plus haut) : simule les
+  jetons physiques faible/moyen/fort d'un Geconomicus classique, avec rendu
+  de monnaie si besoin.
+- **Mode monnaie numérique** (à construire) : plus de dénominations du tout -
+  chaque joueur n'a qu'un MONTANT GLOBAL, comme un compte bancaire simple.
+  Simplifie en cascade : plus besoin de `findPaymentWithChange`/
+  `tryMakeChange` (une transaction ne fait que soustraire/ajouter une valeur,
+  jamais de "compte exact" à trouver), et le formulaire d'inventaire de
+  l'assistant à l'entre-deux-tours n'aurait plus qu'UN SEUL champ par joueur
+  (au lieu des trois - faible/moyen/fort - actuels).
+
+Point de vigilance pour l'implémentation future : concevoir le nouveau champ
+de configuration (ex. `Game.jetonMode` ou similaire) et les DEUX chemins de
+code (transaction, formulaire d'inventaire, affichage smartphone) de façon à
+ce qu'ils cohabitent proprement dans le même système de monnaie libre - pas
+un système monétaire de plus, seulement une variante d'affichage/mécanique à
+l'intérieur de la monnaie libre existante.
+
