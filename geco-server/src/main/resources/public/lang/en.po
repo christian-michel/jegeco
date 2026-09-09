@@ -885,7 +885,7 @@ msgid "wiz.death_du_result"
 msgstr "Inventory before death: {currentValue} tokens. Reborn with the DU alone: {du} tokens."
 
 msgid "wiz.death_du_breakdown"
-msgstr "To give back: {weak} weak token(s), {medium} medium, {strong} strong."
+msgstr "To give back: {weak} token(s)."
 
 msgid "wiz.other_du_title"
 msgstr "DU distribution"
@@ -1964,3 +1964,7 @@ msgstr "Paused"
 # ============ Cannot make change (07/09/2026) ============
 msgid "trade.cannot_make_change_toast"
 msgstr "Cannot make change"
+
+# ============ Single tokens field (08/09/2026) ============
+msgid "wiz.field_tokens_simple"
+msgstr "Tokens"

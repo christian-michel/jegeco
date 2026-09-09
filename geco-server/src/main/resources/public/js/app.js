@@ -1471,18 +1471,17 @@ function openPlayerQuitDialog() {
 		});
 		return;
 	}
-	// Monnaie libre : jetons (faible/moyen/fort) ET cartes valeurs séparément -
-	// ça, en revanche, correspond bien aux règles réelles (voir
-	// StatsService.computeGain, branche libre inchangée).
+	// Monnaie libre : jetons ET cartes valeurs séparément - ça, en revanche,
+	// correspond bien aux règles réelles (voir StatsService.computeGain,
+	// branche libre inchangée). Remonté par l'utilisateur (08/09/2026) :
+	// "il n'y a que des jetons de valeur faible que l'on appellera
+	// simplement jetons" - un seul champ de jetons désormais, les cartes
+	// (par niveau) restent inchangées, un système distinct.
 	openDialog(t("game.quit_inventory_title", { name: escapeHtml(player.name) }), `
 		<p>${t("game.quit_inventory_body", { name: escapeHtml(player.name) })}</p>
 		<p class="cannot-pay-inventory-title">${t("wiz.death_du_tokens_subtitle")}</p>
-		<div class="field-row">
-			<div><label>${t("wiz.field_weak_tokens")}</label><input id="fQuitCoinWeak" type="number" value="0" min="0"></div>
-			<div><label>${t("wiz.field_medium_tokens")}</label><input id="fQuitCoinMedium" type="number" value="0" min="0"></div>
-		</div>
-		<label>${t("wiz.field_strong_tokens")}</label>
-		<input id="fQuitCoinStrong" type="number" value="0" min="0">
+		<label>${t("wiz.field_tokens_simple")}</label>
+		<input id="fQuitCoinWeak" type="number" value="0" min="0">
 		<p class="cannot-pay-inventory-title" style="margin-top:0.6rem;">${t("wiz.death_du_cards_subtitle")}</p>
 		<label>${t("game.field_weak_cards")}</label>
 		<input id="fQuitWeak" type="number" value="0" min="0">
@@ -1494,8 +1493,8 @@ function openPlayerQuitDialog() {
 		await Api.recordEvent(state.currentGameId, {
 			type: "Q", playerId: player.id,
 			weakCoins: parseInt(el("fQuitCoinWeak").value || "0", 10),
-			mediumCoins: parseInt(el("fQuitCoinMedium").value || "0", 10),
-			strongCoins: parseInt(el("fQuitCoinStrong").value || "0", 10),
+			mediumCoins: 0,
+			strongCoins: 0,
 			weakCards: parseInt(el("fQuitWeak").value || "0", 10),
 			mediumCards: parseInt(el("fQuitMedium").value || "0", 10),
 			strongCards: parseInt(el("fQuitStrong").value || "0", 10),
@@ -3633,18 +3632,22 @@ async function openEndOfTurnWizard() {
 				// faire apparaître ou disparaître des jetons une fois plusieurs
 				// joueurs additionnés - conservé ci-dessous comme repli pour un
 				// joueur pas encore suivi par smartphone, ou en dette).
+				// Remonté par l'utilisateur (08/09/2026) : depuis que le DU n'est
+				// plus jamais distribué qu'en jetons faibles (voir
+				// computeDuBreakdown), les jetons moyens/forts ne sont plus JAMAIS
+				// réellement en circulation - un seul champ "Jetons" suffit
+				// désormais, jamais trois. medium/strong restent à 0 en interne
+				// (jamais retirés du modèle de données, seulement de cet
+				// affichage) - au cas où une évolution future les réintroduirait.
 				const prefill = p.hasStartingAllocation
 					? { weak: p.jetonWeak, medium: p.jetonMedium, strong: p.jetonStrong }
 					: computeLibrePrefill(p.id);
+				const totalTokens = prefill.weak + (2 * prefill.medium) + (4 * prefill.strong);
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}</legend>
-				<div class="field-row">
-					<div><label>${t("wiz.field_weak_tokens")}</label><input type="number" class="amWeak" value="${prefill.weak}" min="0"></div>
-					<div><label>${t("wiz.field_medium_tokens")}</label><input type="number" class="amMedium" value="${prefill.medium}" min="0"></div>
-				</div>
-				<label>${t("wiz.field_strong_tokens")}</label>
-				<input type="number" class="amStrong" value="${prefill.strong}" min="0">
+				<label>${t("wiz.field_tokens_simple")}</label>
+				<input type="number" class="amWeak" value="${totalTokens}" min="0">
 			</fieldset>`;
 			}).join("")}
 			<div id="allPlayersMoneyCheckBlock" style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--border);">
@@ -3656,8 +3659,8 @@ async function openEndOfTurnWizard() {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
 				allPlayersMoneyInventory[playerId] = {
 					weak: parseInt(fieldset.querySelector(".amWeak").value || "0", 10),
-					medium: parseInt(fieldset.querySelector(".amMedium").value || "0", 10),
-					strong: parseInt(fieldset.querySelector(".amStrong").value || "0", 10),
+					medium: 0,
+					strong: 0,
 				};
 			});
 			if (selectedDeathIds.length > 0) renderStepDyingCardsDU();
@@ -3668,9 +3671,7 @@ async function openEndOfTurnWizard() {
 			let collected = 0;
 			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
 				const weak = parseInt(fieldset.querySelector(".amWeak").value || "0", 10);
-				const medium = parseInt(fieldset.querySelector(".amMedium").value || "0", 10);
-				const strong = parseInt(fieldset.querySelector(".amStrong").value || "0", 10);
-				collected += (weak + 2 * medium + 4 * strong) * game.weakCoinValue;
+				collected += weak * game.weakCoinValue;
 			});
 			const remaining = game.moneyMass - collected;
 			const elc = document.querySelector(".am-remaining");
@@ -3747,13 +3748,15 @@ async function openEndOfTurnWizard() {
 			const playerId = parseInt(fieldset.dataset.playerId, 10);
 			const coins = allPlayersMoneyInventory[playerId] || { weak: 0, medium: 0, strong: 0 };
 			const currentValue = (coins.weak + 2 * coins.medium + 4 * coins.strong) * game.weakCoinValue;
-			// Remonté par un utilisateur : préciser l'unité ("3 jetons", pas juste
-			// "3") et détailler concrètement quoi redonner par niveau, plutôt qu'un
-			// total que l'animateur devrait reconvertir de tête.
+			// Remonté par l'utilisateur (08/09/2026) : "il n'y a que des jetons de
+			// valeur faible que l'on appellera simplement jetons" - depuis que le
+			// DU n'est plus jamais distribué qu'en jetons faibles (voir
+			// computeDuBreakdown), plus besoin de détailler par dénomination -
+			// medium/strong sont toujours à 0 désormais.
 			const breakdown = computeDuBreakdown(du, game.weakCoinValue);
 			fieldset.querySelector(".du-result").innerHTML =
 				`${escapeHtml(t("wiz.death_du_result", { currentValue, du }))}<br>` +
-				t("wiz.death_du_breakdown", { weak: breakdown.weak, medium: breakdown.medium, strong: breakdown.strong });
+				t("wiz.death_du_breakdown", { weak: breakdown.weak });
 		}
 		document.querySelectorAll(".death-inventory-player").forEach((fieldset) => updatePlayerResult(fieldset));
 	}
@@ -3857,7 +3860,7 @@ async function openEndOfTurnWizard() {
 				<legend>${escapeHtml(p.name)}</legend>
 				<p class="du-result" style="font-size:0.82rem;color:var(--text-dim);">
 					${escapeHtml(t("wiz.du_result", { currentValue, du, total }))}<br>
-					${t("wiz.death_du_breakdown", { weak: breakdown.weak, medium: breakdown.medium, strong: breakdown.strong })}
+					${t("wiz.death_du_breakdown", { weak: breakdown.weak })}
 				</p>
 			</fieldset>`;
 			}).join("")}
@@ -4032,12 +4035,14 @@ async function openEndOfTurnWizard() {
 			return;
 		}
 
-		// Monnaie libre : demande les jetons (faible/moyen/fort) ET les cartes
-		// valeurs (faible/moyenne/forte) séparément - même principe que dans
-		// l'entre-deux-tours (bug remonté par un utilisateur : jusqu'ici,
-		// un seul "Monnaie restante" ne permettait pas à StatsService.computeGain()
-		// de calculer correctement la richesse d'un joueur en monnaie libre, qui a
-		// besoin des jetons ET des cartes séparément).
+		// Monnaie libre : demande les jetons ET les cartes valeurs (faible/
+		// moyenne/forte) séparément - même principe que dans l'entre-deux-tours
+		// (bug remonté par un utilisateur : jusqu'ici, un seul "Monnaie
+		// restante" ne permettait pas à StatsService.computeGain() de calculer
+		// correctement la richesse d'un joueur en monnaie libre, qui a besoin
+		// des jetons ET des cartes séparément). Remonté par l'utilisateur
+		// (08/09/2026) : "il n'y a que des jetons de valeur faible que l'on
+		// appellera simplement jetons" - un seul champ de jetons désormais.
 		if (!isDebt) {
 			el("dlgTitle").textContent = t("wiz.end_inventory_title");
 			el("dlgBody").innerHTML = `
@@ -4048,12 +4053,8 @@ async function openEndOfTurnWizard() {
 					<fieldset class="death-inventory-player" data-player-id="${p.id}">
 						<legend>${escapeHtml(p.name)}</legend>
 						<p class="cannot-pay-inventory-title">${t("wiz.death_du_tokens_subtitle")}</p>
-						<div class="field-row">
-							<div><label>${t("wiz.field_weak_tokens")}</label><input type="number" class="eqCoinWeak" value="0" min="0"></div>
-							<div><label>${t("wiz.field_medium_tokens")}</label><input type="number" class="eqCoinMedium" value="0" min="0"></div>
-						</div>
-						<label>${t("wiz.field_strong_tokens")}</label>
-						<input type="number" class="eqCoinStrong" value="0" min="0">
+						<label>${t("wiz.field_tokens_simple")}</label>
+						<input type="number" class="eqCoinWeak" value="0" min="0">
 						<p class="cannot-pay-inventory-title" style="margin-top:0.6rem;">${t("wiz.death_du_cards_subtitle")}</p>
 						<div class="field-row">
 							<div><label>${t("game.field_weak_cards")}</label><input type="number" class="eqWeak" value="0" min="0"></div>
@@ -4069,8 +4070,8 @@ async function openEndOfTurnWizard() {
 					await Api.recordEvent(state.currentGameId, {
 						type: "Q", playerId,
 						weakCoins: parseInt(fieldset.querySelector(".eqCoinWeak").value || "0", 10),
-						mediumCoins: parseInt(fieldset.querySelector(".eqCoinMedium").value || "0", 10),
-						strongCoins: parseInt(fieldset.querySelector(".eqCoinStrong").value || "0", 10),
+						mediumCoins: 0,
+						strongCoins: 0,
 						weakCards: parseInt(fieldset.querySelector(".eqWeak").value || "0", 10),
 						mediumCards: parseInt(fieldset.querySelector(".eqMedium").value || "0", 10),
 						strongCards: parseInt(fieldset.querySelector(".eqStrong").value || "0", 10),
@@ -4091,10 +4092,8 @@ async function openEndOfTurnWizard() {
 				let collectedCoinCount = 0;
 				document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
 					const cWeak = parseInt(fieldset.querySelector(".eqCoinWeak").value || "0", 10);
-					const cMedium = parseInt(fieldset.querySelector(".eqCoinMedium").value || "0", 10);
-					const cStrong = parseInt(fieldset.querySelector(".eqCoinStrong").value || "0", 10);
-					collectedValue += (cWeak + 2 * cMedium + 4 * cStrong) * game.weakCoinValue;
-					collectedCoinCount += cWeak + cMedium + cStrong;
+					collectedValue += cWeak * game.weakCoinValue;
+					collectedCoinCount += cWeak;
 				});
 				const remainingValue = game.moneyMass - collectedValue;
 				const el1 = document.querySelector(".du-remaining");
