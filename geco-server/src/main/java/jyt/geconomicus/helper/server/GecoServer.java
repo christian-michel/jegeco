@@ -1421,9 +1421,34 @@ public class GecoServer
 			final int previewPrice = preview.weakCoins() + (2 * preview.mediumCoins()) + (4 * preview.strongCoins());
 			if (previewPrice > 0)
 			{
-				final int buyerBalance = mGameService.computeTradeBalance(id, req.buyerPlayerId());
-				if (buyerBalance < previewPrice)
-					throw new BadRequestResponse("Solde insuffisant pour cet achat."); //$NON-NLS-1$
+				if (game.getMoneySystem() == Game.MONEY_LIBRE)
+				{
+					// Remonté par l'utilisateur (08/09/2026) : vérifie ICI, AVANT de
+					// consommer le QR, que l'achat pourrait vraiment aboutir - pas
+					// seulement que le solde GLOBAL suffit (insuffisant depuis
+					// l'introduction du rendu de monnaie, voir
+					// GameService.findPaymentWithChange) : un acheteur avec assez en
+					// valeur mais sans combinaison de jetons possible (et un vendeur
+					// sans de quoi rendre la monnaie) ne doit jamais gâcher le QR
+					// pour un achat voué à l'échec de toute façon. Deux messages
+					// DISTINCTS, comme le reste de l'application (voir
+					// player-view.js, confirmPurchase) : solde insuffisant en
+					// VALEUR (première vérification, déjà en place), ou solde
+					// suffisant mais rendu de monnaie impossible (nouvelle
+					// vérification, mGameService.canAffordLibrePurchase).
+					final int buyerBalance = mGameService.computeTradeBalance(id, req.buyerPlayerId());
+					if (buyerBalance < previewPrice)
+						throw new BadRequestResponse("Solde insuffisant pour cet achat."); //$NON-NLS-1$
+					if (!mGameService.canAffordLibrePurchase(id, req.buyerPlayerId(), preview.sellerPlayerId(),
+							preview.cardLevel()))
+						throw new BadRequestResponse("Impossible de rendre la monnaie pour cet achat."); //$NON-NLS-1$
+				}
+				else
+				{
+					final int buyerBalance = mGameService.computeTradeBalance(id, req.buyerPlayerId());
+					if (buyerBalance < previewPrice)
+						throw new BadRequestResponse("Solde insuffisant pour cet achat."); //$NON-NLS-1$
+				}
 			}
 			// À ce stade, la transaction devrait réussir - on consomme l'offre
 			// (atomique, voir le commentaire ci-dessous) seulement maintenant.
