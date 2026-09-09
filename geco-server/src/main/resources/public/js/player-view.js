@@ -306,6 +306,16 @@ async function refreshPlayer() {
 		const res = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}`);
 		if (!res.ok) throw new Error("not found");
 		state.player = await res.json();
+		// Remonté par l'utilisateur (09/09/2026, captures du nouveau journal de
+		// diagnostic à l'appui) : un simple accroc wifi passager (quelques
+		// secondes, très courant sur un réseau partagé avec de nombreux
+		// téléphones) faisait disparaître TOUTE l'application au profit de
+		// l'écran d'erreur, dès le tout premier échec de ce rafraîchissement
+		// périodique (toutes les 5 secondes) - un joueur pouvait ainsi croire
+		// le jeu cassé alors que seul son wifi avait eu un accroc d'une
+		// seconde. Remis à zéro uniquement en cas de SUCCÈS : un accroc isolé
+		// ne doit jamais, à lui seul, effacer l'écran du joueur.
+		state.refreshFailureCount = 0;
 		el("viewError").classList.add("hidden");
 		// Remonté par l'utilisateur (02/09/2026, précisé le 07/09/2026 : "quand
 		// on met le compte à rebours en pause, l'info bulle indique fin de tour
@@ -333,6 +343,17 @@ async function refreshPlayer() {
 		details.innerHTML = detailsHtml;
 		await Promise.all([renderDashboard(), renderProfile()]);
 	} catch (err) {
+		// Tolère quelques échecs consécutifs (voir le commentaire ci-dessus) -
+		// seuil choisi pour couvrir un accroc wifi typique de quelques
+		// secondes (3 échecs à 5 secondes d'intervalle = ~15 secondes) sans
+		// pour autant masquer indéfiniment une VRAIE coupure prolongée, qui
+		// doit bien finir par prévenir le joueur. Ne s'applique QU'APRÈS un
+		// premier chargement déjà réussi (state.player déjà rempli) : au
+		// tout premier chargement de la page, rien de bon à préserver sur
+		// l'écran - mieux vaut prévenir tout de suite que de laisser un
+		// écran vide pendant ~15 secondes sans aucune indication.
+		state.refreshFailureCount = (state.refreshFailureCount || 0) + 1;
+		if (state.player && (state.refreshFailureCount < 3)) return;
 		el("viewError").classList.remove("hidden");
 		el("mobileContainer").classList.add("hidden");
 		return;
