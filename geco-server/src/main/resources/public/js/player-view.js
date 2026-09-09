@@ -302,6 +302,23 @@ async function refreshPlayer() {
 		el("mobileContainer").classList.add("hidden");
 		return;
 	}
+	// Remonté par l'utilisateur (09/09/2026) : rafales de 4 à 6 échecs
+	// IDENTIQUES dans la même seconde, de façon très régulière à chaque
+	// entre-deux-tours - plausiblement lié au verrouillage d'écran du
+	// téléphone pendant les quelques minutes où l'animateur gère le tour
+	// suivant (le joueur ne touche pas son téléphone à ce moment-là) : au
+	// réveil, plusieurs minuteurs "en retard" peuvent se déclencher presque
+	// simultanément, juste au moment où le wifi lui-même reprend sa
+	// connexion - plusieurs appels à cette MÊME fonction en même temps,
+	// tous vaguement au même instant. Garde-fou simple, efficace quelle que
+	// soit la cause exacte (verrouillage d'écran, message WebSocket,
+	// rafraîchissement périodique... tous appellent cette même fonction) :
+	// ignore purement et simplement un appel si un précédent est encore en
+	// cours - inutile de multiplier les tentatives simultanées vers le même
+	// point, ça ne fait qu'aggraver une éventuelle instabilité réseau au
+	// moment précis où elle se produit déjà.
+	if (state.refreshInFlight) return;
+	state.refreshInFlight = true;
 	try {
 		const res = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}`);
 		if (!res.ok) throw new Error("not found");
@@ -357,6 +374,12 @@ async function refreshPlayer() {
 		el("viewError").classList.remove("hidden");
 		el("mobileContainer").classList.add("hidden");
 		return;
+	} finally {
+		// Toujours remis à zéro, quel que soit le chemin de sortie ci-dessus
+		// (succès, échec toléré, échec affiché) - sans quoi ce garde-fou
+		// bloquerait DÉFINITIVEMENT tout rafraîchissement futur dès le
+		// premier appel, un bug bien pire que celui qu'il est censé corriger.
+		state.refreshInFlight = false;
 	}
 	el("mobileContainer").classList.remove("hidden");
 	// Ne bascule sur le hub que si aucun autre écran d'échange n'est déjà affiché
