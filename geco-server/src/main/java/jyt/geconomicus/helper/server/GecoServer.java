@@ -245,6 +245,27 @@ public class GecoServer
 
 		server.registerRoutes(app);
 
+		// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 08/09/2026, via des
+		// traces de diagnostic dédiées) : "Confirmer l'achat" semblait ne rien
+		// faire - en réalité, le serveur répondait bien 400 avec le bon
+		// message (voir BadRequestResponse, throw new
+		// BadRequestResponse("Solde insuffisant...")), mais Javalin, SANS
+		// gestionnaire d'exception explicite enregistré, sérialise par défaut
+		// une HttpResponseException en TEXTE BRUT (pas en JSON) - côté client,
+		// res.json() sur un corps qui n'est PAS du JSON valide échoue, tombe
+		// dans le .catch(() => ({})), et le message d'erreur est perdu
+		// (remplacé par le texte générique "Erreur 400"). Un commentaire dans
+		// app.js ("corps non-JSON, on garde le code HTTP") révèle que cette
+		// limite était déjà connue ailleurs dans l'application, mais jamais
+		// corrigée à la source - CE correctif s'applique donc à TOUTES les
+		// routes de l'application, pas seulement à l'achat de cartes.
+		// BadRequestResponse et ForbiddenResponse : les deux SEULS types
+		// utilisés dans tout le projet (vérifié par recherche exhaustive).
+		app.exception(BadRequestResponse.class,
+				(e, ctx) -> ctx.status(400).json(java.util.Map.of("error", e.getMessage()))); //$NON-NLS-1$
+		app.exception(ForbiddenResponse.class,
+				(e, ctx) -> ctx.status(403).json(java.util.Map.of("error", e.getMessage()))); //$NON-NLS-1$
+
 		// Chargement des plugins "système d'échange" (voir docs/11-plugin-api-contrat.md).
 		// Volontairement lu depuis "./plugins" (le dossier de travail au lancement de
 		// run.sh est la racine du projet, voir run.sh) plutôt que depuis une route réseau -
