@@ -585,6 +585,25 @@ public class Game implements Serializable
 		return weakCoinValue;
 	}
 
+	/**
+	 * Remonté par l'utilisateur (09/09/2026) : "au départ, 1 DU = 7 unités
+	 * monétaires. Donc si mon jeton de valeur faible est égal à 1 unité
+	 * monétaire, alors il en faut 7 pour faire un DU. De même, si mon jeton
+	 * de valeur faible est égal à 0.5 unité monétaire, alors il faut
+	 * 7/0.5=14 jetons de valeurs faibles pour avoir 1 DU sur smartphone."
+	 * Confirmé explicitement par l'utilisateur : la masse monétaire globale
+	 * (voir tous les appelants) doit ELLE AUSSI suivre cette même référence,
+	 * pour rester cohérente - remplace la constante "7" fixée en dur
+	 * utilisée jusqu'ici (mise en place, DU normal et de renaissance en
+	 * mode strict TRM, cible en mode non strict) par ce calcul, qui
+	 * redonne exactement "7" quand weakCoinValue vaut 1 (comportement
+	 * inchangé dans ce cas précis, le plus courant).
+	 */
+	public int computeWeakJetonsPerDU()
+	{
+		return Math.max(1, (int) Math.round(7 / ((weakCoinValue == 0) ? 1 : weakCoinValue)));
+	}
+
 	public void setWeakCoinValue(final double pWeakCoinValue)
 	{
 		weakCoinValue = pWeakCoinValue;

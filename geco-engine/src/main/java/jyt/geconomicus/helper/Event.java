@@ -433,8 +433,9 @@ public class Event implements Serializable
 					for (Player p2 : game.getPlayers())
 						if (p2.isActive())
 							nbActivePlayers++;
+					final int weakJetonsPerDU = game.computeWeakJetonsPerDU();
 					final int du = nbActivePlayers > 0
-							? game.getMoneyMass() / (7 * nbActivePlayers * game.getMoneyCardsFactor()) : 0;
+							? game.getMoneyMass() / (weakJetonsPerDU * nbActivePlayers * game.getMoneyCardsFactor()) : 0;
 					game.changeMoneyMass(du);
 				}
 				else
@@ -484,8 +485,11 @@ public class Event implements Serializable
 		case JOIN:
 			player.setActive(true);
 			if (game.getMoneySystem() == Game.MONEY_LIBRE)
-			// Add player's DU to money mass
-				game.changeMoneyMass(7 * game.getMoneyCardsFactor());
+			// Add player's DU to money mass - remonté par l'utilisateur
+			// (09/09/2026) : "7" fixé en dur remplacé par la référence
+			// weakCoinValue-dépendante (voir Game.computeWeakJetonsPerDU) -
+			// identique à "7" quand weakCoinValue vaut 1.
+				game.changeMoneyMass(game.computeWeakJetonsPerDU() * game.getMoneyCardsFactor());
 			break;
 		case TURN:
 			// All players that have debt need to go to the bank
@@ -546,7 +550,12 @@ public class Event implements Serializable
 					// mais pas encore parfait.
 					if (nbPlayers > 0)
 					{
-						final int du = game.getMoneyMass() / (7 * nbPlayers * game.getMoneyCardsFactor());
+						// Remonté par l'utilisateur (09/09/2026) : "7" fixé en dur
+						// remplacé par la référence weakCoinValue-dépendante (voir
+						// Game.computeWeakJetonsPerDU) - identique à "7" quand
+						// weakCoinValue vaut 1.
+						final int weakJetonsPerDU = game.computeWeakJetonsPerDU();
+						final int du = game.getMoneyMass() / (weakJetonsPerDU * nbPlayers * game.getMoneyCardsFactor());
 						game.changeMoneyMass(du * nbPlayers);
 					}
 				}
@@ -555,7 +564,10 @@ public class Event implements Serializable
 				// Note that we don't have the actual data of how much money each player is giving away
 				// We can deal with an average here.
 				{
-					final int target = 7 * game.getMoneyCardsFactor() * nbPlayers;
+					// Remonté par l'utilisateur (09/09/2026) : même référence que
+					// ci-dessus, pour que la cible reste cohérente avec la
+					// dotation de départ quel que soit weakCoinValue.
+					final int target = game.computeWeakJetonsPerDU() * game.getMoneyCardsFactor() * nbPlayers;
 					final int currentMM = game.getMoneyMass();
 					game.changeMoneyMass((target - currentMM) / 2);
 				}

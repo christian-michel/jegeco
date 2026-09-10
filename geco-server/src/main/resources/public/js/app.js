@@ -2162,7 +2162,14 @@ async function renderGameDetail(gameId) {
 	// monnaie libre (ni en dette, ni en troc qui n'a pas de masse monétaire).
 	el("statChangeCard").classList.toggle("hidden", isDebt || isTroc);
 	if (!isDebt && !isTroc) {
-		const target = 7 * game.moneyCardsFactor * game.activePlayersCount;
+		// Remonté par l'utilisateur (09/09/2026) : même référence
+		// weakCoinValue-dépendante que partout ailleurs (voir
+		// computeWeakJetonsPerDU, portée directement ici plutôt qu'appelée -
+		// cette fonction vit dans une portée différente, propre à
+		// l'assistant, jamais accessible depuis cet écran de tableau de
+		// bord).
+		const weakJetonsPerDU = Math.max(1, Math.round(7 / (game.weakCoinValue || 1)));
+		const target = weakJetonsPerDU * game.moneyCardsFactor * game.activePlayersCount;
 		el("statChange").textContent = target - game.moneyMass;
 	}
 	// Troc : pas de masse monétaire, mais un chiffre qui lui est propre - le
@@ -3498,14 +3505,16 @@ async function openEndOfTurnWizard() {
 		// donne une dotation de départ de VALEUR 7 (voir
 		// PlayerDto.hasStartingAllocation, posé par
 		// GameService.dealStartingHandsForLibreIfNeeded), pas un solde de zéro.
-		// Corrigé le 31/08/2026 (remonté par l'utilisateur) : le nombre de
-		// jetons de CHAQUE dénomination dépend de "Valeur d'une pièce faible"
-		// (fWeakCoinValue, écran Nouvelle partie) - un simple 1/1/1 codé en dur
-		// n'est correct QUE si cette valeur vaut 1. Réutilise
-		// computeTokenBreakdown(), déjà la référence pour cette conversion
-		// partout ailleurs dans cet assistant (grosses coupures privilégiées).
+		// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) :
+		// donnait un décompte par dénomination (via computeTokenBreakdown,
+		// grosses coupures privilégiées) - mais en mode smartphone, la
+		// dotation de départ est TOUJOURS en jetons faibles uniquement (voir
+		// dealStartingHandsForLibreIfNeeded/computeDuBreakdown), et leur
+		// NOMBRE suit désormais la même référence weakCoinValue-dépendante
+		// que partout ailleurs (voir computeWeakJetonsPerDU) plutôt qu'une
+		// simple valeur 7 à décomposer.
 		const player = game.players.find((p) => p.id === playerId);
-		if (player && player.hasStartingAllocation) return computeTokenBreakdown(7, game.weakCoinValue);
+		if (player && player.hasStartingAllocation) return { weak: computeWeakJetonsPerDU(), medium: 0, strong: 0 };
 		return { weak: 0, medium: 0, strong: 0 };
 	}
 
@@ -3608,16 +3617,31 @@ async function openEndOfTurnWizard() {
 	// l'animateur à distribuer physiquement les jetons - ne touche jamais
 	// game.moneyMass, qui continue d'être suivi séparément par la formule de
 	// convergence déjà existante (pas de double comptage).
+	// Remonté par l'utilisateur (09/09/2026) : "au départ, 1 DU = 7 unités
+	// monétaires. Donc si mon jeton de valeur faible est égal à 1 unité
+	// monétaire, alors il en faut 7 pour faire un DU. De même, si mon jeton
+	// de valeur faible est égal à 0.5 unité monétaire, alors il faut
+	// 7/0.5=14 jetons de valeurs faibles pour avoir 1 DU sur smartphone."
+	// Confirmé explicitement : la masse monétaire globale doit ELLE AUSSI
+	// suivre cette même référence (voir la même fonction côté moteur,
+	// Game.computeWeakJetonsPerDU - portée ici à l'identique) - redonne
+	// exactement "7" quand weakCoinValue vaut 1 (comportement inchangé dans
+	// ce cas précis, le plus courant).
+	function computeWeakJetonsPerDU() {
+		return Math.max(1, Math.round(7 / (game.weakCoinValue || 1)));
+	}
+
 	function computeCurrentDU() {
 		if (game.activePlayersCount === 0) return 0;
 		// Remonté par un utilisateur : la division elle-même n'a jamais utilisé de
 		// facteur, mais game.moneyMass (le nombre divisé) est indirectement gonflé
 		// par le facteur carte/monnaie (chaque "Rejoindre la partie" ajoute
-		// 7 × facteur à la masse monétaire, voir Event.java côté moteur) - le DU
-		// affiché ici dépendait donc quand même du facteur configuré. On divise
-		// maintenant aussi par le facteur pour l'annuler : le DU sort désormais
-		// identique quel que soit le facteur choisi à la création de la partie.
-		return Math.floor(game.moneyMass / (7 * game.activePlayersCount * game.moneyCardsFactor));
+		// la référence DU × facteur à la masse monétaire, voir Event.java côté
+		// moteur) - le DU affiché ici dépendait donc quand même du facteur
+		// configuré. On divise maintenant aussi par le facteur pour l'annuler :
+		// le DU sort désormais identique quel que soit le facteur choisi à la
+		// création de la partie.
+		return Math.floor(game.moneyMass / (computeWeakJetonsPerDU() * game.activePlayersCount * game.moneyCardsFactor));
 	}
 
 	// Remonté par un utilisateur, avec le document de spécification détaillé à
@@ -3926,10 +3950,11 @@ async function openEndOfTurnWizard() {
 
 		el("dlgTitle").textContent = t("wiz.other_du_title");
 		// Remonté par un utilisateur : rendre visible le détail du calcul étape par
-		// étape (base 7 × joueurs actifs, puis le facteur carte/monnaie appliqué),
-		// pas seulement le résultat final - pour que l'animateur puisse vérifier
-		// et refaire le calcul de son côté s'il le souhaite.
-		const baseTarget = 7 * game.activePlayersCount;
+		// étape (base 7 (ou l'équivalent selon "Valeur d'une pièce faible", voir
+		// computeWeakJetonsPerDU) × joueurs actifs, puis le facteur carte/monnaie
+		// appliqué), pas seulement le résultat final - pour que l'animateur puisse
+		// vérifier et refaire le calcul de son côté s'il le souhaite.
+		const baseTarget = computeWeakJetonsPerDU() * game.activePlayersCount;
 		const target = baseTarget * game.moneyCardsFactor;
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.du_value_intro", { du })}</p>

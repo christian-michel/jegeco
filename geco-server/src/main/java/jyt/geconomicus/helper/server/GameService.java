@@ -1209,7 +1209,11 @@ public class GameService
 					// décomposée en jetons PHYSIQUES selon "Valeur d'une pièce faible"
 					// (game.weakCoinValue) - jamais recalculée après coup, ce compte
 					// devient la SEULE source de vérité pour ce joueur désormais.
-					final int[] startingJetons = computeDuBreakdown(7, game.getWeakCoinValue());
+					// Remonté par l'utilisateur (09/09/2026) : "7" fixé en dur
+					// remplacé par la référence weakCoinValue-dépendante (voir
+					// Game.computeWeakJetonsPerDU) - identique à "7" quand
+					// weakCoinValue vaut 1.
+					final int[] startingJetons = computeDuBreakdown(game.computeWeakJetonsPerDU());
 					player.setJetonWeak(startingJetons[0]);
 					player.setJetonMedium(startingJetons[1]);
 					player.setJetonStrong(startingJetons[2]);
@@ -1560,11 +1564,17 @@ public class GameService
 	 * peut jamais composer une valeur impaire comme le prix d'une carte
 	 * faible).
 	 */
-	private int[] computeDuBreakdown(final double pDuValue, final double pWeakCoinValue)
+	/**
+	 * Remonté par l'utilisateur (08/09/2026, précisé le 09/09/2026) : le DU
+	 * est toujours distribué en jetons FAIBLES (voir la même fonction côté
+	 * client, computeDuBreakdown dans app.js) - son entrée est déjà un
+	 * décompte de jetons (voir Game.computeWeakJetonsPerDU, qui intègre
+	 * désormais weakCoinValue en amont), jamais une valeur à reconvertir ici
+	 * une seconde fois.
+	 */
+	private int[] computeDuBreakdown(final int pDuValue)
 	{
-		final double divisor = (pWeakCoinValue == 0) ? 1 : pWeakCoinValue;
-		final int weak = (int) Math.max(0, Math.round(pDuValue / divisor));
-		return new int[] { weak, 0, 0 }; // {weak, medium, strong} - toujours en jetons faibles
+		return new int[] { Math.max(0, pDuValue), 0, 0 }; // {weak, medium, strong} - toujours en jetons faibles
 	}
 
 	/**
