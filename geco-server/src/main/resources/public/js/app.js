@@ -3656,15 +3656,28 @@ async function openEndOfTurnWizard() {
 	// Alternative retenue après cette simulation : le DU est TOUJOURS
 	// distribué en jetons FAIBLES (valeur ABSTRAITE 1, jamais 2 ni 4) -
 	// la SEULE dénomination qui divise exactement tous les prix de carte
-	// (3, 6, 12, 24) quelle que soit weakCoinValue, qui n'intervient que pour
-	// la conversion vers une valeur réelle affichée/comparée à la masse
-	// monétaire, jamais pour le CHOIX de la dénomination elle-même. Vérifié :
-	// 0 rejet "impossible de rendre la monnaie" sur les 5 mêmes scénarios,
-	// contre ~9 avec l'ancien algorithme glouton et ~34 avec la proposition
-	// initiale.
-	function computeDuBreakdown(pDuValue, pWeakCoinValue) {
-		const weak = Math.max(0, Math.round(pDuValue / (pWeakCoinValue || 1)));
-		return { weak, medium: 0, strong: 0 };
+	// (3, 6, 12, 24) quelle que soit weakCoinValue.
+	//
+	// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026 :
+	// "l'aide au calcul... indique que c'est faux" + "le DU du second tour
+	// est très bas") : cette fonction divisait encore pDuValue par
+	// weakCoinValue, comme si son entrée était une valeur RÉELLE à
+	// reconvertir en jetons - mais pDuValue (voir computeCurrentDU) est déjà
+	// une valeur ABSTRAITE (game.moneyMass n'est JAMAIS mis à l'échelle par
+	// weakCoinValue nulle part - voir Event.java, changeMoneyMass(7 *
+	// factor) au JOIN, sans aucune trace de weakCoinValue). En mode
+	// smartphone (voir la réponse de l'utilisateur, 09/09/2026 : "le mode
+	// smartphone... n'utilise que des jetons de valeur faible... il faut
+	// revoir la formule autrement"), puisque 1 jeton faible = 1 unité
+	// abstraite PAR DÉFINITION, le compte de jetons faibles à distribuer
+	// est DIRECTEMENT le DU abstrait, sans aucune conversion - confirmé par
+	// la règle officielle (geconomicus.glibre.org/libre_money.html) :
+	// "on aura donc toujours une moyenne de monnaie par joueur de 7 DU" -
+	// le "7" s'exprime EN DU (l'unité de référence interne), jamais une
+	// valeur à reconvertir. weakCoinValue reste utilisé ailleurs (mode
+	// classique sans smartphone, affichage) - jamais ici.
+	function computeDuBreakdown(pDuValue) {
+		return { weak: Math.max(0, Math.round(pDuValue)), medium: 0, strong: 0 };
 	}
 
 	// Étape 1 (nouvel ordre demandé par un utilisateur) : inventaire en JETONS de
@@ -3730,10 +3743,18 @@ async function openEndOfTurnWizard() {
 		};
 
 		function updateCheck() {
+			// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) :
+			// mélangeait deux unités différentes - game.moneyMass est
+			// TOUJOURS abstrait (jamais mis à l'échelle par weakCoinValue,
+			// voir Event.java), mais "collected" était multiplié par
+			// weakCoinValue avant la comparaison. En mode smartphone, le
+			// champ "Jetons" représente déjà directement des jetons faibles
+			// (1 jeton = 1 unité abstraite, voir computeDuBreakdown) -
+			// jamais une valeur réelle à reconvertir. Comparé désormais dans
+			// la MÊME unité que moneyMass, sans aucune conversion.
 			let collected = 0;
 			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
-				const weak = parseInt(fieldset.querySelector(".amWeak").value || "0", 10);
-				collected += weak * game.weakCoinValue;
+				collected += parseInt(fieldset.querySelector(".amWeak").value || "0", 10);
 			});
 			const remaining = game.moneyMass - collected;
 			const elc = document.querySelector(".am-remaining");
@@ -3787,7 +3808,7 @@ async function openEndOfTurnWizard() {
 			// de se propager tel quel dans tous les calculs suivants
 			// (computeLastKnownLibreCoins/computeTradeBalance) comme si la mort
 			// n'avait aucun effet monétaire.
-			const duBreakdown = computeDuBreakdown(du, game.weakCoinValue);
+			const duBreakdown = computeDuBreakdown(du);
 			for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
 				const weakCards = parseInt(fieldset.querySelector(".duCardWeak").value || "0", 10);
@@ -3809,13 +3830,23 @@ async function openEndOfTurnWizard() {
 		function updatePlayerResult(fieldset) {
 			const playerId = parseInt(fieldset.dataset.playerId, 10);
 			const coins = allPlayersMoneyInventory[playerId] || { weak: 0, medium: 0, strong: 0 };
-			const currentValue = (coins.weak + 2 * coins.medium + 4 * coins.strong) * game.weakCoinValue;
+			// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026 :
+			// "le DU du second tour est très bas") : "coins" est TOUJOURS un
+			// décompte de jetons déjà abstrait (qu'il vienne directement du
+			// suivi réel smartphone, ou de computeLibrePrefill qui convertit
+			// déjà en interne une valeur réelle vers l'abstrait) - le
+			// multiplier ENCORE par weakCoinValue ici revenait à appliquer
+			// cette conversion deux fois, faussant l'inventaire affiché
+			// avant la mort et donc, par ricochet, l'impression d'un DU trop
+			// faible juste en dessous (voir aussi la même correction sur
+			// computeDuBreakdown, updateCheck).
+			const currentValue = coins.weak + (2 * coins.medium) + (4 * coins.strong);
 			// Remonté par l'utilisateur (08/09/2026) : "il n'y a que des jetons de
 			// valeur faible que l'on appellera simplement jetons" - depuis que le
 			// DU n'est plus jamais distribué qu'en jetons faibles (voir
 			// computeDuBreakdown), plus besoin de détailler par dénomination -
 			// medium/strong sont toujours à 0 désormais.
-			const breakdown = computeDuBreakdown(du, game.weakCoinValue);
+			const breakdown = computeDuBreakdown(du);
 			fieldset.querySelector(".du-result").innerHTML =
 				`${escapeHtml(t("wiz.death_du_result", { currentValue, du }))}<br>` +
 				t("wiz.death_du_breakdown", { weak: breakdown.weak });
@@ -3909,13 +3940,17 @@ async function openEndOfTurnWizard() {
 			<p>${t("wiz.other_du_intro")}</p>
 			${staying.length === 0 ? `<p>${t("wiz.no_other_active_player")}</p>` : staying.map((p) => {
 				const coins = allPlayersMoneyInventory[p.id] || { weak: 0, medium: 0, strong: 0 };
-				const currentValue = (coins.weak + 2 * coins.medium + 4 * coins.strong) * game.weakCoinValue;
+				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) :
+				// même correction que dans renderStepDyingCardsDU/updateCheck -
+				// "coins" est déjà un décompte abstrait, ne JAMAIS le multiplier
+				// encore par weakCoinValue.
+				const currentValue = coins.weak + (2 * coins.medium) + (4 * coins.strong);
 				const total = currentValue + du;
 				// Remonté par l'utilisateur (08/09/2026) : cette prévisualisation doit
 				// correspondre EXACTEMENT à ce qui sera réellement enregistré (voir
 				// plus bas, renderStep4) - le DU ajouté en jetons faibles au solde
 				// réel existant, jamais une reconstruction du total combiné.
-				const duBreakdown = computeDuBreakdown(du, game.weakCoinValue);
+				const duBreakdown = computeDuBreakdown(du);
 				const breakdown = { weak: coins.weak + duBreakdown.weak, medium: coins.medium, strong: coins.strong };
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
@@ -4150,11 +4185,15 @@ async function openEndOfTurnWizard() {
 			// valeur) - utile pour vérifier qu'aucune pièce physique n'a été
 			// oubliée, pas seulement que le compte est bon en valeur.
 			function updateRemainingLibre() {
+				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) :
+				// même correction que dans updateCheck/renderStepOtherDU -
+				// game.moneyMass est toujours abstrait, jamais collectedValue
+				// à multiplier par weakCoinValue avant la comparaison.
 				let collectedValue = 0;
 				let collectedCoinCount = 0;
 				document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
 					const cWeak = parseInt(fieldset.querySelector(".eqCoinWeak").value || "0", 10);
-					collectedValue += cWeak * game.weakCoinValue;
+					collectedValue += cWeak;
 					collectedCoinCount += cWeak;
 				});
 				const remainingValue = game.moneyMass - collectedValue;
@@ -4529,7 +4568,7 @@ async function openEndOfTurnWizard() {
 				for (const p of game.players.filter((pl) => pl.active)) {
 					let breakdown;
 					if (selectedDeathIds.includes(p.id)) {
-						breakdown = computeDuBreakdown(du, game.weakCoinValue);
+						breakdown = computeDuBreakdown(du);
 					} else {
 						// Remonté par l'utilisateur (08/09/2026) : le DU est désormais
 						// ADDITIONNÉ tel quel (en jetons faibles, voir
@@ -4541,7 +4580,7 @@ async function openEndOfTurnWizard() {
 						// fragmentation en dénominations qui ne peuvent plus se rendre
 						// la monnaie entre elles).
 						const coins = allPlayersMoneyInventory[p.id] || { weak: 0, medium: 0, strong: 0 };
-						const duBreakdown = computeDuBreakdown(du, game.weakCoinValue);
+						const duBreakdown = computeDuBreakdown(du);
 						breakdown = { weak: coins.weak + duBreakdown.weak, medium: coins.medium, strong: coins.strong };
 					}
 					await Api.recordEvent(state.currentGameId, {
