@@ -5,6 +5,14 @@ Claude, pour reprendre le projet sans perdre le contexte accumulé pendant
 l'étape 2. Rédigé en fin d'étape 2, à partir de tout ce qui a été discuté et
 construit ensemble.
 
+> **⚠️ Ce document décrit la VISION et le PÉRIMÈTRE d'origine de l'étape 3,
+> rédigés à son tout début.** Pour savoir CE QUI EST CONSTRUIT AUJOURD'HUI et
+> CE QU'IL RESTE À FAIRE, voir plutôt
+> `docs/13-etape3-etat-et-feuille-de-route.md`, tenu à jour. Ce cahier des
+> charges reste valable pour le périmètre général et les décisions de
+> conception qu'il documente, mais sa section "état d'avancement" (§4) est
+> maintenant celle de l'étape 2, pas de l'étape 3 en cours.
+
 ---
 
 ## 1. Résumé pour Claude (à lire en premier)

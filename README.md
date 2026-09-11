@@ -74,7 +74,9 @@ java -jar geco-app/target/gecohelper.jar
 | **[docs/10-etape-plugins-troc.md](docs/10-etape-plugins-troc.md)** | Le troc comme premier plugin tiers : conception et règles |
 | **[docs/11-plugin-api-contrat.md](docs/11-plugin-api-contrat.md)** | Le contrat d'API que doit respecter un plugin de système d'échange |
 | **[docs/12-guide-creer-systeme-echange.md](docs/12-guide-creer-systeme-echange.md)** | Guide pas à pas pour créer un nouveau système d'échange |
-| **[CAHIER_DES_CHARGES_ETAPE3.md](CAHIER_DES_CHARGES_ETAPE3.md)** | Périmètre et décisions de conception pour l'étape 3 (jeu sur smartphone) |
+| **[docs/13-etape3-etat-et-feuille-de-route.md](docs/13-etape3-etat-et-feuille-de-route.md)** | État d'avancement à jour de l'étape 3 (jeu sur smartphone) et ce qu'il reste à faire |
+| **[CAHIER_DES_CHARGES_ETAPE3.md](CAHIER_DES_CHARGES_ETAPE3.md)** | Vision et périmètre d'origine de l'étape 3 (jeu sur smartphone) |
+| **[CLAUDE.md](CLAUDE.md)** | Conventions condensées à destination d'une session Claude Code |
 
 ## Organisation du code
 

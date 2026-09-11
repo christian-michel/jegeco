@@ -94,8 +94,13 @@ séparé à installer.
 
 ## Pour aller plus loin
 
+- `docs/13-etape3-etat-et-feuille-de-route.md` : ce qui est construit
+  aujourd'hui dans l'étape 3 (jeu sur smartphone) et ce qu'il reste à
+  faire - à lire en priorité si vous reprenez le projet après une pause.
 - `docs/03-architecture-technique.md` : historique détaillé de toutes les
   décisions techniques, dans l'ordre chronologique.
 - `docs/02-installation.md` : instructions d'installation détaillées.
 - `docs/09-etape2-aide-contextuelle.md` : ce qui manque encore par rapport au
   manuel du programme original (fonctionnalités non portées à ce jour).
+- `CLAUDE.md` (racine du dépôt) : conventions condensées à destination
+  d'une session Claude Code - lu automatiquement à l'ouverture du dépôt.

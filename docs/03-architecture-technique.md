@@ -1452,3 +1452,79 @@ ce qu'ils cohabitent proprement dans le même système de monnaie libre - pas
 un système monétaire de plus, seulement une variante d'affichage/mécanique à
 l'intérieur de la monnaie libre existante.
 
+### Refonte majeure (09/09/2026) : le DU était confondu avec un simple décompte de jetons
+
+Remontée par l'utilisateur, après plusieurs sessions de test réel en
+conditions réelles : "le programme actuel confond le DU et la monnaie...
+l'assistant prétend donner 1 DU mais il ne donne qu'1 jeton car il confond
+le jeton et le DU." L'ancienne formule (`masse / (7 × joueurs actifs)`,
+document au §4.2 du cahier des charges) était une approximation qui ne
+correspondait pas à la vraie Théorie Relative de la Monnaie.
+
+**Formule TRM exacte** (vérifiée par recherche, plusieurs sources
+concordantes) :
+
+```
+DU = c × (masse_monétaire / joueurs_vivants)
+c  = ln(ev/2) / (ev/2)
+```
+
+où `ev` (espérance de vie) a été confirmée par l'utilisateur comme étant la
+durée simulée de la partie précise (nombre de tours × 8 ans - convention du
+jeu déjà en place, "80 ans / 10 tours"), jamais une référence fixe à 80 ans.
+Vérifié numériquement : `c≈9,2%/an` pour `ev=80` ans, exactement la valeur
+de référence documentée par la TRM.
+
+**Deuxième bug trouvé en testant, pas en lisant le code** : faire grandir
+la masse monétaire globale de façon INDÉPENDANTE (une formule côté serveur,
+une autre côté client pour les jetons réellement distribués, chacune avec
+son propre arrondi) crée un écart qui peut s'accumuler progressivement dès
+que "Valeur d'une pièce faible" ne divise pas exactement la dotation de
+référence. Corrigé en profondeur : la masse monétaire n'est plus jamais
+ajoutée de façon indépendante - elle est **recalculée directement comme la
+somme réelle des jetons physiquement détenus par tous les joueurs actifs**
+(`Game.computeMoneyMassFromActivePlayersJetons`), garantissant une
+cohérence parfaite par construction. Vérifié par simulation exhaustive sur
+135 configurations différentes (2 à 8 joueurs, 9 valeurs de "Valeur d'une
+pièce faible", 3 durées de partie) sur 10 tours chacune : pire écart
+observé = 0,5 unité monétaire (la limite théorique incompressible avec des
+montants entiers), et surtout, cet écart ne grandit jamais avec le temps.
+
+**Prix des cartes fixé en DU**, également remonté par l'utilisateur : "il
+faut fixer le prix d'une carte de monnaie libre en DU. Par exemple, une
+carte faible est égale à 0.5DU." Uniquement pour la monnaie libre suivie
+par smartphone - la monnaie dette garde son prix fixe en jetons, le mode
+classique (libre sans smartphone) reprend le code existant, non concerné.
+Un prix qui varie donc réellement d'un tour à l'autre désormais, suivant le
+DU courant, contrairement à l'ancien système de valeur abstraite fixe.
+
+**Décision de conception prise avec l'utilisateur** : garder le système de
+jetons entiers (avec une imprecision résiduelle minime et bornée, prouvée
+par simulation) plutôt que de passer à des montants exacts mais avec
+plusieurs décimales - pour préserver l'ancrage pédagogique concret du jeu
+(des jetons qu'on peut compter) et la cohérence avec le mode classique.
+
+**Simplification connexe** (même session, avant la refonte du DU) : depuis
+que le DU est toujours distribué en jetons faibles uniquement, les jetons
+moyens/forts ne sont plus jamais réellement en circulation en mode
+smartphone - simplifié en conséquence : un seul champ "Jetons" dans tous
+les écrans de l'assistant (plus de détail faible/moyen/fort), et retiré de
+l'affichage des écrans Accueil/Profil du smartphone.
+
+**Nouveau système de journalisation**, remonté par l'utilisateur après
+plusieurs sessions de débogage ralenties par des échecs silencieux : "un ou
+plusieurs moyens à mettre en œuvre... pour ne plus avoir d'erreur
+silencieuse et toujours avoir des logs ou des pistes en cas de problème...
+aussi bien sur le serveur que sur les applications smartphone des joueurs
+ou l'application de l'animateur." Gestionnaires d'exception globaux côté
+serveur (`GecoServer.java`), capture automatique côté client (erreurs JS
+non attrapées, promesses rejetées, requêtes réseau échouées) avec un
+panneau de diagnostic consultable/copiable sur smartphone (pas d'outils de
+développement disponibles là-bas). A permis de trouver et corriger, le soir
+même, un vrai bug (un accroc réseau passager effaçait toute l'application
+du joueur) - la valeur de ce système a été démontrée en conditions réelles
+dès sa mise en place.
+
+Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
+à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
+condensées à destination d'une session Claude Code.
