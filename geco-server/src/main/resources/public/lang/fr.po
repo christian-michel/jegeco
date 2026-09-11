@@ -892,14 +892,11 @@ msgstr "À lui redonner : {weak} jeton(s)."
 msgid "wiz.other_du_title"
 msgstr "Distribution du DU"
 
-msgid "wiz.du_formula"
-msgstr "Dividende Universel de ce tour : <strong>{du}</strong> (masse monétaire {mass} ÷ (7 × {count} joueurs actifs × facteur {factor}), tronqué - indépendant du facteur carte/monnaie choisi."
-
-msgid "wiz.target_formula"
-msgstr "Pour information, la base théorique de la masse monétaire est : 7 × {count} joueurs actifs = {base}, puis × facteur carte/monnaie ({factor}) = <strong>{target}</strong>."
+msgid "wiz.du_formula_trm"
+msgstr "Cette valeur est calculée par la formule de la Théorie Relative de la Monnaie (TRM), à partir de la masse monétaire actuelle et du nombre de joueurs vivants - elle change à chaque tour. Convertie en jetons faibles (valeur d'une pièce faible = {weakCoinValue}) : <strong>{jetons} jetons</strong> à distribuer."
 
 msgid "wiz.du_value_intro"
-msgstr "Dividende Universel (DU) de ce tour : <strong>{du} jetons</strong>."
+msgstr "Dividende Universel (DU) de ce tour : <strong>{du} unités monétaires</strong>."
 
 msgid "wiz.other_du_intro"
 msgstr "Pour chaque joueur, comptez ses jetons actuels puis donnez-lui le nouveau total calculé."

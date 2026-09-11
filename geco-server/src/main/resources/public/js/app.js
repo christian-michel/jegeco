@@ -3960,19 +3960,27 @@ async function openEndOfTurnWizard() {
 		const staying = sortByName(game.players.filter((p) => p.active && !selectedDeathIds.includes(p.id)));
 
 		el("dlgTitle").textContent = t("wiz.other_du_title");
-		// Remonté par un utilisateur : rendre visible le détail du calcul étape par
-		// étape (base 7 (ou l'équivalent selon "Valeur d'une pièce faible", voir
-		// computeWeakJetonsPerDU) × joueurs actifs, puis le facteur carte/monnaie
-		// appliqué), pas seulement le résultat final - pour que l'animateur puisse
-		// vérifier et refaire le calcul de son côté s'il le souhaite.
-		const baseTarget = computeWeakJetonsPerDU() * game.activePlayersCount;
-		const target = baseTarget * game.moneyCardsFactor;
+		// BUG TROUVÉ ET CORRIGÉ (11/09/2026, retour utilisateur sur une partie
+		// test réelle avec weakCoinValue=0.5) : ce texte affichait DEUX erreurs
+		// d'unité à la fois. (1) "wiz.du_value_intro" appelait "du" (une VALEUR
+		// MONÉTAIRE, voir computeCurrentDU) un nombre de "jetons" - visible dès
+		// que weakCoinValue != 1, où les deux valeurs diffèrent réellement.
+		// (2) "wiz.du_formula"/"wiz.target_formula" décrivaient encore
+		// l'ANCIENNE formule simple (masse ÷ (7 × joueurs × facteur), plus
+		// utilisée depuis le passage à la vraie formule TRM le 09/09/2026) et
+		// une "cible théorique" en jetons (via l'ex-computeWeakJetonsPerDU)
+		// étiquetée à tort "masse monétaire" - un residu de l'ancien mode non
+		// strict TRM (convergence vers une cible), sans aucun sens en strict
+		// TRM (la masse ne fait jamais que croître). Les deux textes étaient
+		// donc à la fois FAUX (ne correspondant plus au calcul réel) et
+		// AMBIGUS (confondant valeur monétaire et nombre de jetons) - remplacés
+		// par une seule ligne correcte, qui montre explicitement les DEUX
+		// valeurs (DU en unités monétaires, ET sa conversion en jetons) sans
+		// jamais les confondre.
+		const duBreakdown = computeDuBreakdown(du);
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.du_value_intro", { du })}</p>
-			<p style="font-size:0.85rem;color:var(--text-dim);">${t("wiz.du_formula", { du, mass: game.moneyMass, count: game.activePlayersCount, factor: game.moneyCardsFactor })}</p>
-			<p style="font-size:0.85rem;color:var(--text-dim);">${t("wiz.target_formula", {
-				count: game.activePlayersCount, base: baseTarget, factor: game.moneyCardsFactor, target,
-			})}</p>
+			<p style="font-size:0.85rem;color:var(--text-dim);">${t("wiz.du_formula_trm", { jetons: duBreakdown.weak, weakCoinValue: game.weakCoinValue })}</p>
 			<p>${t("wiz.other_du_intro")}</p>
 			${staying.length === 0 ? `<p>${t("wiz.no_other_active_player")}</p>` : staying.map((p) => {
 				const coins = allPlayersMoneyInventory[p.id] || { weak: 0, medium: 0, strong: 0 };

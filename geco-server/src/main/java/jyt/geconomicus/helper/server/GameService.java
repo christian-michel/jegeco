@@ -1210,6 +1210,28 @@ public class GameService
 				}
 			}
 			writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
+			// Correctif (11/09/2026, audit + retour utilisateur sur une partie
+			// test réelle, weakCoinValue=0.5, 2 joueurs) : le tout premier
+			// événement TURN (celui qui vient de faire passer turnNumber de 0 à
+			// 1 - cette méthode est appelée JUSTE APRÈS, voir GecoServer)
+			// s'applique AVANT que les jetons de départ ne soient distribués
+			// ci-dessus : à cet instant, aucun joueur n'a encore
+			// startingCardsJson, donc Event.isSmartphoneTrackedGame() voit une
+			// partie "classique" et utilise l'ancien mécanisme (DU simple ajouté
+			// à la masse) au lieu du recalcul exact par les jetons réels.
+			// Observé concrètement : masse monétaire = 16 après ce premier TURN,
+			// alors que les jetons tout juste distribués ci-dessus ne valent
+			// que 14 unités monétaires (7 × 2 joueurs) - un écart de 2 qui ne se
+			// corrigeait ensuite JAMAIS tout seul (rien ne resynchronisait la
+			// masse une fois les jetons connus), gonflant à tort le DU de tous
+			// les tours suivants (10 au lieu de 9 dans ce cas précis). Corrigé
+			// en resynchronisant ICI la masse monétaire sur la somme réelle des
+			// jetons qui viennent d'être distribués, dès que la mise en place
+			// vient de se terminer pour une partie strict TRM - la même
+			// garantie "masse toujours exacte" que celle déjà assurée par
+			// Event.java pour tous les tours suivants, étendue au tout premier.
+			if (game.isStrictTrm())
+				game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
 			em.getTransaction().commit();
 		}
 		finally

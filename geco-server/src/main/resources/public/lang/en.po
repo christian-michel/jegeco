@@ -890,14 +890,11 @@ msgstr "To give back: {weak} token(s)."
 msgid "wiz.other_du_title"
 msgstr "DU distribution"
 
-msgid "wiz.du_formula"
-msgstr "This turn's Universal Dividend: <strong>{du}</strong> (money mass {mass} ÷ (7 × {count} active players × factor {factor}), truncated - independent of the chosen card/money factor."
-
-msgid "wiz.target_formula"
-msgstr "For reference, the theoretical money mass baseline is: 7 × {count} active players = {base}, then × card/money factor ({factor}) = <strong>{target}</strong>."
+msgid "wiz.du_formula_trm"
+msgstr "This value is computed by the Relative Theory of Money (RTM) formula, from the current money mass and the number of living players - it changes every turn. Converted into weak tokens (weak coin value = {weakCoinValue}): <strong>{jetons} tokens</strong> to distribute."
 
 msgid "wiz.du_value_intro"
-msgstr "This turn's Universal Dividend (DU): <strong>{du} tokens</strong>."
+msgstr "This turn's Universal Dividend (DU): <strong>{du} monetary units</strong>."
 
 msgid "wiz.other_du_intro"
 msgstr "For each player, count their current tokens then give them the newly calculated total."
