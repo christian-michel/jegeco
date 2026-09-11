@@ -646,7 +646,17 @@ public class Game implements Serializable
 	 * pour qu'aucune des deux ne recalcule sa PROPRE version de cette même
 	 * formule - une SEULE source de vérité, jamais deux calculs séparés
 	 * risquant de diverger l'un de l'autre si l'un des deux était mis à jour
-	 * sans l'autre.
+	 * sans l'autre. Réutilisée telle quelle par le prix des cartes en monnaie
+	 * libre smartphone (voir GameService.levelValue) - jamais un calcul
+	 * divergent. Retourne 0 si aucun joueur actif (garde-fou, cas extrême qui
+	 * ne devrait normalement jamais arriver).
+	 *
+	 * Correctif (11/09/2026) : cette méthode était accidentellement définie
+	 * DEUX FOIS dans cette classe (erreur de compilation - "method
+	 * computeCurrentDU() is already defined"), les deux copies étant
+	 * fonctionnellement identiques (l'une lisait le champ moneyMass
+	 * directement, l'autre via getMoneyMass() - aucune différence de
+	 * comportement). Fusionnées en une seule.
 	 */
 	public int computeCurrentDU()
 	{
@@ -656,7 +666,7 @@ public class Game implements Serializable
 				nbActivePlayers++;
 		if (nbActivePlayers == 0)
 			return 0;
-		return (int) Math.round(computeDuGrowthRatePerTurn() * moneyMass / nbActivePlayers);
+		return (int) Math.round(computeDuGrowthRatePerTurn() * getMoneyMass() / nbActivePlayers);
 	}
 
 	/**
@@ -718,26 +728,6 @@ public class Game implements Serializable
 			if (p.isActive())
 				total += p.getJetonWeak() * weakCoinValue;
 		return (int) Math.round(total);
-	}
-
-	/**
-	 * Remonté par l'utilisateur (09/09/2026) : "pour les cartes, elles ne se
-	 * calculent en DU que sur la partie monnaie libre avec le smartphone" -
-	 * portage EXACT de computeCurrentDU() côté client (app.js), pour que le
-	 * prix des cartes (voir GameService.levelValue) utilise TOUJOURS la
-	 * même valeur de DU que celle affichée/distribuée à l'entre-deux-tours -
-	 * jamais un calcul divergent. Retourne 0 si aucun joueur actif (garde-fou,
-	 * cas extrême qui ne devrait normalement jamais arriver).
-	 */
-	public int computeCurrentDU()
-	{
-		int nbActivePlayers = 0;
-		for (final Player p : players)
-			if (p.isActive())
-				nbActivePlayers++;
-		if (nbActivePlayers == 0)
-			return 0;
-		return (int) Math.round(computeDuGrowthRatePerTurn() * getMoneyMass() / nbActivePlayers);
 	}
 
 	public void setWeakCoinValue(final double pWeakCoinValue)

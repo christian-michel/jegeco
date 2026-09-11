@@ -1694,7 +1694,13 @@ public class GecoServer
 				pDto.avgAge(), pDto.totalCreditsOutstanding(), pDto.turnDurationSeconds(),
 				pDto.turnStartedAtEpochMs(), pDto.players(), pDto.events(), pDto.moneyCardsFactor(),
 				pDto.weakCoinValue(), pDto.animatorPseudo(), pDto.seizedValues(), pDto.moneyInvestBank(),
-				pDto.cardsInvestBank(), pDto.pausedRemainingSeconds(), pDto.startingGoods(), pDto.strictTrm(), null);
+				pDto.cardsInvestBank(), pDto.pausedRemainingSeconds(), pDto.startingGoods(), pDto.strictTrm(), null,
+				// Correctif (11/09/2026) : champ currentDuValue ajouté au record GameDetailDto
+				// (voir commit "le prix des cartes en monnaie libre smartphone est désormais
+				// fixe en DU") sans mettre à jour cet appel - constructeur appelé avec un
+				// argument manquant, erreur de compilation ("actual and formal argument lists
+				// differ in length"). Simplement propagé depuis pDto, comme tous les autres champs.
+				pDto.currentDuValue());
 	}
 
 	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement
