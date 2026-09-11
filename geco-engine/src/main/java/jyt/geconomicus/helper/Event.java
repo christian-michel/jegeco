@@ -425,19 +425,28 @@ public class Event implements Serializable
 				if (strictTrmExit)
 				// Remonté par un utilisateur : en mode strict TRM, le nouveau-né reçoit
 				// une création monétaire fraîche égale au DU du moment (pas un bonus
-				// fixe indépendant de l'état de la partie) - même formule que celle
-				// affichée à l'écran (voir computeCurrentDU() côté client), portée ici
-				// côté moteur puisqu'elle doit influer sur la masse monétaire elle-même.
-				{
-					int nbActivePlayers = 0;
-					for (Player p2 : game.getPlayers())
-						if (p2.isActive())
-							nbActivePlayers++;
-					final int weakJetonsPerDU = game.computeWeakJetonsPerDU();
-					final int du = nbActivePlayers > 0
-							? game.getMoneyMass() / (weakJetonsPerDU * nbActivePlayers * game.getMoneyCardsFactor()) : 0;
-					game.changeMoneyMass(du);
-				}
+				// fixe indépendant de l'état de la partie).
+				//
+				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026,
+				// en deux temps) : "le programme actuel confond le DU et la
+				// monnaie" - le DU n'est PAS un nombre de jetons, c'est une
+				// VALEUR MONÉTAIRE calculée par la vraie formule de la TRM
+				// (vérifiée sur trm.creationmonetaire.info) - PUIS, testé par
+				// simulation : faire grandir la masse monétaire de façon
+				// INDÉPENDANTE du nombre RÉEL de jetons distribués (voir
+				// GameService.recordEvent, qui a DÉJÀ mis à jour
+				// player.jetonWeak à ce stade - avant cet appel) crée un
+				// écart qui peut S'ACCUMULER au fil des tours dès que
+				// "Valeur d'une pièce faible" ne divise pas exactement la
+				// dotation de référence. Corrigé : la masse monétaire n'est
+				// plus jamais AJOUTÉE de façon indépendante - elle est
+				// RECALCULÉE directement comme la somme réelle des jetons
+				// PHYSIQUEMENT détenus par tous les joueurs actifs, le
+				// joueur qui vient de renaître INCLUS (voir
+				// Game.computeMoneyMassFromActivePlayersJetons, appelée
+				// APRÈS que son propre jetonWeak a déjà été mis à jour) -
+				// garantit une cohérence parfaite par construction.
+					game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
 				else
 				// adjust money mass
 					game.changeMoneyMass(8 * game.getMoneyCardsFactor());
@@ -486,10 +495,15 @@ public class Event implements Serializable
 			player.setActive(true);
 			if (game.getMoneySystem() == Game.MONEY_LIBRE)
 			// Add player's DU to money mass - remonté par l'utilisateur
-			// (09/09/2026) : "7" fixé en dur remplacé par la référence
-			// weakCoinValue-dépendante (voir Game.computeWeakJetonsPerDU) -
-			// identique à "7" quand weakCoinValue vaut 1.
-				game.changeMoneyMass(game.computeWeakJetonsPerDU() * game.getMoneyCardsFactor());
+			// (09/09/2026) : la masse monétaire se mesure désormais TOUJOURS
+			// en unités monétaires réelles (jamais en nombre de jetons) - la
+			// dotation de départ reste la constante FIXE "7" (voir la règle
+			// officielle : 1+2+4=7), jamais mise à l'échelle par
+			// weakCoinValue ici (celui-ci ne sert qu'à convertir une valeur
+			// monétaire en un nombre de jetons PHYSIQUES pour UN joueur
+			// donné - voir GameService.dealStartingHandsForLibreIfNeeded -
+			// jamais pour la masse monétaire globale elle-même).
+				game.changeMoneyMass(7 * game.getMoneyCardsFactor());
 			break;
 		case TURN:
 			// All players that have debt need to go to the bank
@@ -527,47 +541,42 @@ public class Event implements Serializable
 				// convergence vers une cible arbitraire. Le calcul UTILISE la
 				// masse AVANT tout ajout (comme côté client, qui calcule le DU
 				// à partir de la masse encore inchangée à ce moment précis).
+				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026, en
+				// deux temps) : "le programme actuel confond le DU et la
+				// monnaie" - le DU n'est pas un nombre de jetons, c'est une
+				// VALEUR MONÉTAIRE (voir Game.computeDuGrowthRatePerTurn) - PUIS,
+				// testé par simulation : faire grandir la masse monétaire de
+				// façon INDÉPENDANTE du nombre RÉEL de jetons distribués (voir
+				// GameService.recordEvent, qui a DÉJÀ mis à jour le jetonWeak de
+				// CHAQUE joueur via son propre WEALTH_CHECKPOINT, AVANT que cet
+				// événement TURN ne soit enregistré) crée un écart qui peut
+				// S'ACCUMULER au fil des tours dès que "Valeur d'une pièce
+				// faible" ne divise pas exactement la dotation de référence.
+				//
+				// Corrigé : la masse monétaire n'est plus jamais AJOUTÉE de
+				// façon indépendante - elle est RECALCULÉE directement comme la
+				// somme réelle des jetons PHYSIQUEMENT détenus par tous les
+				// joueurs actifs (voir Game.computeMoneyMassFromActivePlayersJetons)
+				// - garantit une cohérence parfaite par construction. Élimine
+				// au passage l'ancienne limite connue du double comptage d'un
+				// joueur mort/ressuscité CE tour (son DU de renaissance ET son
+				// DU de tour normal étaient tous deux comptés dans la
+				// croissance indépendante) : ici, peu importe COMBIEN DE FOIS
+				// ni COMMENT un joueur a reçu des jetons ce tour, seul ce qu'il
+				// détient RÉELLEMENT au final est compté, une seule fois.
 				if (game.isStrictTrm())
-				{
-					// Garde-fou (cas extrême, ne devrait normalement jamais
-					// arriver) : évite une division par zéro si TOUS les
-					// joueurs sont devenus inactifs au moment de ce tour -
-					// aucun DU à distribuer dans ce cas, la masse monétaire
-					// reste alors inchangée plutôt que de faire planter
-					// l'enregistrement de l'événement.
-					//
-					// LIMITE CONNUE (testée par simulation, pas corrigée pour
-					// l'instant, faute de temps pour une solution plus sûre) :
-					// un joueur qui meurt et renaît CE tour reçoit déjà son
-					// propre DU via l'événement DEATH (voir plus haut,
-					// strictTrmExit) - mais nbPlayers ci-dessous le recompte
-					// une seconde fois (il redevient actif juste après sa
-					// renaissance), créant un écart de +1×DU par mort
-					// survenue, qui ne grandit plus ensuite mais ne se
-					// résorbe pas non plus. Sans commune mesure avec le
-					// problème corrigé ici (l'écart précédent grandissait
-					// SANS BORNE, à chaque tour, même sans aucune mort) -
-					// mais pas encore parfait.
-					if (nbPlayers > 0)
-					{
-						// Remonté par l'utilisateur (09/09/2026) : "7" fixé en dur
-						// remplacé par la référence weakCoinValue-dépendante (voir
-						// Game.computeWeakJetonsPerDU) - identique à "7" quand
-						// weakCoinValue vaut 1.
-						final int weakJetonsPerDU = game.computeWeakJetonsPerDU();
-						final int du = game.getMoneyMass() / (weakJetonsPerDU * nbPlayers * game.getMoneyCardsFactor());
-						game.changeMoneyMass(du * nbPlayers);
-					}
-				}
+					game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
 				else
 				// The money mass is going towards the average
 				// Note that we don't have the actual data of how much money each player is giving away
 				// We can deal with an average here.
 				{
-					// Remonté par l'utilisateur (09/09/2026) : même référence que
-					// ci-dessus, pour que la cible reste cohérente avec la
-					// dotation de départ quel que soit weakCoinValue.
-					final int target = game.computeWeakJetonsPerDU() * game.getMoneyCardsFactor() * nbPlayers;
+					// Remonté par l'utilisateur (09/09/2026) : la masse monétaire
+					// se mesure toujours en unités monétaires réelles - la
+					// dotation de référence par joueur reste la constante FIXE
+					// "7" (voir le cas JOIN), jamais mise à l'échelle par
+					// weakCoinValue ici.
+					final int target = 7 * game.getMoneyCardsFactor() * nbPlayers;
 					final int currentMM = game.getMoneyMass();
 					game.changeMoneyMass((target - currentMM) / 2);
 				}

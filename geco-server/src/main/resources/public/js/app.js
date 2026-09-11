@@ -3618,30 +3618,55 @@ async function openEndOfTurnWizard() {
 	// game.moneyMass, qui continue d'être suivi séparément par la formule de
 	// convergence déjà existante (pas de double comptage).
 	// Remonté par l'utilisateur (09/09/2026) : "au départ, 1 DU = 7 unités
-	// monétaires. Donc si mon jeton de valeur faible est égal à 1 unité
-	// monétaire, alors il en faut 7 pour faire un DU. De même, si mon jeton
-	// de valeur faible est égal à 0.5 unité monétaire, alors il faut
-	// 7/0.5=14 jetons de valeurs faibles pour avoir 1 DU sur smartphone."
-	// Confirmé explicitement : la masse monétaire globale doit ELLE AUSSI
-	// suivre cette même référence (voir la même fonction côté moteur,
-	// Game.computeWeakJetonsPerDU - portée ici à l'identique) - redonne
-	// exactement "7" quand weakCoinValue vaut 1 (comportement inchangé dans
-	// ce cas précis, le plus courant).
-	function computeWeakJetonsPerDU() {
+	// monétaires" - la dotation de départ (voir la règle officielle :
+	// "chaque joueur reçoit 1 billet de chacune des 3 couleurs", soit
+	// 1+2+4=7) reste une constante FIXE de 7 unités monétaires par joueur -
+	// weakCoinValue sert uniquement à convertir cette valeur réelle en un
+	// nombre de jetons faibles physiques (voir l'appelant), jamais à mettre
+	// à l'échelle la référence elle-même. Portage exact de
+	// Game.computeStartingJetonsPerPlayer côté moteur.
+	function computeStartingJetonsPerPlayer() {
 		return Math.max(1, Math.round(7 / (game.weakCoinValue || 1)));
+	}
+
+	// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) : "le
+	// programme actuel confond le DU et la monnaie... l'assistant prétend
+	// donner 1 DU mais il ne donne qu'1 jeton car il confond le jeton et le
+	// DU." Le DU n'est PAS un nombre de jetons - c'est une VALEUR MONÉTAIRE
+	// calculée par la vraie formule de la Théorie Relative de la Monnaie
+	// (vérifiée sur trm.creationmonetaire.info - "c" y est donné
+	// explicitement comme valant ~9,2%/an pour une espérance de vie ev=80
+	// ans, ce que cette formule reproduit EXACTEMENT) :
+	//
+	//     c = ln(ev/2) / (ev/2)     (taux de croissance ANNUEL)
+	//     DU(t) = c × M(t) / N(t)   (masse monétaire, nombre de vivants)
+	//
+	// "ev" (espérance de vie) confirmée par l'utilisateur : la durée
+	// simulée de CETTE partie précise (nombre de tours × 8 ans, convention
+	// déjà établie ailleurs dans le jeu - voir "1 tour = 8 ans" au moment
+	// de la création de la partie), jamais une référence fixe à 80 ans.
+	// "c" étant un taux ANNUEL et un tour représentant 8 ans, il est
+	// composé sur cette durée pour obtenir le taux RÉELLEMENT appliqué à
+	// chaque tour. Portage exact de Game.computeDuGrowthRatePerTurn côté
+	// moteur - vérifié par simulation : redonne une croissance d'environ
+	// ×2,28 par tour pour une partie à 8 tours (64 ans), cohérent avec la
+	// règle physique officielle ("on double ainsi la masse monétaire à
+	// chaque tour").
+	function computeDuGrowthRatePerTurn() {
+		const YEARS_PER_TURN = 8; // convention du jeu, voir "80 ans / 10 tours" ailleurs dans le code
+		const evYears = Math.max(1, game.nbTurnsPlanned) * YEARS_PER_TURN;
+		const halfEv = evYears / 2;
+		const cAnnual = Math.log(halfEv) / halfEv;
+		return Math.pow(1 + cAnnual, YEARS_PER_TURN) - 1;
 	}
 
 	function computeCurrentDU() {
 		if (game.activePlayersCount === 0) return 0;
-		// Remonté par un utilisateur : la division elle-même n'a jamais utilisé de
-		// facteur, mais game.moneyMass (le nombre divisé) est indirectement gonflé
-		// par le facteur carte/monnaie (chaque "Rejoindre la partie" ajoute
-		// la référence DU × facteur à la masse monétaire, voir Event.java côté
-		// moteur) - le DU affiché ici dépendait donc quand même du facteur
-		// configuré. On divise maintenant aussi par le facteur pour l'annuler :
-		// le DU sort désormais identique quel que soit le facteur choisi à la
-		// création de la partie.
-		return Math.floor(game.moneyMass / (computeWeakJetonsPerDU() * game.activePlayersCount * game.moneyCardsFactor));
+		// Le DU est une VALEUR MONÉTAIRE (voir le commentaire ci-dessus) -
+		// jamais un décompte de jetons. La conversion en jetons faibles
+		// PHYSIQUES à distribuer se fait séparément (voir computeDuBreakdown),
+		// jamais mélangée à ce calcul.
+		return Math.round(computeDuGrowthRatePerTurn() * game.moneyMass / game.activePlayersCount);
 	}
 
 	// Remonté par un utilisateur, avec le document de spécification détaillé à
@@ -3682,26 +3707,21 @@ async function openEndOfTurnWizard() {
 	// la SEULE dénomination qui divise exactement tous les prix de carte
 	// (3, 6, 12, 24) quelle que soit weakCoinValue.
 	//
-	// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026 :
-	// "l'aide au calcul... indique que c'est faux" + "le DU du second tour
-	// est très bas") : cette fonction divisait encore pDuValue par
-	// weakCoinValue, comme si son entrée était une valeur RÉELLE à
-	// reconvertir en jetons - mais pDuValue (voir computeCurrentDU) est déjà
-	// une valeur ABSTRAITE (game.moneyMass n'est JAMAIS mis à l'échelle par
-	// weakCoinValue nulle part - voir Event.java, changeMoneyMass(7 *
-	// factor) au JOIN, sans aucune trace de weakCoinValue). En mode
-	// smartphone (voir la réponse de l'utilisateur, 09/09/2026 : "le mode
-	// smartphone... n'utilise que des jetons de valeur faible... il faut
-	// revoir la formule autrement"), puisque 1 jeton faible = 1 unité
-	// abstraite PAR DÉFINITION, le compte de jetons faibles à distribuer
-	// est DIRECTEMENT le DU abstrait, sans aucune conversion - confirmé par
-	// la règle officielle (geconomicus.glibre.org/libre_money.html) :
-	// "on aura donc toujours une moyenne de monnaie par joueur de 7 DU" -
-	// le "7" s'exprime EN DU (l'unité de référence interne), jamais une
-	// valeur à reconvertir. weakCoinValue reste utilisé ailleurs (mode
-	// classique sans smartphone, affichage) - jamais ici.
+	// CONCEPTION FINALE, confirmée par l'utilisateur (09/09/2026), après
+	// plusieurs itérations sur ce sujet précis cette même session : le DU
+	// est une VALEUR MONÉTAIRE (voir computeCurrentDU/Game.
+	// computeDuGrowthRatePerTurn - la vraie formule de la TRM, DU = c ×
+	// masse monétaire / joueurs vivants), JAMAIS un nombre de jetons
+	// directement. "Une fois le DU calculé (en unités monétaires), comment
+	// les jetons faibles du smartphone doivent-ils en découler ?" -
+	// réponse : "DU divisé par Valeur d'une pièce faible = nombre de
+	// jetons à donner." Toujours en jetons FAIBLES uniquement (jamais
+	// moyens ni forts - conclusion d'une itération précédente, toujours
+	// valable : seule cette dénomination divise exactement tous les prix
+	// de carte quelle que soit weakCoinValue).
 	function computeDuBreakdown(pDuValue) {
-		return { weak: Math.max(0, Math.round(pDuValue)), medium: 0, strong: 0 };
+		const weak = Math.max(0, Math.round(pDuValue / (game.weakCoinValue || 1)));
+		return { weak, medium: 0, strong: 0 };
 	}
 
 	// Étape 1 (nouvel ordre demandé par un utilisateur) : inventaire en JETONS de
@@ -3767,18 +3787,18 @@ async function openEndOfTurnWizard() {
 		};
 
 		function updateCheck() {
-			// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) :
-			// mélangeait deux unités différentes - game.moneyMass est
-			// TOUJOURS abstrait (jamais mis à l'échelle par weakCoinValue,
-			// voir Event.java), mais "collected" était multiplié par
-			// weakCoinValue avant la comparaison. En mode smartphone, le
-			// champ "Jetons" représente déjà directement des jetons faibles
-			// (1 jeton = 1 unité abstraite, voir computeDuBreakdown) -
-			// jamais une valeur réelle à reconvertir. Comparé désormais dans
-			// la MÊME unité que moneyMass, sans aucune conversion.
+			// CONCEPTION FINALE, confirmée par l'utilisateur (09/09/2026) : le DU
+			// est une VRAIE valeur monétaire (formule TRM, voir
+			// computeCurrentDU/Game.computeDuGrowthRatePerTurn) - game.moneyMass
+			// se mesure donc en UNITÉS MONÉTAIRES réelles, jamais en nombre de
+			// jetons. Le champ "Jetons" saisi ici représente un NOMBRE de
+			// jetons faibles physiques - reconverti en unités monétaires (×
+			// weakCoinValue) avant la comparaison, pour rester dans la MÊME
+			// unité que moneyMass.
 			let collected = 0;
 			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
-				collected += parseInt(fieldset.querySelector(".amWeak").value || "0", 10);
+				const weak = parseInt(fieldset.querySelector(".amWeak").value || "0", 10);
+				collected += weak * game.weakCoinValue;
 			});
 			const remaining = game.moneyMass - collected;
 			const elc = document.querySelector(".am-remaining");
@@ -3854,25 +3874,18 @@ async function openEndOfTurnWizard() {
 		function updatePlayerResult(fieldset) {
 			const playerId = parseInt(fieldset.dataset.playerId, 10);
 			const coins = allPlayersMoneyInventory[playerId] || { weak: 0, medium: 0, strong: 0 };
-			// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026 :
-			// "le DU du second tour est très bas") : "coins" est TOUJOURS un
-			// décompte de jetons déjà abstrait (qu'il vienne directement du
-			// suivi réel smartphone, ou de computeLibrePrefill qui convertit
-			// déjà en interne une valeur réelle vers l'abstrait) - le
-			// multiplier ENCORE par weakCoinValue ici revenait à appliquer
-			// cette conversion deux fois, faussant l'inventaire affiché
-			// avant la mort et donc, par ricochet, l'impression d'un DU trop
-			// faible juste en dessous (voir aussi la même correction sur
-			// computeDuBreakdown, updateCheck).
+			// CONCEPTION FINALE (remonté par l'utilisateur, 09/09/2026) : "coins"
+			// est un décompte de jetons PHYSIQUES (pas une valeur monétaire) -
+			// currentValue reste donc ce décompte tel quel, pour l'affichage
+			// "X jetons" avant la mort.
 			const currentValue = coins.weak + (2 * coins.medium) + (4 * coins.strong);
-			// Remonté par l'utilisateur (08/09/2026) : "il n'y a que des jetons de
-			// valeur faible que l'on appellera simplement jetons" - depuis que le
-			// DU n'est plus jamais distribué qu'en jetons faibles (voir
-			// computeDuBreakdown), plus besoin de détailler par dénomination -
-			// medium/strong sont toujours à 0 désormais.
+			// Le DU (voir computeCurrentDU) est une VALEUR MONÉTAIRE, PAS un
+			// nombre de jetons - jamais afficher "du" directement comme un
+			// compte de jetons (voir computeDuBreakdown, qui fait la VRAIE
+			// conversion monnaie -> jetons via weakCoinValue).
 			const breakdown = computeDuBreakdown(du);
 			fieldset.querySelector(".du-result").innerHTML =
-				`${escapeHtml(t("wiz.death_du_result", { currentValue, du }))}<br>` +
+				`${escapeHtml(t("wiz.death_du_result", { currentValue, du: breakdown.weak }))}<br>` +
 				t("wiz.death_du_breakdown", { weak: breakdown.weak });
 		}
 		document.querySelectorAll(".death-inventory-player").forEach((fieldset) => updatePlayerResult(fieldset));
@@ -3965,23 +3978,21 @@ async function openEndOfTurnWizard() {
 			<p>${t("wiz.other_du_intro")}</p>
 			${staying.length === 0 ? `<p>${t("wiz.no_other_active_player")}</p>` : staying.map((p) => {
 				const coins = allPlayersMoneyInventory[p.id] || { weak: 0, medium: 0, strong: 0 };
-				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) :
-				// même correction que dans renderStepDyingCardsDU/updateCheck -
-				// "coins" est déjà un décompte abstrait, ne JAMAIS le multiplier
-				// encore par weakCoinValue.
+				// CONCEPTION FINALE (remonté par l'utilisateur, 09/09/2026) :
+				// "coins" est un décompte de jetons PHYSIQUES (pas une valeur
+				// monétaire) - currentValue reste ce décompte tel quel.
 				const currentValue = coins.weak + (2 * coins.medium) + (4 * coins.strong);
-				const total = currentValue + du;
-				// Remonté par l'utilisateur (08/09/2026) : cette prévisualisation doit
-				// correspondre EXACTEMENT à ce qui sera réellement enregistré (voir
-				// plus bas, renderStep4) - le DU ajouté en jetons faibles au solde
-				// réel existant, jamais une reconstruction du total combiné.
+				// Le DU (voir computeCurrentDU) est une VALEUR MONÉTAIRE - jamais
+				// l'afficher/l'additionner directement comme un nombre de jetons
+				// (voir computeDuBreakdown, la VRAIE conversion monnaie -> jetons).
 				const duBreakdown = computeDuBreakdown(du);
+				const total = currentValue + duBreakdown.weak;
 				const breakdown = { weak: coins.weak + duBreakdown.weak, medium: coins.medium, strong: coins.strong };
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}</legend>
 				<p class="du-result" style="font-size:0.82rem;color:var(--text-dim);">
-					${escapeHtml(t("wiz.du_result", { currentValue, du, total }))}<br>
+					${escapeHtml(t("wiz.du_result", { currentValue, du: duBreakdown.weak, total }))}<br>
 					${t("wiz.death_du_breakdown", { weak: breakdown.weak })}
 				</p>
 			</fieldset>`;

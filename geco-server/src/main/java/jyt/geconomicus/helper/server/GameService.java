@@ -1209,11 +1209,11 @@ public class GameService
 					// décomposée en jetons PHYSIQUES selon "Valeur d'une pièce faible"
 					// (game.weakCoinValue) - jamais recalculée après coup, ce compte
 					// devient la SEULE source de vérité pour ce joueur désormais.
-					// Remonté par l'utilisateur (09/09/2026) : "7" fixé en dur
-					// remplacé par la référence weakCoinValue-dépendante (voir
-					// Game.computeWeakJetonsPerDU) - identique à "7" quand
-					// weakCoinValue vaut 1.
-					final int[] startingJetons = computeDuBreakdown(game.computeWeakJetonsPerDU());
+					// Remonté par l'utilisateur (09/09/2026) : "7" (valeur FIXE en
+					// unités monétaires, jamais mise à l'échelle elle-même - voir
+					// Event.java, cas JOIN) converti en nombre de jetons faibles
+					// PHYSIQUES via Game.computeStartingJetonsPerPlayer.
+					final int[] startingJetons = computeDuBreakdown(game.computeStartingJetonsPerPlayer());
 					player.setJetonWeak(startingJetons[0]);
 					player.setJetonMedium(startingJetons[1]);
 					player.setJetonStrong(startingJetons[2]);
@@ -1568,7 +1568,7 @@ public class GameService
 	 * Remonté par l'utilisateur (08/09/2026, précisé le 09/09/2026) : le DU
 	 * est toujours distribué en jetons FAIBLES (voir la même fonction côté
 	 * client, computeDuBreakdown dans app.js) - son entrée est déjà un
-	 * décompte de jetons (voir Game.computeWeakJetonsPerDU, qui intègre
+	 * décompte de jetons (voir Game.computeStartingJetonsPerPlayer, qui intègre
 	 * désormais weakCoinValue en amont), jamais une valeur à reconvertir ici
 	 * une seconde fois.
 	 */

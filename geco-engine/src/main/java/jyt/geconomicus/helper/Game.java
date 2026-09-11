@@ -587,21 +587,87 @@ public class Game implements Serializable
 
 	/**
 	 * Remonté par l'utilisateur (09/09/2026) : "au départ, 1 DU = 7 unités
-	 * monétaires. Donc si mon jeton de valeur faible est égal à 1 unité
-	 * monétaire, alors il en faut 7 pour faire un DU. De même, si mon jeton
-	 * de valeur faible est égal à 0.5 unité monétaire, alors il faut
-	 * 7/0.5=14 jetons de valeurs faibles pour avoir 1 DU sur smartphone."
-	 * Confirmé explicitement par l'utilisateur : la masse monétaire globale
-	 * (voir tous les appelants) doit ELLE AUSSI suivre cette même référence,
-	 * pour rester cohérente - remplace la constante "7" fixée en dur
-	 * utilisée jusqu'ici (mise en place, DU normal et de renaissance en
-	 * mode strict TRM, cible en mode non strict) par ce calcul, qui
-	 * redonne exactement "7" quand weakCoinValue vaut 1 (comportement
-	 * inchangé dans ce cas précis, le plus courant).
+	 * monétaires" - la dotation de départ (voir la règle officielle
+	 * geconomicus.glibre.org/libre_money.html : "chaque joueur reçoit 1
+	 * billet de chacune des 3 couleurs", soit 1+2+4=7) reste une constante
+	 * FIXE de 7 unités monétaires par joueur, jamais mise à l'échelle par
+	 * weakCoinValue elle-même (celui-ci sert uniquement à convertir cette
+	 * valeur réelle en un nombre de jetons faibles physiques, voir
+	 * l'appelant) - redonne exactement 7 jetons quand weakCoinValue vaut 1
+	 * (comportement inchangé dans ce cas précis, le plus courant).
 	 */
-	public int computeWeakJetonsPerDU()
+	public int computeStartingJetonsPerPlayer()
 	{
 		return Math.max(1, (int) Math.round(7 / ((weakCoinValue == 0) ? 1 : weakCoinValue)));
+	}
+
+	/**
+	 * Remonté par l'utilisateur (09/09/2026) : "le programme actuel confond
+	 * le DU et la monnaie... le DU se calcule à l'aide d'une formule
+	 * mathématique qui divise la masse monétaire globale en circulation par
+	 * le nombre de personnes vivantes multiplié par un coefficient qui
+	 * dépend de la durée de vie moyenne des êtres humains." Formule exacte
+	 * de la Théorie Relative de la Monnaie (trm.creationmonetaire.info,
+	 * vérifiée par recherche - "c" y est donné explicitement comme valant
+	 * ~9,2%/an pour une espérance de vie ev=80 ans, ce que cette formule
+	 * reproduit EXACTEMENT) :
+	 *
+	 *     c = ln(ev/2) / (ev/2)     (taux de croissance ANNUEL)
+	 *     DU(t) = c × M(t) / N(t)   (masse monétaire, nombre de vivants)
+	 *
+	 * "ev" (espérance de vie) confirmée par l'utilisateur : la durée
+	 * simulée de CETTE partie précise (nombre de tours × 8 ans, convention
+	 * déjà établie ailleurs dans le jeu - voir "1 tour = 8 ans", 80 ans /
+	 * 10 tours), jamais une référence fixe à 80 ans indépendante du nombre
+	 * de tours choisi. "c" étant un taux ANNUEL et un tour représentant 8
+	 * ans, il est composé sur cette durée pour obtenir le taux de
+	 * croissance RÉELLEMENT appliqué à chaque tour - cette méthode retourne
+	 * ce taux composé, prêt à être multiplié directement par la masse
+	 * monétaire courante (voir les appelants : Event.java, JOIN/TURN/DEATH).
+	 * Vérifié par simulation : redonne une croissance d'environ ×2,28 par
+	 * tour pour une partie à 8 tours (64 ans) - cohérent avec la règle
+	 * physique officielle ("on double ainsi la masse monétaire à chaque
+	 * tour").
+	 */
+	public double computeDuGrowthRatePerTurn()
+	{
+		final double YEARS_PER_TURN = 8; // convention du jeu, voir "80 ans / 10 tours" ailleurs dans le code
+		final double evYears = Math.max(1, nbTurnsPlanned) * YEARS_PER_TURN;
+		final double halfEv = evYears / 2;
+		final double cAnnual = Math.log(halfEv) / halfEv;
+		return Math.pow(1 + cAnnual, YEARS_PER_TURN) - 1;
+	}
+
+	/**
+	 * Remonté par l'utilisateur (09/09/2026) : "arrange-toi pour que la masse
+	 * monétaire globale reste juste et cohérente avec la somme globale des
+	 * unités monétaires en circulation chez les joueurs." Vérifié par
+	 * simulation : faire grandir la masse monétaire de façon INDÉPENDANTE
+	 * (une formule côté serveur, une autre côté client pour les jetons
+	 * réellement distribués) crée un écart qui peut S'ACCUMULER au fil des
+	 * tours dès que "Valeur d'une pièce faible" ne divise pas exactement la
+	 * dotation de référence (7) - deux arrondis séparés qui ne coïncident
+	 * pas toujours exactement.
+	 *
+	 * Corrigé en ne faisant JAMAIS grandir la masse monétaire de façon
+	 * indépendante : elle est RECALCULÉE directement, comme la somme réelle
+	 * des jetons faibles PHYSIQUEMENT détenus par tous les joueurs ACTIFS
+	 * (convertis en unités monétaires via weakCoinValue) - garantit une
+	 * cohérence parfaite PAR CONSTRUCTION, plutôt que d'espérer que deux
+	 * calculs séparés coïncident. Vérifié par simulation sur 8 tours : écart
+	 * nul pour les valeurs de weakCoinValue qui divisent exactement la
+	 * dotation de référence, et borné à moins d'une demi-unité monétaire
+	 * (jamais croissant) pour les autres - la seule limite restante étant
+	 * la contrainte des nombres entiers elle-même (voir aussi la demande de
+	 * l'utilisateur : "arrondir les montants pour conserver des entiers").
+	 */
+	public int computeMoneyMassFromActivePlayersJetons()
+	{
+		double total = 0;
+		for (final Player p : players)
+			if (p.isActive())
+				total += p.getJetonWeak() * weakCoinValue;
+		return (int) Math.round(total);
 	}
 
 	public void setWeakCoinValue(final double pWeakCoinValue)
