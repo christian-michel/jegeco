@@ -3705,6 +3705,23 @@ async function openEndOfTurnWizard() {
 		return { weak, medium: 0, strong: 0 };
 	}
 
+	// BUG TROUVÉ ET CORRIGÉ (11/09/2026, audit + test réel bout-en-bout) :
+	// cette fonction était appelée à deux endroits (computeLibrePrefill,
+	// renderStepOtherDU) mais n'était plus définie nulle part dans ce fichier -
+	// "ReferenceError: computeWeakJetonsPerDU is not defined", plantant
+	// SYSTÉMATIQUEMENT l'étape "Distribution du DU" dès qu'il restait au moins
+	// un survivant (donc à quasiment CHAQUE tour d'une partie en monnaie libre
+	// smartphone) - confirmé en pilotant l'app réelle dans un navigateur,
+	// jamais détecté par les seuls appels API directs (qui contournent ce
+	// code JS). Portage EXACT de Game.computeStartingJetonsPerPlayer() côté
+	// moteur (même formule, même garde-fou weakCoinValue==0) : la dotation de
+	// départ fixe de 7 unités monétaires, convertie en nombre de jetons
+	// faibles via "Valeur d'une pièce faible" - jamais recalculée séparément
+	// ici avec une formule qui pourrait diverger de celle du serveur.
+	function computeWeakJetonsPerDU() {
+		return Math.max(1, Math.round(7 / (game.weakCoinValue || 1)));
+	}
+
 	// Étape 1 (nouvel ordre demandé par un utilisateur) : inventaire en JETONS de
 	// TOUS les joueurs actifs, mourants et survivants confondus - avant même de
 	// déclencher quoi que ce soit. Objectif : établir un contrôle de collecte
