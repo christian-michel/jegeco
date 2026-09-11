@@ -124,7 +124,16 @@ Source de vérité **unique** : `Game.java` —
   actifs, à chaque `TURN`/`DEATH` en strict TRM (voir `Event.java`).
   Garantit une cohérence exacte par construction plutôt que d'espérer que
   deux calculs séparés (masse globale d'un côté, jetons distribués de
-  l'autre) coïncident.
+  l'autre) coïncident. **Uniquement pour une partie suivie par smartphone**
+  (au moins un joueur actif avec `Player.startingCardsJson != null`, voir
+  `Event.isSmartphoneTrackedGame()`) : en mode classique (sans smartphone,
+  ni dans l'app Swing `geco-app`), `jetonWeak` n'est jamais renseigné et
+  resterait à 0 pour tout le monde — ces parties gardent donc l'ancien
+  mécanisme (DU "simple" = masse / (7 × joueurs actifs × facteur), ajouté
+  à la masse, sans formule de croissance TRM). Correctif du 11/09/2026,
+  suite à un audit : la version précédente cassait strict TRM en mode
+  classique (masse remise à 0 à chaque mort/tour) et le test
+  `FreeMoneySystemTest.testStrictTrmNeverDecreasesMoneyMassAtDeath`.
 - `computeStartingJetonsPerPlayer()` — dotation de départ (7 unités
   monétaires FIXES par joueur, converties en jetons via "Valeur d'une
   pièce faible").
@@ -141,12 +150,21 @@ bancaire (arrondit 0,5 vers le PAIR le plus proche) — **différent** de
 en Java/JS, utilise `math.floor(x + 0.5)`, jamais `round(x)` — un piège
 rencontré et corrigé plusieurs fois pendant le développement.
 
-**Séquencement important** (`GameService.recordEvent`) : pour un événement
-`WEALTH_CHECKPOINT`/`DEATH` en monnaie libre smartphone, `player.jetonWeak`
-est mis à jour **avant** l'appel à `event.applyEvent()` — c'est ce qui
-permet à `computeMoneyMassFromActivePlayersJetons()` (appelée depuis
-`applyEvent()`) de voir la valeur à jour. Si tu déplaces ce code, vérifie
-que cet ordre est préservé.
+**Séquencement important** (`Event.applyEvent()`, cas `WEALTH_CHECKPOINT`/
+`DEATH`) : pour un joueur en monnaie libre suivi par smartphone,
+`player.jetonWeak` est mis à jour **en tout premier**, avant tout calcul de
+masse monétaire — c'est ce qui permet à
+`computeMoneyMassFromActivePlayersJetons()`, appelée juste après, de voir la
+valeur à jour. Déplacé depuis `GameService.recordEvent()` vers le moteur le
+11/09/2026 (audit + confirmation utilisateur) : ce code ne fonctionnait que
+pour le chemin "en direct" — un rejeu historique (`Game.recomputeAll()`,
+utilisé par `StatsService.computeWealthOverTime` pour le graphique "module
+Galilée" et par `GameService.deleteEvent`/`editEvent`/`undoLastEvent`)
+n'appelle jamais `GameService`, seulement `applyEvent()` sur chaque
+événement — `jetonWeak` restait donc bloqué à sa valeur ACTUELLE au lieu de
+refléter l'état réel à chaque instant rejoué. Si tu déplaces ce code, vérifie
+que cet ordre (jetonWeak avant tout calcul de masse) est préservé, et qu'il
+reste dans le moteur pour fonctionner identiquement en direct et en rejeu.
 
 ## Système de journalisation (utile pour diagnostiquer)
 

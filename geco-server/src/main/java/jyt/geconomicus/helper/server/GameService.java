@@ -445,25 +445,14 @@ public class GameService
 			event.setWeakCoins(pWeakCoins);
 			event.setMediumCoins(pMediumCoins);
 			event.setStrongCoins(pStrongCoins);
-			// Remonté par l'utilisateur (07/09/2026) : "il faut que chaque jeton en
-			// circulation puisse être traçable et à un seul endroit à la fois" -
-			// sur un WEALTH_CHECKPOINT (chaque tour) OU un DEATH (renaissance),
-			// pour un joueur en monnaie libre suivi par smartphone, les valeurs
-			// CONFIRMÉES par l'animateur (pWeakCoins/pMediumCoins/pStrongCoins -
-			// déjà correctes pour DEATH depuis le correctif précédent : le DU
-			// seul, jamais l'ancien solde) devi​ennent la nouvelle vérité pour
-			// Player.jetonWeak&co - jamais recalculées après coup depuis
-			// l'historique, contrairement à l'ancien système
-			// (GameService.computeTradeBalance, maintenant remplacé par une
-			// simple lecture directe de ces trois champs).
-			if (((type == EventType.WEALTH_CHECKPOINT) || (type == EventType.DEATH))
-					&& (game.getMoneySystem() == Game.MONEY_LIBRE) && (player != null)
-					&& (player.getStartingCardsJson() != null))
-			{
-				player.setJetonWeak(pWeakCoins);
-				player.setJetonMedium(pMediumCoins);
-				player.setJetonStrong(pStrongCoins);
-			}
+			// Correctif (11/09/2026, audit + confirmation utilisateur) : la mise à
+			// jour de Player.jetonWeak&co pour un WEALTH_CHECKPOINT/DEATH en
+			// monnaie libre suivie par smartphone (introduite ici le 07/09/2026)
+			// est déplacée dans Event.applyEvent() - cet appel a lieu juste après
+			// (voir plus bas), et c'est désormais l'unique endroit qui fait cette
+			// mise à jour, pour qu'elle fonctionne aussi bien en direct qu'en rejeu
+			// historique (Game.recomputeAll(), qui n'appelle jamais GameService).
+			// Voir Event.java pour le détail complet.
 			event.setCounterpartyPlayer(counterpartyPlayer);
 			event.setGoodsFromPlayer(pGoodsFromPlayer);
 			event.setGoodsFromCounterparty(pGoodsFromCounterparty);

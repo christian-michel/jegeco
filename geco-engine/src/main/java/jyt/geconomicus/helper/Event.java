@@ -375,6 +375,36 @@ public class Event implements Serializable
 	}
 
 	/**
+	 * Ajouté le 11/09/2026 (audit + confirmation utilisateur) : distingue une
+	 * partie monnaie libre suivie par SMARTPHONE (où {@code Player.jetonWeak}
+	 * est tenu à jour en direct, voir {@code GameService.recordEvent}) d'une
+	 * partie CLASSIQUE (animateur seul, jamais de smartphone - voir
+	 * {@code AppSettings.GAME_MODE_SMARTPHONE} côté serveur, jamais consulté
+	 * ici puisque c'est un réglage global d'app, pas une donnée de partie) ou
+	 * jouée via l'app Swing (geco-app, qui ignore totalement jetonWeak).
+	 * Un seul joueur actif réellement suivi ({@code startingCardsJson != null},
+	 * posé par {@code GameService.dealStartingHandsForLibreIfNeeded}) suffit à
+	 * qualifier la partie entière : en pratique, soit TOUS les joueurs actifs
+	 * l'ont (mise en place déjà faite pour tout le monde), soit AUCUN (mode
+	 * classique) - le mode est un réglage global, pas mélangé au sein d'une
+	 * même partie.
+	 * <p>
+	 * Utilisé par les cas DEATH/TURN en mode strict TRM ci-dessous : seule une
+	 * partie ainsi suivie a des jetons réels PAR JOUEUR sur lesquels recalculer
+	 * exactement la masse monétaire (voir {@link Game#computeMoneyMassFromActivePlayersJetons()})
+	 * - une partie classique n'a que l'ancien mécanisme (DU "simple" ajouté à
+	 * la masse) à sa disposition, faute de connaître les jetons réels de
+	 * chacun en continu.
+	 */
+	private static boolean isSmartphoneTrackedGame(final Game pGame)
+	{
+		for (final Player p : pGame.getPlayers())
+			if (p.isActive() && (p.getStartingCardsJson() != null))
+				return true;
+		return false;
+	}
+
+	/**
 	 * Applies this event to the current game.<br>
 	 * It adds seized values or interest gained, increments or decrements the money owed by a player,
 	 * adjusts the current money mass, etc.
@@ -395,6 +425,29 @@ public class Event implements Serializable
 		case QUIT:
 		case DEATH:
 		{
+			// Ajouté le 11/09/2026 (audit + confirmation utilisateur) : cette mise à
+			// jour vivait jusqu'ici dans GameService.recordEvent (côté web), APPELÉE
+			// AVANT applyEvent() - ça fonctionnait pour le chemin "en direct", mais
+			// pas pour un REJEU historique (Game.recomputeAll(), utilisé par
+			// StatsService.computeWealthOverTime pour le graphique "module Galilée"
+			// et par GameService.deleteEvent/editEvent/undoLastEvent) : le rejeu
+			// n'appelle que applyEvent() sur chaque événement, jamais GameService -
+			// jetonWeak restait donc à sa valeur ACTUELLE (celle d'aujourd'hui) à
+			// chaque étape du rejeu, au lieu de refléter l'état réellement vrai à ce
+			// moment précis de l'historique. Déplacé ici (source de vérité unique,
+			// comme documenté dans CLAUDE.md : "le moteur ne change jamais de
+			// comportement entre web et Swing") : fonctionne désormais identiquement
+			// en direct ET en rejeu, puisque chaque WEALTH_CHECKPOINT/DEATH rejoué
+			// remet jetonWeak à la valeur qu'il avait RÉELLEMENT à cet instant
+			// (celle persistée sur CET événement), avant que la ligne suivante
+			// (calcul strict TRM) ne s'en serve.
+			if (EventType.DEATH.equals(evt) && (game.getMoneySystem() == Game.MONEY_LIBRE)
+					&& (player.getStartingCardsJson() != null))
+			{
+				player.setJetonWeak(weakCoins);
+				player.setJetonMedium(mediumCoins);
+				player.setJetonStrong(strongCoins);
+			}
 			// A player has finished playing - do an inventory of what he has left
 			// take that into account in the total money mass
 			// Remonté par un utilisateur : mode "strict TRM" (voir Game.isStrictTrm,
@@ -446,7 +499,37 @@ public class Event implements Serializable
 				// Game.computeMoneyMassFromActivePlayersJetons, appelée
 				// APRÈS que son propre jetonWeak a déjà été mis à jour) -
 				// garantit une cohérence parfaite par construction.
-					game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
+				//
+				// BUG TROUVÉ ET CORRIGÉ (11/09/2026, audit + confirmation
+				// utilisateur) : ce recalcul suppose que TOUS les joueurs actifs
+				// sont suivis en jetons réels (mode smartphone, voir
+				// Player.startingCardsJson) - or ce champ n'est JAMAIS renseigné
+				// en mode classique (sans smartphone, voir
+				// AppSettings.GAME_MODE_SMARTPHONE côté serveur, jamais consulté
+				// depuis geco-engine) ni par l'app Swing (geco-app), qui ignore
+				// totalement jetonWeak. Résultat : une partie strict TRM classique
+				// voyait sa masse monétaire retomber à 0 à chaque mort (tous les
+				// jetonWeak valant 0), régression confirmée par
+				// FreeMoneySystemTest.testStrictTrmNeverDecreasesMoneyMassAtDeath.
+				// Décision utilisateur (11/09/2026) : garder l'ancien mécanisme
+				// (DU "simple" du moment ajouté à la masse, sans connaître les
+				// jetons réels de chacun) pour le mode classique - le recalcul
+				// exact par les jetons réels ne s'applique donc plus qu'aux
+				// parties effectivement suivies par smartphone.
+				{
+					if (isSmartphoneTrackedGame(game))
+						game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
+					else
+					{
+						int nbActivePlayers = 0;
+						for (Player p2 : game.getPlayers())
+							if (p2.isActive())
+								nbActivePlayers++;
+						final int du = nbActivePlayers > 0
+								? game.getMoneyMass() / (7 * nbActivePlayers * game.getMoneyCardsFactor()) : 0;
+						game.changeMoneyMass(du);
+					}
+				}
 				else
 				// adjust money mass
 					game.changeMoneyMass(8 * game.getMoneyCardsFactor());
@@ -564,8 +647,28 @@ public class Event implements Serializable
 				// croissance indépendante) : ici, peu importe COMBIEN DE FOIS
 				// ni COMMENT un joueur a reçu des jetons ce tour, seul ce qu'il
 				// détient RÉELLEMENT au final est compté, une seule fois.
+				// BUG TROUVÉ ET CORRIGÉ (11/09/2026, audit + confirmation utilisateur) :
+				// computeMoneyMassFromActivePlayersJetons() suppose que tous les
+				// joueurs actifs sont suivis en jetons réels (mode smartphone) - en
+				// mode classique (sans smartphone, ni dans l'app Swing), jetonWeak
+				// n'est jamais renseigné et reste à 0 pour tout le monde, ce qui
+				// aurait remis la masse monétaire à 0 à chaque tour. Décision
+				// utilisateur : garder pour le mode classique l'ancien mécanisme
+				// (celui introduit par le commit 3f4446f, juste avant le passage au
+				// recalcul par les jetons réels) - le DU "simple" du moment
+				// (masse / (7 × joueurs actifs × facteur), sans formule de
+				// croissance TRM) multiplié par le nombre de joueurs, ajouté à la
+				// masse. Voir la même distinction au cas DEATH ci-dessus.
 				if (game.isStrictTrm())
-					game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
+				{
+					if (isSmartphoneTrackedGame(game))
+						game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
+					else if (nbPlayers > 0)
+					{
+						final int du = game.getMoneyMass() / (7 * nbPlayers * game.getMoneyCardsFactor());
+						game.changeMoneyMass(du * nbPlayers);
+					}
+				}
 				else
 				// The money mass is going towards the average
 				// Note that we don't have the actual data of how much money each player is giving away
@@ -590,11 +693,29 @@ public class Event implements Serializable
 			// Nothing to do here
 			break;
 		case WEALTH_CHECKPOINT:
-			// Volontairement AUCUN effet sur l'état du jeu (voir le commentaire sur
-			// ce type d'événement ci-dessus) : ni masse monétaire, ni cartes, ni
-			// saisie - un simple point de mesure pour StatsService.
-			// computeWealthOverTime, jamais un mouvement d'argent réel comme le
-			// sont DEATH/QUIT juste au-dessus.
+			// Volontairement AUCUN effet sur la masse monétaire, les cartes ou une
+			// saisie (voir le commentaire sur ce type d'événement ci-dessus) : ce
+			// n'est jamais un mouvement d'argent réel comme le sont DEATH/QUIT
+			// juste au-dessus.
+			//
+			// Ajouté le 11/09/2026 (audit + confirmation utilisateur, même
+			// raisonnement que pour DEATH ci-dessus) : en revanche, pour un joueur
+			// suivi par smartphone, ce point de contrôle DOIT mettre à jour
+			// Player.jetonWeak&co - c'est justement le mécanisme qui rend son solde
+			// disponible pour le calcul strict TRM du TOUR SUIVANT
+			// (Game.computeMoneyMassFromActivePlayersJetons) et pour la
+			// reconstruction historique correcte du graphique "module Galilée"
+			// (StatsService.computeWealthOverTime, qui rejoue l'historique via
+			// Game.recomputeAll() - seul applyEvent() est appelé pendant ce rejeu,
+			// jamais GameService). Déplacé ici depuis GameService.recordEvent pour
+			// la même raison qu'au cas DEATH : une seule source de vérité,
+			// fonctionnant identiquement en direct et en rejeu.
+			if ((game.getMoneySystem() == Game.MONEY_LIBRE) && (player.getStartingCardsJson() != null))
+			{
+				player.setJetonWeak(weakCoins);
+				player.setJetonMedium(mediumCoins);
+				player.setJetonStrong(strongCoins);
+			}
 			break;
 		case SIDE_INVESTMENT:
 			// The bank invests some money and cards
