@@ -3629,44 +3629,25 @@ async function openEndOfTurnWizard() {
 		return Math.max(1, Math.round(7 / (game.weakCoinValue || 1)));
 	}
 
-	// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) : "le
-	// programme actuel confond le DU et la monnaie... l'assistant prétend
-	// donner 1 DU mais il ne donne qu'1 jeton car il confond le jeton et le
-	// DU." Le DU n'est PAS un nombre de jetons - c'est une VALEUR MONÉTAIRE
-	// calculée par la vraie formule de la Théorie Relative de la Monnaie
-	// (vérifiée sur trm.creationmonetaire.info - "c" y est donné
-	// explicitement comme valant ~9,2%/an pour une espérance de vie ev=80
-	// ans, ce que cette formule reproduit EXACTEMENT) :
-	//
-	//     c = ln(ev/2) / (ev/2)     (taux de croissance ANNUEL)
-	//     DU(t) = c × M(t) / N(t)   (masse monétaire, nombre de vivants)
-	//
-	// "ev" (espérance de vie) confirmée par l'utilisateur : la durée
-	// simulée de CETTE partie précise (nombre de tours × 8 ans, convention
-	// déjà établie ailleurs dans le jeu - voir "1 tour = 8 ans" au moment
-	// de la création de la partie), jamais une référence fixe à 80 ans.
-	// "c" étant un taux ANNUEL et un tour représentant 8 ans, il est
-	// composé sur cette durée pour obtenir le taux RÉELLEMENT appliqué à
-	// chaque tour. Portage exact de Game.computeDuGrowthRatePerTurn côté
-	// moteur - vérifié par simulation : redonne une croissance d'environ
-	// ×2,28 par tour pour une partie à 8 tours (64 ans), cohérent avec la
-	// règle physique officielle ("on double ainsi la masse monétaire à
-	// chaque tour").
-	function computeDuGrowthRatePerTurn() {
-		const YEARS_PER_TURN = 8; // convention du jeu, voir "80 ans / 10 tours" ailleurs dans le code
-		const evYears = Math.max(1, game.nbTurnsPlanned) * YEARS_PER_TURN;
-		const halfEv = evYears / 2;
-		const cAnnual = Math.log(halfEv) / halfEv;
-		return Math.pow(1 + cAnnual, YEARS_PER_TURN) - 1;
-	}
+	// (Note historique, 09/09/2026 : cette section calculait autrefois ici,
+	// côté client, le taux de croissance du DU (formule TRM complète) -
+	// désormais calculé UNE SEULE FOIS côté serveur, voir Game.
+	// computeDuGrowthRatePerTurn/computeCurrentDU, et simplement LU depuis
+	// game.currentDuValue (voir computeCurrentDU ci-dessous) - jamais
+	// recalculé séparément ici, pour écarter tout risque de divergence
+	// entre les deux applications si l'une des deux formules venait à être
+	// mise à jour sans l'autre.)
 
 	function computeCurrentDU() {
-		if (game.activePlayersCount === 0) return 0;
-		// Le DU est une VALEUR MONÉTAIRE (voir le commentaire ci-dessus) -
-		// jamais un décompte de jetons. La conversion en jetons faibles
-		// PHYSIQUES à distribuer se fait séparément (voir computeDuBreakdown),
-		// jamais mélangée à ce calcul.
-		return Math.round(computeDuGrowthRatePerTurn() * game.moneyMass / game.activePlayersCount);
+		// Remonté par l'utilisateur (09/09/2026) : "il faut fixer le prix
+		// d'une carte de monnaie libre en DU" - le smartphone a lui aussi
+		// besoin de connaître cette même valeur pour calculer ses prix.
+		// Calculée désormais UNE SEULE FOIS côté serveur (voir
+		// Game.computeCurrentDU) et exposée aux DEUX applications via
+		// game.currentDuValue - jamais recalculée séparément ici, pour
+		// écarter tout risque de divergence entre les deux si l'une des
+		// deux formules venait à être mise à jour sans l'autre.
+		return game.currentDuValue || 0;
 	}
 
 	// Remonté par un utilisateur, avec le document de spécification détaillé à

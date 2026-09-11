@@ -971,7 +971,7 @@ public class GecoServer
 			}
 			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
 					game.getMoneySystem(), mGameService.isTradingAllowed(game), game.getWeakCoinValue(),
-					game.getPausedRemainingSeconds() != null));
+					game.getPausedRemainingSeconds() != null, game.computeCurrentDU()));
 		});
 
 		// Inventaire de cartes d'un joueur, par SON PROPRE jeton (voir "Mes

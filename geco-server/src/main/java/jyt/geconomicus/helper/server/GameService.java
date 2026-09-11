@@ -567,7 +567,7 @@ public class GameService
 			int actualStrongChange = 0;
 			if (game.getMoneySystem() == Game.MONEY_LIBRE)
 			{
-				final int requiredValue = levelValue(pCardLevel);
+				final int requiredValue = levelValue(game, pCardLevel);
 				final int buyerValue = buyer.getJetonWeak() + (2 * buyer.getJetonMedium())
 						+ (4 * buyer.getJetonStrong());
 				// Remonté par l'utilisateur (07/09/2026) : "il faut que l'acheteur
@@ -760,9 +760,10 @@ public class GameService
 		{
 			final Player buyer = em.find(Player.class, pBuyerPlayerId);
 			final Player seller = em.find(Player.class, pSellerPlayerId);
-			if ((buyer == null) || (seller == null))
+			final Game game = em.find(Game.class, pGameId);
+			if ((buyer == null) || (seller == null) || (game == null))
 				return false;
-			final int requiredValue = levelValue(pCardLevel);
+			final int requiredValue = levelValue(game, pCardLevel);
 			return findPaymentWithChange(buyer.getJetonWeak(), buyer.getJetonMedium(), buyer.getJetonStrong(),
 					seller.getJetonWeak(), seller.getJetonMedium(), seller.getJetonStrong(), requiredValue) != null;
 		}
@@ -1662,17 +1663,31 @@ public class GameService
 	 * (geconomicus.glibre.org/libre_money.html : "3, 6, 12" - tresforte à 24
 	 * extrapolée, absente des règles à 3 niveaux).
 	 */
-	private int levelValue(final String pLevel)
+	/**
+	 * Remonté par l'utilisateur (09/09/2026) : "pour les cartes, elles ne se
+	 * calculent en DU que sur la partie monnaie libre avec le smartphone...
+	 * il faut fixer le prix d'une carte de monnaie libre en DU. Par exemple,
+	 * une carte faible est égale à 0.5 DU." Prix FIXÉS en DU (mêmes
+	 * proportions que l'ancien système en valeur abstraite - 1:2:4:8 -
+	 * jamais changées, seule leur unité change : DU au lieu d'une valeur
+	 * abstraite fixe), convertis en jetons faibles PHYSIQUES via le DU
+	 * COURANT (voir Game.computeCurrentDU) puis "Valeur d'une pièce
+	 * faible" - un prix qui varie donc réellement d'un tour à l'autre,
+	 * suivant le DU. "Mode classique" (monnaie libre SANS smartphone) non
+	 * concerné par ce changement - cette méthode n'est appelée que depuis
+	 * le flux de transaction smartphone (recordTransaction/
+	 * canAffordLibrePurchase), jamais depuis l'assistant classique.
+	 */
+	private int levelValue(final Game pGame, final String pLevel)
 	{
-		if ("faible".equals(pLevel)) //$NON-NLS-1$
-			return 3;
-		if ("moyenne".equals(pLevel)) //$NON-NLS-1$
-			return 6;
-		if ("forte".equals(pLevel)) //$NON-NLS-1$
-			return 12;
-		if ("tresforte".equals(pLevel)) //$NON-NLS-1$
-			return 24;
-		return 0; // niveau inconnu (ne devrait jamais arriver) : prix nul plutôt qu'une exception
+		// Réutilise Game.cardPriceInDU comme SEULE source de vérité pour ces
+		// proportions - jamais une seconde copie ici qui pourrait diverger.
+		final double priceInDU = Game.cardPriceInDU(pLevel);
+		if (priceInDU == 0)
+			return 0; // niveau inconnu (ne devrait jamais arriver) : prix nul plutôt qu'une exception
+		final double weakCoinValue = (pGame.getWeakCoinValue() == 0) ? 1 : pGame.getWeakCoinValue();
+		final double priceInMonetaryUnits = priceInDU * pGame.computeCurrentDU();
+		return Math.max(0, (int) Math.round(priceInMonetaryUnits / weakCoinValue));
 	}
 
 	// Tire un modèle au hasard parmi ceux ENCORE disponibles (count > 0) dans

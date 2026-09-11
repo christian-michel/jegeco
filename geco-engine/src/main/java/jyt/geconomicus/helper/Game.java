@@ -639,6 +639,56 @@ public class Game implements Serializable
 	}
 
 	/**
+	 * Remonté par l'utilisateur (09/09/2026) : "il faut fixer le prix d'une
+	 * carte de monnaie libre en DU" - calcule la VALEUR MONÉTAIRE actuelle du
+	 * DU (voir computeDuGrowthRatePerTurn pour le détail de la formule TRM),
+	 * exposée aux DEUX applications (animateur ET smartphones, via les DTO)
+	 * pour qu'aucune des deux ne recalcule sa PROPRE version de cette même
+	 * formule - une SEULE source de vérité, jamais deux calculs séparés
+	 * risquant de diverger l'un de l'autre si l'un des deux était mis à jour
+	 * sans l'autre.
+	 */
+	public int computeCurrentDU()
+	{
+		int nbActivePlayers = 0;
+		for (final Player p : players)
+			if (p.isActive())
+				nbActivePlayers++;
+		if (nbActivePlayers == 0)
+			return 0;
+		return (int) Math.round(computeDuGrowthRatePerTurn() * moneyMass / nbActivePlayers);
+	}
+
+	/**
+	 * Remonté par l'utilisateur (09/09/2026) : "il faut fixer le prix d'une
+	 * carte de monnaie libre en DU. Par exemple, une carte faible est égale
+	 * à 0.5DU." Prix en DU pour chaque niveau, dans les mêmes proportions
+	 * que l'ancienne échelle abstraite fixe (3/6/12/24, voir levelValue) -
+	 * 1 DU = 6 unités de cette échelle, ce qui redonne exactement l'exemple
+	 * donné (carte faible : 3/6 = 0,5 DU). Uniquement pour la monnaie LIBRE
+	 * suivie par smartphone - la monnaie dette garde son propre prix fixe en
+	 * jetons (voir GameService.LEVEL_JETON_PRICE côté serveur, inchangé), et
+	 * le mode classique (sans smartphone) reprend le code existant
+	 * (levelValue), non concerné par ce calcul.
+	 */
+	public static double cardPriceInDU(final String pLevel)
+	{
+		switch (pLevel)
+		{
+			case "faible":
+				return 0.5;
+			case "moyenne":
+				return 1;
+			case "forte":
+				return 2;
+			case "tresforte":
+				return 4;
+			default:
+				return 0;
+		}
+	}
+
+	/**
 	 * Remonté par l'utilisateur (09/09/2026) : "arrange-toi pour que la masse
 	 * monétaire globale reste juste et cohérente avec la somme globale des
 	 * unités monétaires en circulation chez les joueurs." Vérifié par
@@ -668,6 +718,26 @@ public class Game implements Serializable
 			if (p.isActive())
 				total += p.getJetonWeak() * weakCoinValue;
 		return (int) Math.round(total);
+	}
+
+	/**
+	 * Remonté par l'utilisateur (09/09/2026) : "pour les cartes, elles ne se
+	 * calculent en DU que sur la partie monnaie libre avec le smartphone" -
+	 * portage EXACT de computeCurrentDU() côté client (app.js), pour que le
+	 * prix des cartes (voir GameService.levelValue) utilise TOUJOURS la
+	 * même valeur de DU que celle affichée/distribuée à l'entre-deux-tours -
+	 * jamais un calcul divergent. Retourne 0 si aucun joueur actif (garde-fou,
+	 * cas extrême qui ne devrait normalement jamais arriver).
+	 */
+	public int computeCurrentDU()
+	{
+		int nbActivePlayers = 0;
+		for (final Player p : players)
+			if (p.isActive())
+				nbActivePlayers++;
+		if (nbActivePlayers == 0)
+			return 0;
+		return (int) Math.round(computeDuGrowthRatePerTurn() * getMoneyMass() / nbActivePlayers);
 	}
 
 	public void setWeakCoinValue(final double pWeakCoinValue)

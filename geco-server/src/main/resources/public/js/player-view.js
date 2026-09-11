@@ -765,23 +765,52 @@ function wireCardModalClicks(container, items) {
 // (Seconde copie retirée le 08/09/2026 - voir le commentaire équivalent plus
 // haut dans ce même fichier.)
 
-// Valeur automatique d'une carte, en jetons, selon son niveau - remonté par
-// l'utilisateur (31/08/2026) : "il faut limiter les risques d'erreurs donc
-// le nombre de saisies humaines. Tout ce qui peut être automatisé doit
-// l'être... la valeur de la carte est définie dans le code", plutôt que de
-// laisser le vendeur fixer librement un prix (steppers manuels, retirés en
-// dette/libre - toujours utilisés en troc, voir plus bas, cette
-// simplification ne concernant que les jetons). Une carte de niveau X vaut
-// toujours 3 jetons de LA DÉNOMINATION CORRESPONDANTE (3 faibles pour une
-// carte faible, 3 moyens pour une carte moyenne, 3 forts pour une carte
-// forte) - tresforte n'ayant pas de 4e dénomination de jeton, 6 jetons forts
-// (même valeur totale que 3 jetons d'une dénomination supérieure aurait eu).
+// Valeur automatique d'une carte, en jetons, selon son niveau.
+// Remonté par un utilisateur : "minimise le nombre de saisies humaines. Tout ce
+// qui peut être automatisé doit l'être... la valeur de la carte est définie
+// dans le code", plutôt que de laisser le vendeur fixer librement un prix
+// (steppers manuels, retirés en dette/libre - toujours utilisés en troc, voir
+// plus bas, cette simplification ne concernant que les jetons).
+//
+// Remonté par l'utilisateur (09/09/2026) : "pour les cartes, elles ne se
+// calculent en DU que sur la partie monnaie libre avec le smartphone. En
+// mode classique on reprend le code existant et en monnaie dette les cartes
+// ont un prix en jetons." LEVEL_JETON_PRICE (prix FIXE, 3 jetons de la
+// dénomination correspondante) reste donc utilisé UNIQUEMENT pour la monnaie
+// DETTE - jamais changé. La monnaie LIBRE utilise désormais un prix
+// EXPRIMÉ EN DU (voir computeLibreCardPrice ci-dessous), converti en jetons
+// FAIBLES uniquement via le DU COURANT - un prix qui varie donc réellement
+// d'un tour à l'autre, suivant le DU, contrairement au prix fixe de la
+// monnaie dette.
 const LEVEL_JETON_PRICE = {
 	faible: { weak: 3, medium: 0, strong: 0 },
 	moyenne: { weak: 0, medium: 3, strong: 0 },
 	forte: { weak: 0, medium: 0, strong: 3 },
 	tresforte: { weak: 0, medium: 0, strong: 6 },
 };
+
+// Remonté par l'utilisateur (09/09/2026) : "il faut fixer le prix d'une carte
+// de monnaie libre en DU. Par exemple, une carte faible est égale à 0.5DU."
+// Mêmes proportions que l'ancien système en valeur abstraite (1:2:4:8),
+// jamais changées - seule leur unité change (DU au lieu d'une valeur
+// abstraite fixe). Portage EXACT de Game.cardPriceInDU côté moteur - jamais
+// réinventée séparément, pour que le prix affiché ici corresponde TOUJOURS
+// exactement à ce que le serveur validera au moment de l'achat (voir
+// GameService.levelValue, la même formule, portée à l'identique).
+const CARD_PRICE_IN_DU = { faible: 0.5, moyenne: 1, forte: 2, tresforte: 4 };
+
+// Prix d'une carte de monnaie LIBRE, en jetons faibles PHYSIQUES à cet
+// instant précis - varie à chaque tour puisque le DU courant (voir
+// PlayerSelfViewDto.currentDuValue, calculé UNE SEULE FOIS côté serveur,
+// jamais recalculé séparément ici pour écarter tout risque de divergence)
+// change lui-même à chaque tour.
+function computeLibreCardPrice(pLevel) {
+	const priceInDU = CARD_PRICE_IN_DU[pLevel] || 0;
+	const currentDU = (state.player && state.player.currentDuValue) || 0;
+	const weakCoinValue = (state.player && state.player.weakCoinValue) || 1;
+	const priceInMonetaryUnits = priceInDU * currentDU;
+	return { weak: Math.max(0, Math.round(priceInMonetaryUnits / weakCoinValue)), medium: 0, strong: 0 };
+}
 
 function openCardModal(item) {
 	state.cardModalItem = item;
@@ -828,7 +857,13 @@ function openCardModal(item) {
 		renderCardModalPriceStep(item);
 	} else {
 		el("cardModalBackBody").innerHTML = `<p style="color:#666;font-size:0.85rem;">${escapeHtmlLocal(t("settings.catalog_loading"))}</p>`;
-		const p = LEVEL_JETON_PRICE[item.entry.niveau] || { weak: 0, medium: 0, strong: 0 };
+		// Remonté par l'utilisateur (09/09/2026) : "les cartes ne se calculent
+		// en DU que sur la partie monnaie libre avec le smartphone... en
+		// monnaie dette les cartes ont un prix en jetons" - LEVEL_JETON_PRICE
+		// (prix fixe) reste utilisé pour la dette, computeLibreCardPrice
+		// (variable, suivant le DU courant) pour la libre.
+		const p = isLibreGame() ? computeLibreCardPrice(item.entry.niveau)
+			: (LEVEL_JETON_PRICE[item.entry.niveau] || { weak: 0, medium: 0, strong: 0 });
 		state.cardModalPrice = { ...p };
 		generateCardModalQr(item);
 	}
