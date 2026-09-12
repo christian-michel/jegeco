@@ -241,28 +241,47 @@ body {
 	background: var(--mist); font-size: 0.78rem; font-family: inherit; color: var(--text);
 }
 .avatar-gallery {
-	display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: minmax(90px, auto); gap: 0.6rem;
-	max-height: 260px; overflow-y: auto; padding: 0.2rem;
+	display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px;
+	max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 0.2rem;
 }
 .avatar-gallery-item {
-	aspect-ratio: 1; border-radius: 16px; border: 2.5px solid var(--border); cursor: pointer; overflow: hidden;
-	background: var(--mist); display: flex; align-items: center; justify-content: center;
-	transition: border-color 0.15s ease, box-shadow 0.15s ease;
-	/* Remonté par l'utilisateur (05/09/2026, capture d'écran iPad) : les
-	   vignettes apparaissaient écrasées/aplaties - aspect-ratio combiné à
-	   une grille CSS avec défilement (overflow-y) est connu pour se
-	   calculer de façon incohérente sur certaines versions de Safari
-	   (iPadOS en particulier). min-height agit comme filet de sécurité,
-	   indépendant du calcul d'aspect-ratio : même si celui-ci échoue, la
-	   vignette ne peut jamais s'écraser sous cette hauteur. 90px correspond
-	   à peu près à la largeur d'une colonne sur 4 dans ce conteneur
-	   (max-width: 460px, voir .join-shell) - un carré approximatif, pas
-	   besoin d'être pixel-parfait pour un simple filet de sécurité.
+	/* Correctif (12/09/2026, retour utilisateur avec capture d'écran - les
+	   vignettes se chevauchaient sur plusieurs rangées) : la combinaison
+	   précédente (aspect-ratio + min-height en filet de sécurité, ajoutée le
+	   05/09/2026 pour un souci d'aplatissement sous Safari/iPadOS) créait
+	   l'écart inverse ailleurs - dès que la largeur RÉELLE d'une colonne (1/4
+	   de la largeur du conteneur, variable selon l'écran) s'éloignait des 90px
+	   supposés par min-height, la hauteur réellement rendue de chaque
+	   vignette ne correspondait plus à ce que "grid-auto-rows: auto"
+	   calculait pour la rangée, d'où le chevauchement. Remplacé par la
+	   technique "padding-top: 100%" (carré garanti par un pourcentage de la
+	   LARGEUR du conteneur, jamais dépendant du calcul d'aspect-ratio ni
+	   d'une valeur de secours en pixels) - fonctionne de façon identique et
+	   fiable sur tous les moteurs de rendu, y compris ceux où aspect-ratio
+	   posait problème. Le contenu (image/svg) est positionné en absolu par-
+	   dessus ce padding, voir la règle juste en dessous.
 	*/
-	min-height: 90px;
+	/* padding-top: calc(100% - 5px) plutôt que 100% pile : sous le reset
+	   global border-box (ligne 54), width:100% donne une largeur EXACTE
+	   (bordure comprise), mais height:0 est impossible à honorer avec une
+	   bordure de 5px au total (2.5px de chaque côté) - le navigateur revient
+	   alors à hauteur = padding-top + bordure, quel que soit box-sizing.
+	   Sans ce -5px, le résultat était donc très légèrement rectangulaire
+	   (hauteur = largeur + 5px) plutôt que carré ; passer à content-box
+	   aurait résolu le carré mais fait déborder chaque vignette de sa
+	   colonne de grille (5px de bordure ajoutés APRÈS width:100%, jamais
+	   absorbés par la piste de la grille) - retenu comme la correction la
+	   plus sûre des deux.
+	*/
+	position: relative; width: 100%; padding-top: calc(100% - 5px); height: 0;
+	border-radius: 16px; border: 2.5px solid var(--border); cursor: pointer; overflow: hidden;
+	background: var(--mist);
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .avatar-gallery-item.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,111,238,0.25); }
-.avatar-gallery-item img, .avatar-gallery-item svg { width: 100%; height: 100%; object-fit: cover; }
+.avatar-gallery-item img, .avatar-gallery-item svg {
+	position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+}
 .avatar-gallery-empty { grid-column: 1 / -1; text-align: center; color: var(--text-dim); font-size: 0.82rem; padding: 1.5rem 0.5rem; }
 
 /* ============ Étape 3 : hub d'échange (vendre / scanner) ============ */

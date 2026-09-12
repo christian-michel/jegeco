@@ -206,6 +206,13 @@ const Api = {
 	// l'utilisateur (31/08/2026) : "seront transmises à l'application de
 	// l'animateur lors de l'entre-deux tour".
 	getSquares: (gameId) => api(`/api/games/${gameId}/squares`),
+	// Étape 3, monnaie libre smartphone : inventaire de cartes {cardTypeId:
+	// quantité} d'UN joueur - même route que celle utilisée par son propre
+	// smartphone (voir player-view.js), réutilisée ici côté animateur pour
+	// préremplir l'inventaire de fin de partie (voir renderEndGameInventory) -
+	// l'animateur connaît déjà le jeton d'accès de chaque joueur
+	// (PlayerDto.accessToken), pas besoin d'une route dédiée séparée.
+	getCardInventoryByToken: (gameId, token) => api(`/api/games/${gameId}/players/by-token/${token}/card-inventory`),
 	checkForUpdates: () => api("/api/updates/check"),
 	listLanguages: () => api("/api/languages"),
 	// Le corps envoyé est le contenu BRUT du fichier .po (pas du JSON) - on
@@ -4132,7 +4139,38 @@ async function openEndOfTurnWizard() {
 	// l'inventaire de chacun (monnaie restante + cartes par valeur), exactement
 	// comme le fait déjà "Un joueur quitte la partie" à tout moment de la partie,
 	// mais ici pour tout le monde d'un coup plutôt qu'un joueur à la fois.
-	function renderEndGameInventory() {
+	// Correctif (12/09/2026, retour utilisateur) : à la toute dernière étape
+	// de l'assistant (bilan de sortie de tous les joueurs en fin de
+	// PARTIE), aucun champ n'était préremplu - contrairement à toutes les
+	// autres étapes (jetons de l'entre-deux-tours, préremplis depuis
+	// PlayerDto.jetonWeak). Calcule ici, pour un joueur suivi par
+	// smartphone, son solde en jetons ET son inventaire de cartes par
+	// niveau (via Api.getCardInventoryByToken + pLevelById, le catalogue
+	// pour connaître le niveau de chaque carte, chargé UNE SEULE FOIS pour
+	// tous les joueurs par l'appelant) - jamais bloquant en cas d'échec
+	// réseau (l'animateur peut toujours corriger un champ resté à 0),
+	// jamais utilisé pour un joueur non suivi (classique/dette), qui garde
+	// le champ à 0 comme avant.
+	async function computeEndGamePrefill(pPlayer, pLevelById) {
+		const coins = pPlayer.hasStartingAllocation ? pPlayer.jetonWeak : computeLibrePrefill(pPlayer.id).weak;
+		let weak = 0, medium = 0, strong = 0;
+		if (pPlayer.hasStartingAllocation && pPlayer.accessToken) {
+			try {
+				const inventory = await Api.getCardInventoryByToken(state.currentGameId, pPlayer.accessToken);
+				for (const [cardId, qty] of Object.entries(inventory)) {
+					const level = pLevelById.get(cardId);
+					if (level === "faible") weak += qty;
+					else if (level === "moyenne") medium += qty;
+					else if ((level === "forte") || (level === "tresforte")) strong += qty;
+				}
+			} catch (err) {
+				pushDebugLog("ERREUR", "computeEndGamePrefill: échec du chargement de l'inventaire de cartes -", err);
+			}
+		}
+		return { coins, weak, medium, strong };
+	}
+
+	async function renderEndGameInventory() {
 		hideGenericButtons();
 		const activePlayers = sortByName(game.players.filter((p) => p.active));
 
@@ -4144,17 +4182,22 @@ async function openEndOfTurnWizard() {
 		// de masse monétaire à vérifier.
 		if (isTroc) {
 			el("dlgTitle").textContent = t("wiz.end_inventory_title");
+			// Préremplissage (retour utilisateur 12/09/2026) : Player.weakGoods/
+			// mediumGoods/strongGoods sont déjà suivis en direct (voir
+			// Event.applyEvent, cas GOODS_TRADE) - même prérempli que celui déjà
+			// utilisé en cours de partie pour la mort/renaissance (voir
+			// renderStepDeathTroc), aucun appel réseau nécessaire ici.
 			el("dlgBody").innerHTML = `
 				<p>${t("wiz.end_inventory_intro")}</p>
 				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => `
 					<fieldset class="death-inventory-player" data-player-id="${p.id}">
 						<legend>${escapeHtml(p.name)}</legend>
 						<label>${t("game.field_weak_cards")}</label>
-						<input type="number" class="eqWeak" value="0" min="0">
+						<input type="number" class="eqWeak" value="${p.weakGoods}" min="0">
 						<label>${t("game.field_medium_cards")}</label>
-						<input type="number" class="eqMedium" value="0" min="0">
+						<input type="number" class="eqMedium" value="${p.mediumGoods}" min="0">
 						<label>${t("game.field_strong_cards")}</label>
-						<input type="number" class="eqStrong" value="0" min="0">
+						<input type="number" class="eqStrong" value="${p.strongGoods}" min="0">
 					</fieldset>`).join("")}
 				<button type="button" class="btn btn-primary btn-block" id="wizNextEndInventory">${t("wiz.validate_continue_btn")}</button>`;
 			el("wizNextEndInventory").onclick = async () => {
@@ -4184,24 +4227,42 @@ async function openEndOfTurnWizard() {
 		// appellera simplement jetons" - un seul champ de jetons désormais.
 		if (!isDebt) {
 			el("dlgTitle").textContent = t("wiz.end_inventory_title");
+			// Préremplissage (retour utilisateur 12/09/2026) : chargement du
+			// catalogue UNE SEULE FOIS pour tous les joueurs (jamais un appel par
+			// joueur), puis calcul en parallèle du solde/inventaire de chacun -
+			// un court message de chargement remplace le formulaire pendant ce
+			// court instant plutôt que de l'afficher à moitié prêt.
+			el("dlgBody").innerHTML = `<p style="color:var(--text-dim);">${t("settings.catalog_loading")}</p>`;
+			let levelById = new Map();
+			try {
+				const catalog = await Api.getCatalog("cartes");
+				levelById = new Map(catalog.map((c) => [c.id, c.niveau]));
+			} catch (err) {
+				pushDebugLog("ERREUR", "renderEndGameInventory: échec du chargement du catalogue -", err);
+			}
+			const prefills = await Promise.all(activePlayers.map((p) => computeEndGamePrefill(p, levelById)));
+			const prefillByPlayerId = new Map(activePlayers.map((p, i) => [p.id, prefills[i]]));
 			el("dlgBody").innerHTML = `
 				<p>${t("wiz.end_inventory_intro")}</p>
 				<p class="du-remaining" style="font-weight:600;"></p>
 				<p class="du-remaining" id="eqCoinsRemaining" style="font-weight:600;"></p>
-				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => `
+				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
+					const pre = prefillByPlayerId.get(p.id);
+					return `
 					<fieldset class="death-inventory-player" data-player-id="${p.id}">
 						<legend>${escapeHtml(p.name)}</legend>
 						<p class="cannot-pay-inventory-title">${t("wiz.death_du_tokens_subtitle")}</p>
 						<label>${t("wiz.field_tokens_simple")}</label>
-						<input type="number" class="eqCoinWeak" value="0" min="0">
+						<input type="number" class="eqCoinWeak" value="${pre.coins}" min="0">
 						<p class="cannot-pay-inventory-title" style="margin-top:0.6rem;">${t("wiz.death_du_cards_subtitle")}</p>
 						<div class="field-row">
-							<div><label>${t("game.field_weak_cards")}</label><input type="number" class="eqWeak" value="0" min="0"></div>
-							<div><label>${t("game.field_medium_cards")}</label><input type="number" class="eqMedium" value="0" min="0"></div>
+							<div><label>${t("game.field_weak_cards")}</label><input type="number" class="eqWeak" value="${pre.weak}" min="0"></div>
+							<div><label>${t("game.field_medium_cards")}</label><input type="number" class="eqMedium" value="${pre.medium}" min="0"></div>
 						</div>
 						<label>${t("game.field_strong_cards")}</label>
-						<input type="number" class="eqStrong" value="0" min="0">
-					</fieldset>`).join("")}
+						<input type="number" class="eqStrong" value="${pre.strong}" min="0">
+					</fieldset>`;
+				}).join("")}
 				<button type="button" class="btn btn-primary btn-block" id="wizNextEndInventory">${t("wiz.validate_continue_btn")}</button>`;
 			el("wizNextEndInventory").onclick = async () => {
 				for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
@@ -4227,15 +4288,23 @@ async function openEndOfTurnWizard() {
 			// valeur) - utile pour vérifier qu'aucune pièce physique n'a été
 			// oubliée, pas seulement que le compte est bon en valeur.
 			function updateRemainingLibre() {
-				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 09/09/2026) :
-				// même correction que dans updateCheck/renderStepOtherDU -
-				// game.moneyMass est toujours abstrait, jamais collectedValue
-				// à multiplier par weakCoinValue avant la comparaison.
+				// BUG TROUVÉ ET CORRIGÉ (12/09/2026, retour utilisateur - visible dès
+				// que weakCoinValue != 1) : malgré le commentaire ci-dessous
+				// (laissé par un correctif du 09/09/2026 qui n'avait en réalité
+				// jamais touché CETTE fonction précise, seulement updateCheck/
+				// renderStepOtherDU), collectedValue additionnait les jetons SAISIS
+				// tels quels, jamais multipliés par weakCoinValue, alors que
+				// game.moneyMass est toujours une VALEUR MONÉTAIRE - "Reste à
+				// collecter" affichait donc un écart absurde (ex. -14 avec
+				// weakCoinValue=0.5) même quand la collecte était en réalité exacte.
+				// collectedCoinCount, lui, reste à raison un compte BRUT de jetons
+				// (voir wiz.remaining_coins_collected, qui affiche "X pièces", pas
+				// une valeur monétaire) - jamais converti.
 				let collectedValue = 0;
 				let collectedCoinCount = 0;
 				document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
 					const cWeak = parseInt(fieldset.querySelector(".eqCoinWeak").value || "0", 10);
-					collectedValue += cWeak;
+					collectedValue += cWeak * (game.weakCoinValue || 1);
 					collectedCoinCount += cWeak;
 				});
 				const remainingValue = game.moneyMass - collectedValue;

@@ -51,9 +51,13 @@
 		<section id="step2" class="join-card hidden">
 			<h2 data-i18n="join.step2_title">2. Créez votre avatar</h2>
 
+			<!-- Correctif (12/09/2026, retour utilisateur) : le badge crayon
+			     décoratif (aria-hidden, sans gestionnaire de clic) laissait
+			     croire à tort qu'on pouvait cliquer dessus pour éditer l'avatar -
+			     retiré, sans fonction ni intention d'en ajouter une (le choix de
+			     l'avatar se fait entièrement via la galerie ci-dessous). -->
 			<div class="avatar-preview-wrap">
 				<div id="avatarPreview" class="avatar-preview"></div>
-				<span class="avatar-preview-badge" aria-hidden="true">✎</span>
 			</div>
 
 			<!-- Remonté par l'utilisateur (02/09/2026) : bascule masquée, la
