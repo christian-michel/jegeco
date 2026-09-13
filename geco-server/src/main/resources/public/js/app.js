@@ -516,6 +516,18 @@ function updateNewGameAdvancedFields(pLibreSmartphone) {
 	const factorField = el("fMoneyCardsFactor");
 	factorField.disabled = el("fStrictTrm").checked;
 	if (factorField.disabled) factorField.value = "1";
+
+	// Remonté par l'utilisateur (13/09/2026, PDF "Retours_-_20260913_2.pdf") :
+	// "en partie monnaie libre avec le smartphone, ne pas afficher cette case
+	// à cocher [pénalité d'un jeton]". Ce réglage n'a d'ailleurs jamais eu
+	// d'effet dans le moteur (voir Game.tokenPenalty : stocké mais jamais lu
+	// par Event.applyEvent) - masquer ne change donc aucun comportement de
+	// jeu, seulement le bruit visuel d'une case sans effet dans ce mode.
+	// Décochée en même temps qu'elle est masquée, par cohérence (jamais
+	// envoyée à true depuis un champ que l'animateur ne peut plus voir).
+	const tokenPenaltyLabel = el("fTokenPenalty").parentElement;
+	tokenPenaltyLabel.classList.toggle("hidden", pLibreSmartphone);
+	if (pLibreSmartphone) el("fTokenPenalty").checked = false;
 }
 
 function selectMoneyChoice(pPlugin) {
@@ -3674,6 +3686,20 @@ async function openEndOfTurnWizard() {
 	// partie (voir renderEndGameInventory/renderEndGameSummary plus bas).
 	const isLastTurn = game.turnNumber >= game.nbTurnsPlanned;
 
+	// Remonté par l'utilisateur (13/09/2026, PDF "Retours_-_20260913_2.pdf") :
+	// plusieurs champs de l'assistant doivent basculer en unités monétaires
+	// (au lieu de jetons) SPÉCIFIQUEMENT en monnaie libre suivie par
+	// smartphone - jamais en monnaie libre CLASSIQUE (sans smartphone),
+	// où l'animateur compte de VRAIS jetons physiques sur la table et
+	// saisit ce compte tel quel (voir CLAUDE.md, "Mode classique"). Même
+	// détection que côté moteur (Event.isSmartphoneTrackedGame()) : au moins
+	// un joueur actif avec une dotation de départ smartphone (voir
+	// PlayerDto.hasStartingAllocation) - jamais une simple lecture de
+	// AppSettings.gameMode, qui ne reflète que le réglage GLOBAL courant,
+	// pas forcément celui utilisé quand CETTE partie a été créée.
+	const isSmartphoneLibre = !isDebt && !isTroc
+		&& game.players.some((p) => p.active && p.hasStartingAllocation);
+
 	// Étape 3, monnaie libre uniquement : charge l'historique des transactions
 	// smartphone une seule fois, avant toute étape de l'assistant (voir
 	// allTransactionsThisGame plus haut) - inutile en dette/troc, qui n'ont pas
@@ -3798,6 +3824,14 @@ async function openEndOfTurnWizard() {
 		return Math.max(1, Math.round(7 / (game.weakCoinValue || 1)));
 	}
 
+	// Arrondi à 2 décimales pour l'affichage d'une valeur monétaire (jamais
+	// utilisé pour un compte de jetons, toujours entier) - évite les longues
+	// décimales binaires (ex. 0.30000000000000004) quand weakCoinValue n'est
+	// pas un nombre "rond".
+	function round2(pValue) {
+		return Math.round(pValue * 100) / 100;
+	}
+
 	// Étape 1 (nouvel ordre demandé par un utilisateur) : inventaire en JETONS de
 	// TOUS les joueurs actifs, mourants et survivants confondus - avant même de
 	// déclencher quoi que ce soit. Objectif : établir un contrôle de collecte
@@ -3810,9 +3844,20 @@ async function openEndOfTurnWizard() {
 		const activePlayers = sortByName(game.players.filter((p) => p.active));
 		allPlayersMoneyInventory = {};
 
-		el("dlgTitle").textContent = t("wiz.all_players_money_title");
+		// BUG TROUVÉ ET CORRIGÉ (13/09/2026, PDF "Retours_-_20260913_2.pdf") :
+		// "remplacer le comptage en jetons par le comptage en unités
+		// monétaires" - en monnaie libre suivie par smartphone UNIQUEMENT
+		// (voir isSmartphoneLibre plus haut). En monnaie libre CLASSIQUE
+		// (sans smartphone), l'animateur compte de VRAIS jetons physiques sur
+		// la table - le champ reste donc "Jetons" tel quel dans ce mode, seul
+		// le libellé/l'affichage changent, jamais la donnée stockée
+		// (allPlayersMoneyInventory reste TOUJOURS un compte de jetons en
+		// interne, seule unité que renderStepDyingCardsDU/renderStepOtherDU
+		// savent utiliser - voir leur "coins.weak" ci-dessous).
+		el("dlgTitle").textContent = t(isSmartphoneLibre
+			? "wiz.all_players_money_title_monetary" : "wiz.all_players_money_title");
 		el("dlgBody").innerHTML = `
-			<p>${t("wiz.all_players_money_intro")}</p>
+			<p>${t(isSmartphoneLibre ? "wiz.all_players_money_intro_monetary" : "wiz.all_players_money_intro")}</p>
 			<p class="galilee-explainer">${t("wiz.all_players_money_prefill_note")}</p>
 			${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
 				// Remonté par l'utilisateur (07/09/2026) : "il faut que chaque
@@ -3836,11 +3881,17 @@ async function openEndOfTurnWizard() {
 					? { weak: p.jetonWeak, medium: p.jetonMedium, strong: p.jetonStrong }
 					: computeLibrePrefill(p.id);
 				const totalTokens = prefill.weak + (2 * prefill.medium) + (4 * prefill.strong);
+				// L'INPUT affiche/attend des unités monétaires en mode
+				// smartphone (totalTokens × weakCoinValue), des jetons bruts
+				// sinon - reconverti en jetons au clic sur "Continuer" (voir
+				// wizNextAllPlayersMoney.onclick ci-dessous), jamais stocké
+				// tel quel dans ce cas.
+				const displayValue = isSmartphoneLibre ? round2(totalTokens * game.weakCoinValue) : totalTokens;
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}</legend>
-				<label>${t("wiz.field_tokens_simple")}</label>
-				<input type="number" class="amWeak" value="${totalTokens}" min="0">
+				<label>${t(isSmartphoneLibre ? "wiz.field_monetary_units_simple" : "wiz.field_tokens_simple")}</label>
+				<input type="number" class="amWeak" value="${displayValue}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}">
 			</fieldset>`;
 			}).join("")}
 			<div id="allPlayersMoneyCheckBlock" style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--border);">
@@ -3850,11 +3901,14 @@ async function openEndOfTurnWizard() {
 		el("wizNextAllPlayersMoney").onclick = () => {
 			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
-				allPlayersMoneyInventory[playerId] = {
-					weak: parseInt(fieldset.querySelector(".amWeak").value || "0", 10),
-					medium: 0,
-					strong: 0,
-				};
+				const entered = parseFloat(fieldset.querySelector(".amWeak").value || "0");
+				// Reconversion en jetons (unité interne, voir commentaire plus
+				// haut) - seulement nécessaire en mode smartphone, où l'animateur
+				// vient de saisir une valeur monétaire, pas un compte de jetons.
+				const weak = isSmartphoneLibre
+					? Math.max(0, Math.round(entered / (game.weakCoinValue || 1)))
+					: Math.max(0, Math.round(entered));
+				allPlayersMoneyInventory[playerId] = { weak, medium: 0, strong: 0 };
 			});
 			if (selectedDeathIds.length > 0) renderStepDyingCardsDU();
 			else renderStepOtherDU();
@@ -3865,14 +3919,15 @@ async function openEndOfTurnWizard() {
 			// est une VRAIE valeur monétaire (formule TRM, voir
 			// computeCurrentDU/Game.computeDuGrowthRatePerTurn) - game.moneyMass
 			// se mesure donc en UNITÉS MONÉTAIRES réelles, jamais en nombre de
-			// jetons. Le champ "Jetons" saisi ici représente un NOMBRE de
-			// jetons faibles physiques - reconverti en unités monétaires (×
-			// weakCoinValue) avant la comparaison, pour rester dans la MÊME
-			// unité que moneyMass.
+			// jetons. Le champ saisi ici représente soit un NOMBRE de jetons
+			// faibles physiques (mode classique - reconverti en unités
+			// monétaires via × weakCoinValue avant la comparaison), soit DÉJÀ
+			// une valeur monétaire (mode smartphone, depuis le correctif du
+			// 13/09/2026 - additionnée telle quelle, sans reconversion).
 			let collected = 0;
 			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
-				const weak = parseInt(fieldset.querySelector(".amWeak").value || "0", 10);
-				collected += weak * game.weakCoinValue;
+				const entered = parseFloat(fieldset.querySelector(".amWeak").value || "0");
+				collected += isSmartphoneLibre ? entered : entered * game.weakCoinValue;
 			});
 			const remaining = game.moneyMass - collected;
 			const elc = document.querySelector(".am-remaining");
@@ -4311,18 +4366,27 @@ async function openEndOfTurnWizard() {
 			}
 			const prefills = await Promise.all(activePlayers.map((p) => computeEndGamePrefill(p, levelById)));
 			const prefillByPlayerId = new Map(activePlayers.map((p, i) => [p.id, prefills[i]]));
+			// BUG TROUVÉ ET CORRIGÉ (13/09/2026, PDF "Retours_-_20260913_2.pdf") :
+			// "remplacer le comptage des jetons par le comptage des unités
+			// monétaires" - en monnaie libre suivie par smartphone UNIQUEMENT
+			// (isSmartphoneLibre, voir plus haut). Même principe qu'à l'étape
+			// renderStepAllPlayersMoney ci-dessus : la donnée envoyée au serveur
+			// (weakCoins) reste TOUJOURS un compte de jetons - seule la SAISIE
+			// de l'animateur change d'unité dans ce mode précis.
 			el("dlgBody").innerHTML = `
 				<p>${t("wiz.end_inventory_intro")}</p>
 				<p class="du-remaining" style="font-weight:600;"></p>
-				<p class="du-remaining" id="eqCoinsRemaining" style="font-weight:600;"></p>
+				<p class="du-remaining hidden" id="eqCoinsRemaining" style="font-weight:600;"></p>
 				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
 					const pre = prefillByPlayerId.get(p.id);
+					const displayCoins = isSmartphoneLibre ? round2(pre.coins * game.weakCoinValue) : pre.coins;
 					return `
 					<fieldset class="death-inventory-player" data-player-id="${p.id}">
 						<legend>${escapeHtml(p.name)}</legend>
-						<p class="cannot-pay-inventory-title">${t("wiz.death_du_tokens_subtitle")}</p>
-						<label>${t("wiz.field_tokens_simple")}</label>
-						<input type="number" class="eqCoinWeak" value="${pre.coins}" min="0">
+						<p class="cannot-pay-inventory-title">${t(isSmartphoneLibre
+							? "wiz.field_monetary_units_simple" : "wiz.death_du_tokens_subtitle")}</p>
+						<label>${t(isSmartphoneLibre ? "wiz.field_monetary_units_simple" : "wiz.field_tokens_simple")}</label>
+						<input type="number" class="eqCoinWeak" value="${displayCoins}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}">
 						<p class="cannot-pay-inventory-title" style="margin-top:0.6rem;">${t("wiz.death_du_cards_subtitle")}</p>
 						<div class="field-row">
 							<div><label>${t("game.field_weak_cards")}</label><input type="number" class="eqWeak" value="${pre.weak}" min="0"></div>
@@ -4336,11 +4400,17 @@ async function openEndOfTurnWizard() {
 			el("wizNextEndInventory").onclick = async () => {
 				for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
 					const playerId = parseInt(fieldset.dataset.playerId, 10);
+					const enteredCoins = parseFloat(fieldset.querySelector(".eqCoinWeak").value || "0");
+					// Reconversion en jetons (unité réellement stockée côté
+					// serveur, voir Player.jetonWeak) - seulement nécessaire en
+					// mode smartphone, où l'animateur vient de saisir une valeur
+					// monétaire, pas un compte de jetons.
+					const weakCoins = isSmartphoneLibre
+						? Math.max(0, Math.round(enteredCoins / (game.weakCoinValue || 1)))
+						: Math.max(0, Math.round(enteredCoins));
 					await Api.recordEvent(state.currentGameId, {
 						type: "Q", playerId,
-						weakCoins: parseInt(fieldset.querySelector(".eqCoinWeak").value || "0", 10),
-						mediumCoins: 0,
-						strongCoins: 0,
+						weakCoins, mediumCoins: 0, strongCoins: 0,
 						weakCards: parseInt(fieldset.querySelector(".eqWeak").value || "0", 10),
 						mediumCards: parseInt(fieldset.querySelector(".eqMedium").value || "0", 10),
 						strongCards: parseInt(fieldset.querySelector(".eqStrong").value || "0", 10),
@@ -4366,21 +4436,28 @@ async function openEndOfTurnWizard() {
 				// game.moneyMass est toujours une VALEUR MONÉTAIRE - "Reste à
 				// collecter" affichait donc un écart absurde (ex. -14 avec
 				// weakCoinValue=0.5) même quand la collecte était en réalité exacte.
-				// collectedCoinCount, lui, reste à raison un compte BRUT de jetons
-				// (voir wiz.remaining_coins_collected, qui affiche "X pièces", pas
-				// une valeur monétaire) - jamais converti.
+				// Correctif (13/09/2026) : en mode smartphone, l'animateur saisit
+				// désormais DÉJÀ une valeur monétaire (voir plus haut) - ne plus
+				// la multiplier une seconde fois par weakCoinValue. Le compteur
+				// "Nombre de pièces/jetons" (collectedCoinCount) n'a lui plus de
+				// sens dans ce mode (le champ ne représente plus un compte de
+				// jetons) - masqué, jamais affiché à zéro ou à une valeur
+				// trompeuse.
 				let collectedValue = 0;
 				let collectedCoinCount = 0;
 				document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
-					const cWeak = parseInt(fieldset.querySelector(".eqCoinWeak").value || "0", 10);
-					collectedValue += cWeak * (game.weakCoinValue || 1);
-					collectedCoinCount += cWeak;
+					const entered = parseFloat(fieldset.querySelector(".eqCoinWeak").value || "0");
+					collectedValue += isSmartphoneLibre ? entered : entered * (game.weakCoinValue || 1);
+					collectedCoinCount += entered;
 				});
 				const remainingValue = game.moneyMass - collectedValue;
 				const el1 = document.querySelector(".du-remaining");
 				el1.textContent = t("wiz.remaining_to_collect", { remaining: remainingValue, mass: game.moneyMass, collected: collectedValue });
 				el1.style.color = remainingValue === 0 ? "var(--accent-libre)" : "var(--text-dim)";
-				el("eqCoinsRemaining").textContent = t("wiz.remaining_coins_collected", { count: collectedCoinCount });
+				el("eqCoinsRemaining").classList.toggle("hidden", isSmartphoneLibre);
+				if (!isSmartphoneLibre) {
+					el("eqCoinsRemaining").textContent = t("wiz.remaining_coins_collected", { count: collectedCoinCount });
+				}
 			}
 			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
 				fieldset.addEventListener("input", updateRemainingLibre);

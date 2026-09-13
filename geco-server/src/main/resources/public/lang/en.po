@@ -992,8 +992,14 @@ msgstr "Deaths"
 msgid "wiz.all_players_money_title"
 msgstr "Token inventory for every player"
 
+msgid "wiz.all_players_money_title_monetary"
+msgstr "Monetary-unit inventory for every player"
+
 msgid "wiz.all_players_money_intro"
 msgstr "First, note how many weak, medium and strong tokens each active player currently has - dying and staying players alike. This check verifies the total matches the global money mass, before death changes it."
+
+msgid "wiz.all_players_money_intro_monetary"
+msgstr "First, note the value in monetary units each active player currently holds - dying and staying players alike. This check verifies the total matches the global money mass, before death changes it."
 
 msgid "wiz.all_players_money_prefill_note"
 msgstr "Fields pre-filled from smartphone transactions and the last known balance - review before validating, correct if needed."
@@ -1666,6 +1672,9 @@ msgstr "Something went wrong"
 msgid "trade.balance_label"
 msgstr "Trade token balance"
 
+msgid "trade.balance_label_monetary"
+msgstr "Trade balance"
+
 msgid "trade.balance_value"
 msgstr "{n} tokens"
 
@@ -1807,6 +1816,9 @@ msgstr "Profile"
 
 msgid "playerView.stat_unit_coins"
 msgstr "tokens"
+
+msgid "playerView.stat_unit_monetary"
+msgstr "monetary units"
 
 msgid "playerView.balance_monetary_equiv"
 msgstr "equal to {n} monetary units"
@@ -1989,6 +2001,10 @@ msgstr "Cannot make change"
 # ============ Single tokens field (08/09/2026) ============
 msgid "wiz.field_tokens_simple"
 msgstr "Tokens"
+
+# ============ Smartphone free-money variant (13/09/2026) ============
+msgid "wiz.field_monetary_units_simple"
+msgstr "Monetary units"
 
 # ============ Smartphone debug panel (09/09/2026) ============
 msgid "playerView.debug_log_title"

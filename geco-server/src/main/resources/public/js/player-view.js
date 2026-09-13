@@ -397,7 +397,6 @@ async function renderDashboard() {
 	// jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
 	el("balanceCard").classList.toggle("hidden", isTrocGame());
 	if (!isTrocGame()) {
-		el("balanceCardValue").textContent = state.player.tradeBalance;
 		// Remonté par l'utilisateur (08/09/2026) : "il faut aussi retirer
 		// l'affichage des jetons faibles moyens et forts sur les écrans
 		// d'accueil et de profil des joueurs" - depuis que le DU n'est plus
@@ -405,11 +404,32 @@ async function renderDashboard() {
 		// assistant), cette décomposition n'a plus d'intérêt (toujours "100%
 		// faibles" en pratique) - retirée ici, jamais réaffichée.
 		el("balanceCardBreakdown").innerHTML = "";
-		// Remonté par l'utilisateur (13/09/2026) : équivalent en unités
-		// monétaires du solde de jetons, pour lever toute ambiguïté entre les
-		// deux (voir jetonsToMonetaryUnits ci-dessus).
-		el("balanceMonetaryEquiv").textContent = t("playerView.balance_monetary_equiv",
-			{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
+		// BUG TROUVÉ ET CORRIGÉ (13/09/2026, PDF "Retours_-_20260913_2.pdf") :
+		// une première correction avait ajouté une ligne "soit X unités
+		// monétaires" SOUS le nombre de jetons - insuffisant pour la monnaie
+		// LIBRE, où l'utilisateur demande explicitement de "ne plus afficher
+		// les jetons, afficher les unités monétaires à la place" (le nombre de
+		// jetons brut reste une source de confusion même accompagné d'une
+		// clarification, dès que weakCoinValue != 1). En monnaie libre, le
+		// nombre ET le libellé PRINCIPAUX deviennent donc directement la
+		// valeur monétaire - plus de ligne secondaire "soit...". La monnaie
+		// DETTE, elle, n'est pas concernée par cette demande (prix des cartes
+		// FIXE en jetons, jamais en DU) : elle garde le double affichage déjà
+		// en place (nombre de jetons + ligne "soit X unités monétaires").
+		if (isLibreGame()) {
+			el("balanceCardSubtitle").textContent = t("trade.balance_label_monetary");
+			el("balanceCardValue").textContent = jetonsToMonetaryUnits(state.player.tradeBalance);
+			el("balanceUnitLabel").textContent = t("playerView.stat_unit_monetary");
+			el("balanceMonetaryEquiv").textContent = "";
+			el("balanceMonetaryEquiv").classList.add("hidden");
+		} else {
+			el("balanceCardSubtitle").textContent = t("trade.balance_label");
+			el("balanceCardValue").textContent = state.player.tradeBalance;
+			el("balanceUnitLabel").textContent = t("playerView.stat_unit_coins");
+			el("balanceMonetaryEquiv").classList.remove("hidden");
+			el("balanceMonetaryEquiv").textContent = t("playerView.balance_monetary_equiv",
+				{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
+		}
 	}
 
 	// Historique du joueur (achats + ventes) - sert à la fois à l'évolution
@@ -524,14 +544,29 @@ async function renderProfile() {
 	el("profileName").textContent = state.player.name;
 	el("profileStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
 	el("profileAvatarWrapper").innerHTML = buildProfileAvatarHtml(state.player.avatarConfigJson);
-	el("statCoins").textContent = isTrocGame() ? "—" : state.player.tradeBalance;
 	// Remonté par l'utilisateur (08/09/2026) : même simplification que
 	// renderDashboard() - la décomposition par dénomination n'a plus d'intérêt.
 	el("statCoinsBreakdown").innerHTML = "";
-	// Remonté par l'utilisateur (13/09/2026) : même clarification jeton/unité
-	// monétaire que renderDashboard() - voir jetonsToMonetaryUnits ci-dessus.
-	el("statCoinsMonetaryEquiv").textContent = isTrocGame() ? "" : t("playerView.stat_coins_monetary_equiv",
-		{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
+	// BUG TROUVÉ ET CORRIGÉ (13/09/2026, PDF "Retours_-_20260913_2.pdf") : même
+	// raisonnement que renderDashboard() ci-dessus - en monnaie libre, "ne
+	// plus afficher les jetons, afficher les unités monétaires à la place"
+	// (le nombre ET le libellé principaux, pas seulement une ligne
+	// complémentaire). La monnaie DETTE garde le double affichage (nombre de
+	// jetons + ligne "soit X unités monétaires").
+	if (isTrocGame()) {
+		el("statCoins").textContent = "—";
+		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_coins");
+		el("statCoinsMonetaryEquiv").textContent = "";
+	} else if (isLibreGame()) {
+		el("statCoins").textContent = jetonsToMonetaryUnits(state.player.tradeBalance);
+		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_monetary");
+		el("statCoinsMonetaryEquiv").textContent = "";
+	} else {
+		el("statCoins").textContent = state.player.tradeBalance;
+		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_coins");
+		el("statCoinsMonetaryEquiv").textContent = t("playerView.stat_coins_monetary_equiv",
+			{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
+	}
 	// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026, captures d'écran à
 	// l'appui - écart entre "Profil" et "Mes cartes") : goodsCount est un
 	// champ EXPLICITEMENT documenté comme propre au système TROC (voir

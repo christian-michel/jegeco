@@ -54,16 +54,22 @@
 	<div id="viewContent" class="main-content">
 		<section class="card balance-card" id="balanceCard">
 			<div>
-				<span class="card-subtitle" data-i18n="trade.balance_label">Solde jetons (échanges)</span>
+				<span class="card-subtitle" id="balanceCardSubtitle" data-i18n="trade.balance_label">Solde jetons (échanges)</span>
 				<div class="balance-amount"><span id="balanceCardValue">0</span></div>
-				<span class="balance-unit" data-i18n="playerView.stat_unit_coins">jetons</span>
+				<span class="balance-unit" id="balanceUnitLabel" data-i18n="playerView.stat_unit_coins">jetons</span>
 				<!-- Équivalent en unités monétaires (remonté par l'utilisateur,
 				     13/09/2026 : "limiter le risque de confusion chez les joueurs
 				     entre les jetons et les unités monétaires") - même classe CSS
 				     que la ligne "jetons" juste au-dessus (même police/couleur/
 				     taille/style), forcée sur sa propre ligne (voir
-				     renderDashboard() dans player-view.js). Masquée par défaut :
-				     sans objet pour le troc (pas de jetons), affichée sinon. -->
+				     renderDashboard() dans player-view.js). Correctif du même jour
+				     (PDF "Retours_-_20260913_2.pdf") : en monnaie LIBRE, "ne plus
+				     afficher les jetons, afficher les unités monétaires à la
+				     place" - cette ligne secondaire est donc désormais masquée en
+				     libre (le nombre ET le libellé ci-dessus deviennent
+				     directement l'équivalent monétaire), et ne reste utilisée que
+				     pour la monnaie DETTE (ligne complémentaire au nombre de
+				     jetons, jamais remis en cause pour ce système). -->
 				<span class="balance-unit" id="balanceMonetaryEquiv" style="display:block;"></span>
 				<!-- Décomposition en jetons physiques (31/08/2026) - voir
 				     renderDashboard()/computeTokenBreakdown() dans player-view.js. -->
@@ -128,10 +134,14 @@
 			<div class="stats-grid">
 				<div class="stat-card">
 					<div class="stat-header"><span class="stat-icon" aria-hidden="true">🪙</span><span class="stat-value" id="statCoins">0</span></div>
-					<span class="stat-label" data-i18n="playerView.stat_unit_coins">jetons</span>
+					<span class="stat-label" id="statCoinsUnitLabel" data-i18n="playerView.stat_unit_coins">jetons</span>
 					<!-- Remonté par l'utilisateur (13/09/2026) : clarification "soit XXX
 					     unités monétaires" à côté du nombre de jetons - voir
-					     renderProfile() dans player-view.js. -->
+					     renderProfile() dans player-view.js. Correctif du même jour
+					     (PDF "Retours_-_20260913_2.pdf") : en monnaie LIBRE, cette
+					     ligne complémentaire est masquée - le nombre ET le libellé
+					     ci-dessus deviennent directement l'équivalent monétaire (voir
+					     balanceMonetaryEquiv plus haut pour le même raisonnement). -->
 					<span class="stat-label" id="statCoinsMonetaryEquiv"></span>
 					<div class="token-breakdown" id="statCoinsBreakdown" style="margin-top:0.3rem;"></div>
 				</div>

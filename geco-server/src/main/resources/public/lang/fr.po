@@ -994,8 +994,14 @@ msgstr "Décès"
 msgid "wiz.all_players_money_title"
 msgstr "Inventaire en jetons de tous les joueurs"
 
+msgid "wiz.all_players_money_title_monetary"
+msgstr "Inventaire en unités monétaires de tous les joueurs"
+
 msgid "wiz.all_players_money_intro"
 msgstr "Avant toute chose, notez combien de jetons faibles, moyens et forts possède chaque joueur actif en ce moment - mourants et survivants confondus. Ce contrôle sert à vérifier que le total correspond bien à la masse monétaire globale, avant que la mort ne vienne la modifier."
+
+msgid "wiz.all_players_money_intro_monetary"
+msgstr "Avant toute chose, notez la valeur en unités monétaires que possède chaque joueur actif en ce moment - mourants et survivants confondus. Ce contrôle sert à vérifier que le total correspond bien à la masse monétaire globale, avant que la mort ne vienne la modifier."
 
 msgid "wiz.all_players_money_prefill_note"
 msgstr "Champs pré-remplis à partir des transactions smartphone et du dernier solde connu - vérifiez avant de valider, corrigez si besoin."
@@ -1670,6 +1676,9 @@ msgstr "Une erreur est survenue"
 msgid "trade.balance_label"
 msgstr "Solde jetons (échanges)"
 
+msgid "trade.balance_label_monetary"
+msgstr "Solde (échanges)"
+
 msgid "trade.balance_value"
 msgstr "{n} jetons"
 
@@ -1811,6 +1820,9 @@ msgstr "Profil"
 
 msgid "playerView.stat_unit_coins"
 msgstr "jetons"
+
+msgid "playerView.stat_unit_monetary"
+msgstr "unités monétaires"
 
 msgid "playerView.balance_monetary_equiv"
 msgstr "soit {n} unités monétaires"
@@ -1993,6 +2005,10 @@ msgstr "Impossible de rendre la monnaie"
 # ============ Champ jetons unique (08/09/2026) ============
 msgid "wiz.field_tokens_simple"
 msgstr "Jetons"
+
+# ============ Variante monnaie libre + smartphone (13/09/2026) ============
+msgid "wiz.field_monetary_units_simple"
+msgstr "Unités monétaires"
 
 # ============ Panneau de diagnostic smartphone (09/09/2026) ============
 msgid "playerView.debug_log_title"
