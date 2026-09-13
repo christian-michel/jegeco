@@ -1736,6 +1736,9 @@ msgstr "turn {n}"
 msgid "game.transactions_amount"
 msgstr "{n} tokens"
 
+msgid "playerView.transactions_amount_monetary"
+msgstr "{n} monetary units"
+
 # ============ Step 3, barter: card-for-card exchange via QR ============
 msgid "trade.sell_goods_title"
 msgstr "Propose an exchange"

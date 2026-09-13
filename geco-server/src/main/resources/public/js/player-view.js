@@ -458,8 +458,14 @@ async function renderDashboard() {
 		}
 		evolutionCard.classList.remove("hidden");
 		const amountEl = el("evolutionAmount");
-		amountEl.textContent = (delta >= 0 ? "+" : "") + delta;
-		amountEl.classList.toggle("negative", delta < 0);
+		// BUG TROUVÉ ET CORRIGÉ (13/09/2026, PDF "Retours_-_20260913_2.pdf",
+		// suite - carte "Dernière activité" ci-dessous) : même raisonnement
+		// appliqué ici par cohérence - delta est un mouvement de JETONS
+		// (Transaction.totalCoinsValue), jamais converti. En monnaie libre,
+		// affiché en unités monétaires comme le reste de cet écran.
+		const displayDelta = isLibreGame() ? jetonsToMonetaryUnits(delta) : delta;
+		amountEl.textContent = (displayDelta >= 0 ? "+" : "") + displayDelta;
+		amountEl.classList.toggle("negative", displayDelta < 0);
 		renderEvolutionSparkline(thisTurnTxs, state.player.id);
 	} else {
 		evolutionCard.classList.add("hidden");
@@ -474,10 +480,24 @@ async function renderDashboard() {
 		const cardName = await resolveCardName(latest.cardTypeId);
 		const verbKey = isSale ? "playerView.activity_sold_to" : "playerView.activity_bought_from";
 		activityCard.classList.remove("hidden");
+		// BUG TROUVÉ ET CORRIGÉ (13/09/2026, PDF "Retours_-_20260913_2.pdf",
+		// remonté par l'utilisateur après coup : "oui aligne aussi") : cette
+		// carte affichait encore le montant BRUT en jetons ("vendu pour 25
+		// jetons") - même mode monnaie libre où le reste de l'écran n'affiche
+		// plus que des unités monétaires (voir plus haut). game.
+		// transactions_amount reste "{n} jetons" (jamais changé, réutilisé
+		// tel quel par l'écran ANIMATEUR - voir app.js, historique des
+		// transactions d'une partie) - nouvelle clé dédiée
+		// playerView.transactions_amount_monetary pour ne jamais toucher cet
+		// autre usage.
+		const amountLabel = latest.isGoodsTrade
+			? t("playerView.history_goods_amount_short", { n: latest.buyerWeakGoods + latest.buyerMediumGoods + latest.buyerStrongGoods })
+			: t(isLibreGame() ? "playerView.transactions_amount_monetary" : "game.transactions_amount",
+				{ n: isLibreGame() ? jetonsToMonetaryUnits(latest.totalCoinsValue) : latest.totalCoinsValue });
 		el("activityText").innerHTML = t(verbKey, {
 			card: `<strong>${escapeHtmlLocal(cardName)}</strong>`,
 			name: `<strong>${escapeHtmlLocal(partner)}</strong>`,
-			amount: `<strong>${latest.isGoodsTrade ? t("playerView.history_goods_amount_short", { n: latest.buyerWeakGoods + latest.buyerMediumGoods + latest.buyerStrongGoods }) : t("game.transactions_amount", { n: latest.totalCoinsValue })}</strong>`,
+			amount: `<strong>${amountLabel}</strong>`,
 		});
 		el("activityIconBadge").innerHTML = iconSvg("refresh-cw");
 		el("activityTime").textContent = formatRelativeTime(latest.timestamp);

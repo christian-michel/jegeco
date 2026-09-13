@@ -1740,6 +1740,9 @@ msgstr "tour {n}"
 msgid "game.transactions_amount"
 msgstr "{n} jetons"
 
+msgid "playerView.transactions_amount_monetary"
+msgstr "{n} unités monétaires"
+
 # ============ Étape 3, troc : échange carte-contre-carte par QR ============
 msgid "trade.sell_goods_title"
 msgstr "Proposez un échange"
