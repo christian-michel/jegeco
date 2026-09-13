@@ -1532,6 +1532,28 @@ public class GameService
 						// avec succès juste au-dessus.
 					}
 				}
+				// BUG CRITIQUE TROUVÉ (14/09/2026, vrai playtest 4 joueurs/12 tours
+				// + confirmé par une vraie partie utilisateur remontant des
+				// "carrés en série qui se répétaient plusieurs fois de suite") :
+				// le repli "aucun autre modèle disponible" ci-dessus (05/09/2026)
+				// évite bien de bloquer le joueur indéfiniment, mais quand il se
+				// déclenche (promotedCardId == squareCardId, aucune VRAIE
+				// promotion), la carte "promue" ET les 4 cartes de "remplacement"
+				// sont FORCÉMENT toutes ce même modèle (plus aucun autre en stock
+				// dans cette pioche) : le joueur se retrouve immédiatement avec un
+				// NOUVEAU carré identique, qui se ré-encaisse à l'itération
+				// suivante de cette même boucle - confirmé par un vrai playtest :
+				// 408 carrés d'affilée en un seul appel, consommant la TOTALITÉ du
+				// stock restant de ce modèle pour un gain économique nul (une
+				// "promotion" vers... le même niveau). On encaisse bien CE carré
+				// (le joueur n'est jamais bloqué, intention du correctif du
+				// 05/09/2026 préservée), mais on arrête la boucle ICI plutôt que
+				// de la laisser se ré-déclencher sur ce même modèle dégénéré - un
+				// futur échange qui redistribue la pioche pourra relancer une
+				// vraie cascade plus tard, une fois la diversité des modèles
+				// restaurée dans cette pioche.
+				if (promotedCardId.equals(squareCardId))
+					return cashedInThisCall;
 			}
 			finally
 			{
