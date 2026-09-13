@@ -405,6 +405,11 @@ async function renderDashboard() {
 		// assistant), cette décomposition n'a plus d'intérêt (toujours "100%
 		// faibles" en pratique) - retirée ici, jamais réaffichée.
 		el("balanceCardBreakdown").innerHTML = "";
+		// Remonté par l'utilisateur (13/09/2026) : équivalent en unités
+		// monétaires du solde de jetons, pour lever toute ambiguïté entre les
+		// deux (voir jetonsToMonetaryUnits ci-dessus).
+		el("balanceMonetaryEquiv").textContent = t("playerView.balance_monetary_equiv",
+			{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
 	}
 
 	// Historique du joueur (achats + ventes) - sert à la fois à l'évolution
@@ -523,6 +528,10 @@ async function renderProfile() {
 	// Remonté par l'utilisateur (08/09/2026) : même simplification que
 	// renderDashboard() - la décomposition par dénomination n'a plus d'intérêt.
 	el("statCoinsBreakdown").innerHTML = "";
+	// Remonté par l'utilisateur (13/09/2026) : même clarification jeton/unité
+	// monétaire que renderDashboard() - voir jetonsToMonetaryUnits ci-dessus.
+	el("statCoinsMonetaryEquiv").textContent = isTrocGame() ? "" : t("playerView.stat_coins_monetary_equiv",
+		{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
 	// BUG TROUVÉ (remonté par l'utilisateur, 05/09/2026, captures d'écran à
 	// l'appui - écart entre "Profil" et "Mes cartes") : goodsCount est un
 	// champ EXPLICITEMENT documenté comme propre au système TROC (voir
@@ -797,15 +806,34 @@ const LEVEL_JETON_PRICE = {
 // réinventée séparément, pour que le prix affiché ici corresponde TOUJOURS
 // exactement à ce que le serveur validera au moment de l'achat (voir
 // GameService.levelValue, la même formule, portée à l'identique).
-const CARD_PRICE_IN_DU = { faible: 0.5, moyenne: 1, forte: 2, tresforte: 4 };
+// Correctif (13/09/2026), remonté par l'utilisateur : le prix d'une carte
+// faible en DU est désormais réglable par partie (écran "Nouvelle partie",
+// champ "Valeur d'une carte faible en DU ?", voir Game.weakCardValueInDU) au
+// lieu d'être figé à 0.5 pour toutes les parties - PlayerSelfViewDto expose
+// cette valeur (weakCardValueInDU) pour que ce calcul reste synchronisé avec
+// le serveur sans jamais dupliquer une constante qui pourrait diverger.
+function cardPriceInDuTable() {
+	const weak = (state.player && state.player.weakCardValueInDU) || 0.5;
+	return { faible: weak, moyenne: weak * 2, forte: weak * 4, tresforte: weak * 8 };
+}
 
 // Prix d'une carte de monnaie LIBRE, en jetons faibles PHYSIQUES à cet
 // instant précis - varie à chaque tour puisque le DU courant (voir
 // PlayerSelfViewDto.currentDuValue, calculé UNE SEULE FOIS côté serveur,
 // jamais recalculé séparément ici pour écarter tout risque de divergence)
 // change lui-même à chaque tour.
+// Remonté par l'utilisateur (13/09/2026, PDF "petits ajustements pour limiter
+// le risque de confusion... entre les jetons et les unités monétaires") :
+// convertit un nombre de jetons FAIBLES en unités monétaires (weakCoinValue,
+// voir PlayerSelfViewDto) - arrondi à 2 décimales pour l'affichage (le solde
+// réel, lui, reste toujours un compte entier de jetons, jamais arrondi).
+function jetonsToMonetaryUnits(pJetons) {
+	const weakCoinValue = (state.player && state.player.weakCoinValue) || 1;
+	return Math.round(pJetons * weakCoinValue * 100) / 100;
+}
+
 function computeLibreCardPrice(pLevel) {
-	const priceInDU = CARD_PRICE_IN_DU[pLevel] || 0;
+	const priceInDU = cardPriceInDuTable()[pLevel] || 0;
 	const currentDU = (state.player && state.player.currentDuValue) || 0;
 	const weakCoinValue = (state.player && state.player.weakCoinValue) || 1;
 	const priceInMonetaryUnits = priceInDU * currentDU;

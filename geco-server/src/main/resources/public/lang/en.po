@@ -152,6 +152,18 @@ msgstr "The money mass never decreases when a player dies - their rebirth create
 msgid "newgame.token_penalty_title"
 msgstr "Official rules: geconomicus.glibre.org/libre_money.html - a token is taken from the player when the currency rotates. Optional."
 
+msgid "newgame.advanced_settings_label"
+msgstr "Advanced settings"
+
+msgid "newgame.weak_coin_label_smartphone"
+msgstr "1 token = how many monetary units (e.g. how many G1)?"
+
+msgid "newgame.weak_card_value_du_label"
+msgstr "Value of a weak card, in DU?"
+
+msgid "newgame.weak_card_value_du_title"
+msgstr "Price of a weak card in smartphone free-money mode, expressed in DU (medium/strong/very strong cards automatically follow the same proportions: x2/x4/x8)."
+
 msgid "newgame.players_label"
 msgstr "Players"
 
@@ -1152,6 +1164,12 @@ msgstr "Final wealth per player"
 msgid "report.chart_money_mass_title"
 msgstr "Money mass over time"
 
+msgid "report.chart_money_mass_explainer"
+msgstr "Values expressed in monetary units (e.g. G1), never a number of tokens."
+
+msgid "report.chart_money_mass_axis"
+msgstr "Monetary units"
+
 msgid "report.chart_bank_profit_title"
 msgstr "Bank profit"
 
@@ -1789,6 +1807,12 @@ msgstr "Profile"
 
 msgid "playerView.stat_unit_coins"
 msgstr "tokens"
+
+msgid "playerView.balance_monetary_equiv"
+msgstr "equal to {n} monetary units"
+
+msgid "playerView.stat_coins_monetary_equiv"
+msgstr "equal to {n} monetary units"
 
 msgid "playerView.stat_cards_in_hand"
 msgstr "Cards in hand"

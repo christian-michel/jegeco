@@ -705,7 +705,7 @@ public class GecoServer
 			final Game game = mGameService.createGame(req.moneySystem(), req.nbTurnsPlanned(), req.animatorPseudo(),
 					req.animatorEmail(), req.description(), req.curDate(), req.location(), req.moneyCardsFactor(),
 					req.turnDurationSeconds(), req.weakCoinValue(), req.tokenPenalty(), req.startingGoods(),
-					req.strictTrm());
+					req.strictTrm(), req.weakCardValueInDU());
 			// Remonté par un utilisateur : PIN à 6 chiffres généré uniquement si la
 			// protection est activée globalement (écran Paramètres) - une partie
 			// créée pendant que la protection est désactivée reste accessible sans
@@ -971,7 +971,8 @@ public class GecoServer
 			}
 			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
 					game.getMoneySystem(), mGameService.isTradingAllowed(game), game.getWeakCoinValue(),
-					game.getPausedRemainingSeconds() != null, game.computeCurrentDU()));
+					game.getPausedRemainingSeconds() != null, game.computeCurrentDU(),
+					game.getWeakCardValueInDU()));
 		});
 
 		// Inventaire de cartes d'un joueur, par SON PROPRE jeton (voir "Mes
@@ -1700,7 +1701,8 @@ public class GecoServer
 				// fixe en DU") sans mettre à jour cet appel - constructeur appelé avec un
 				// argument manquant, erreur de compilation ("actual and formal argument lists
 				// differ in length"). Simplement propagé depuis pDto, comme tous les autres champs.
-				pDto.currentDuValue());
+				// Même chose pour weakCardValueInDU, ajouté le 13/09/2026.
+				pDto.currentDuValue(), pDto.weakCardValueInDU());
 	}
 
 	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement

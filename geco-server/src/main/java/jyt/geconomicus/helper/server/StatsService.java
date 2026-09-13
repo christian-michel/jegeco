@@ -387,9 +387,14 @@ public class StatsService
 		for (final Player p : pGame.getPlayers())
 		{
 			lastKnownValue.put(p.getName(), 0);
-			final List<PlayerWealthPoint> points = new ArrayList<>();
-			points.add(new PlayerWealthPoint(0, 0, 0.0));
-			pointsByPlayer.put(p.getName(), points);
+			// Remonté par l'utilisateur (13/09/2026) : "la courbe ne doit pas inclure
+			// le tour 0, elle doit démarrer au début du tour 1" - plus de point de
+			// départ artificiel à (0, 0) ici, le premier point réel de chaque joueur
+			// est désormais celui posé par le tout premier événement TURN (voir plus
+			// bas), à moins que le joueur n'ait encore aucun tour joué (partie tout
+			// juste créée), auquel cas sa série reste simplement vide plutôt que de
+			// montrer un zéro qui n'a jamais correspondu à un tour réel.
+			pointsByPlayer.put(p.getName(), new ArrayList<>());
 		}
 
 		final int[] turnCounter = { 0 };
@@ -425,8 +430,24 @@ public class StatsService
 				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
 				final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
 				final double relative = average == 0 ? 0 : assessedValue / average;
-				pointsByPlayer.get(name)
-						.add(new PlayerWealthPoint(turnCounter[0], assessedValue, round2(relative)));
+				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 13/09/2026, PDF avec
+				// captures d'écran - "ne pas montrer le point où le compte revient à
+				// zéro quand ils quittent la partie à la toute fin, la courbe doit
+				// s'arrêter sur leur score final") : QUIT ne survient JAMAIS qu'au tout
+				// dernier tour de la partie (voir renderEndGameInventory dans app.js -
+				// "à la fin du dernier tour, il n'y a jamais de mort" - QUIT y est posté
+				// pour TOUS les joueurs actifs, sans événement TURN derrière puisque la
+				// partie s'arrête là). turnCounter[0] restait donc encore égal au tour
+				// PRÉCÉDENT (aucun TURN ne l'avait incrémenté pour ce dernier tour) : ce
+				// point se retrouvait au MÊME tour que celui déjà posé par le TURN
+				// d'entrée dans ce dernier tour - deux points distincts au même x, un
+				// artefact visuel qui pouvait ressembler à une chute/un retour à zéro
+				// juste avant la fin de la courbe. DEATH, lui, ne survient jamais au
+				// dernier tour (mort/renaissance en cours de partie uniquement) et un
+				// TURN event suit toujours peu après pour incrémenter turnCounter
+				// normalement - turnCounter[0] y reste donc correct, inchangé.
+				final int turn = (event.getEvt() == EventType.QUIT) ? pGame.getNbTurnsPlanned() : turnCounter[0];
+				pointsByPlayer.get(name).add(new PlayerWealthPoint(turn, assessedValue, round2(relative)));
 				lastKnownValue.put(name, 0);
 			}
 			else if ((event.getEvt() == EventType.WEALTH_CHECKPOINT) && (event.getPlayer() != null)

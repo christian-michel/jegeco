@@ -476,6 +476,48 @@ function findConfigFieldDefault(pPlugin, pKey) {
 	return field ? field.default : null;
 }
 
+// Remonté par l'utilisateur (PDF du 13/09/2026) : plusieurs réglages de
+// l'écran "Nouvelle partie" (case "Mode strict TRM", champ "Facteur
+// carte/monnaie" vs "Valeur d'une carte faible en DU") ne concernent QUE la
+// monnaie libre suivie par smartphone (Player.jetonWeak&co, prix des cartes
+// fixé en DU - voir Game.cardPriceInDU) - jamais la monnaie libre "classique"
+// (suivi manuel par l'animateur, sans smartphone), qui garde le comportement
+// historique inchangé. mAppSettings.gameMode reflète le choix fait sur
+// l'écran Paramètres (voir renderSettingsView), toujours à jour ici puisque
+// mis à jour directement en mémoire dès qu'il change, sans besoin de le
+// recharger depuis le serveur.
+function isLibreSmartphoneNewGame(pPluginId) {
+	return (pPluginId === "libre") && (mAppSettings.gameMode === "smartphone");
+}
+
+// Bascule les champs/libellés de l'écran "Nouvelle partie" qui dépendent du
+// mode "monnaie libre + smartphone" (voir isLibreSmartphoneNewGame
+// ci-dessus) : libellé de "Valeur d'une pièce faible" clarifié (risque de
+// confusion jeton/unité monétaire remonté par l'utilisateur), champ "Valeur
+// d'une carte faible en DU" affiché à la place du "Facteur carte/monnaie"
+// (masqué séparément, voir selectMoneyChoice), case "Mode strict TRM" cochée
+// automatiquement et masquée (une masse monétaire strictement croissante est
+// indispensable pour qu'un smartphone qui trace chaque jeton individuellement
+// reste cohérent - il n'y a plus de raison de laisser ce choix à l'animateur
+// dans ce mode précis).
+function updateNewGameAdvancedFields(pLibreSmartphone) {
+	el("fWeakCoinValueLabel").textContent = window.GecoI18n.t(
+		pLibreSmartphone ? "newgame.weak_coin_label_smartphone" : "newgame.weak_coin_label");
+	el("fWeakCardValueInDUWrap").classList.toggle("hidden", !pLibreSmartphone);
+
+	const strictTrmLabel = el("fStrictTrm").parentElement;
+	strictTrmLabel.classList.toggle("hidden", pLibreSmartphone);
+	if (pLibreSmartphone) el("fStrictTrm").checked = true;
+
+	// Même verrouillage que le gestionnaire "change" manuel de fStrictTrm
+	// (voir plus bas) - reproduit ici pour le cas où la case vient d'être
+	// cochée par CE code (mode libre + smartphone) plutôt que par un clic de
+	// l'animateur.
+	const factorField = el("fMoneyCardsFactor");
+	factorField.disabled = el("fStrictTrm").checked;
+	if (factorField.disabled) factorField.value = "1";
+}
+
 function selectMoneyChoice(pPlugin) {
 	state.newGame.pluginId = pPlugin.id;
 	// undefined pour un plugin pas encore "engineReady" (ex. le troc) : le
@@ -491,7 +533,16 @@ function selectMoneyChoice(pPlugin) {
 	// Remonté par un utilisateur : le troc n'a ni facteur carte/monnaie ni
 	// valeur de pièce - aucune valeur n'est imposée dans ce système (voir
 	// plugins/troc/manifest.json, qui ne déclare d'ailleurs pas ces champs).
-	el("fMoneyValueRow").classList.toggle("hidden", pPlugin.id === "troc");
+	// Correctif (13/09/2026) : également masqué en monnaie libre + smartphone,
+	// où le "Facteur carte/monnaie" n'a plus de sens (voir
+	// updateNewGameAdvancedFields ci-dessous, qui le verrouille à 1).
+	const libreSmartphone = isLibreSmartphoneNewGame(pPlugin.id);
+	el("fMoneyValueRow").classList.toggle("hidden", (pPlugin.id === "troc") || libreSmartphone);
+	// Idem pour le panneau "Réglages avancés" : sans objet pour le troc (ni
+	// valeur de pièce, ni prix de carte en DU).
+	el("advancedSettingsSection").classList.toggle("hidden", pPlugin.id === "troc");
+
+	updateNewGameAdvancedFields(libreSmartphone);
 
 	el("btnNewGame").disabled = !pPlugin.engineReady;
 	el("btnNewGame").title = pPlugin.engineReady ? "" : window.GecoI18n.t("newgame.not_playable_yet_title");
@@ -2908,7 +2959,13 @@ function renderGalileeChart(wealthOverTime, mode) {
 	// s'appuyer sur un tableau de labels partagé construit depuis une seule série,
 	// qui désalignerait les courbes dès que les morts surviennent à des tours
 	// différents d'un joueur à l'autre.
-	const maxTurn = Math.max(...wealthOverTime.series.flatMap((s) => s.points.map((p) => p.turn)));
+	// Remonté par l'utilisateur (13/09/2026) : la courbe ne démarre plus
+	// artificiellement au tour 0 (voir StatsService.computeWealthOverTime) - un
+	// joueur qui n'a encore aucun tour joué (partie tout juste créée) peut donc
+	// avoir une série entièrement VIDE ; Math.max(...[]) vaudrait alors -Infinity
+	// sans ce repli à 0.
+	const allTurns = wealthOverTime.series.flatMap((s) => s.points.map((p) => p.turn));
+	const maxTurn = allTurns.length > 0 ? Math.max(...allTurns) : 0;
 
 	const datasets = wealthOverTime.series.map((s, i) => ({
 		label: s.playerName,
@@ -2924,7 +2981,12 @@ function renderGalileeChart(wealthOverTime, mode) {
 	if (mode === "relative") {
 		datasets.push({
 			label: t("report.galilee_average_reference"),
-			data: [{ x: 0, y: 1 }, { x: maxTurn, y: 1 }],
+			// Remonté par l'utilisateur (13/09/2026) : les courbes des joueurs ne
+			// démarrent plus au tour 0 (voir StatsService.computeWealthOverTime) -
+			// cette ligne de référence commence donc aussi au tour 1, jamais au
+			// tour 0, pour ne pas laisser croire qu'elle représente une donnée
+			// que les courbes réelles n'ont plus.
+			data: [{ x: 1, y: 1 }, { x: maxTurn, y: 1 }],
 			borderColor: "#9ca3af",
 			borderDash: [6, 4],
 			pointRadius: 0,
@@ -3157,7 +3219,14 @@ async function renderReport(gameId, includeBank = false) {
 			labels: report.moneyMassHistory.map((p) => t("game.chart_turn_label", { n: p.turn })),
 			datasets: [{ data: report.moneyMassHistory.map((p) => p.moneyMass), borderColor: accent, fill: false, tension: 0.3 }],
 		},
-		options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } }, maintainAspectRatio: false },
+		options: {
+			plugins: { legend: { display: false } },
+			// Remonté par l'utilisateur (13/09/2026) : clarifie que l'axe Y est une
+			// VALEUR MONÉTAIRE (ex. G1) - voir aussi l'explication textuelle
+			// juste au-dessus du graphique (report.chart_money_mass_explainer).
+			scales: { y: { beginAtZero: true, title: { display: true, text: t("report.chart_money_mass_axis") } } },
+			maintainAspectRatio: false,
+		},
 	});
 
 	// Remonté par un utilisateur : histogramme dédié à la banque uniquement
@@ -4859,6 +4928,16 @@ function bindActions() {
 		factorField.disabled = el("fStrictTrm").checked;
 		if (el("fStrictTrm").checked) factorField.value = "1";
 	});
+
+	// "Réglages avancés" (écran Nouvelle partie) : accordéon animé, remonté par
+	// l'utilisateur (13/09/2026) - un simple toggle de classe suffit, la
+	// transition elle-même est gérée par CSS (grid-template-rows, voir
+	// style.css) dans les deux sens (ouverture ET fermeture).
+	el("btnToggleAdvanced").addEventListener("click", () => {
+		const panel = el("advancedSettingsPanel");
+		const expanded = panel.classList.toggle("open");
+		el("btnToggleAdvanced").setAttribute("aria-expanded", String(expanded));
+	});
 	el("btnCompareStandard").addEventListener("click", () => { compareMode = "standard"; renderComparisonChart(); });
 	el("btnCompareCorrected").addEventListener("click", () => { compareMode = "corrected"; renderComparisonChart(); });
 
@@ -4951,6 +5030,12 @@ function bindActions() {
 			location: el("fLoc").value,
 			moneyCardsFactor: parseInt(el("fMoneyCardsFactor").value || "1", 10),
 			weakCoinValue: parseFloat(el("fWeakCoinValue").value || "1"),
+			// Monnaie libre + smartphone uniquement (voir Game.weakCardValueInDU,
+			// isLibreSmartphoneNewGame ci-dessus) - 0 ailleurs, sans effet
+			// (GameService.createGame ne l'applique que si > 0, gardant alors la
+			// valeur par défaut du moteur).
+			weakCardValueInDU: isLibreSmartphoneNewGame(state.newGame.pluginId)
+				? parseFloat(el("fWeakCardValueInDU").value || "0.5") : 0,
 			tokenPenalty: el("fTokenPenalty").checked,
 			turnDurationSeconds: state.newGame.turnDuration * 60,
 			// Troc uniquement (voir plugins/troc/manifest.json) : 0 signifie "garder

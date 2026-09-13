@@ -69,17 +69,17 @@ public class Dtos
 			boolean visitedBank, Integer declaredAge, String favoriteColor, String avatarConfigJson,
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
 			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused, int jetonWeak,
-			int jetonMedium, int jetonStrong, int currentDuValue)
+			int jetonMedium, int jetonStrong, int currentDuValue, double weakCardValueInDU)
 	{
 		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
 				final boolean pTradingAllowed, final double pWeakCoinValue, final boolean pIsPaused,
-				final int pCurrentDuValue)
+				final int pCurrentDuValue, final double pWeakCardValueInDU)
 		{
 			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
 					p.getGoodsCount(), p.getAccessToken(), pTradeBalance, p.getWeakGoods(), p.getMediumGoods(),
 					p.getStrongGoods(), pMoneySystem, pTradingAllowed, pWeakCoinValue, pIsPaused, p.getJetonWeak(),
-					p.getJetonMedium(), p.getJetonStrong(), pCurrentDuValue);
+					p.getJetonMedium(), p.getJetonStrong(), pCurrentDuValue, pWeakCardValueInDU);
 		}
 	}
 
@@ -180,7 +180,7 @@ public class Dtos
 			int totalCreditsOutstanding, int turnDurationSeconds, long turnStartedAtEpochMs, List<PlayerDto> players,
 			List<EventDto> events, int moneyCardsFactor, double weakCoinValue, String animatorPseudo,
 			int seizedValues, int moneyInvestBank, int cardsInvestBank, Integer pausedRemainingSeconds,
-			int startingGoods, boolean strictTrm, String pin, int currentDuValue)
+			int startingGoods, boolean strictTrm, String pin, int currentDuValue, double weakCardValueInDU)
 	{
 		static GameDetailDto from(final Game g)
 		{
@@ -225,14 +225,16 @@ public class Dtos
 					g.getTurnStartedAt() == null ? 0 : g.getTurnStartedAt().getTime(), players, events,
 					g.getMoneyCardsFactor(), g.getWeakCoinValue(), g.getAnimatorPseudo(),
 					g.getSeizedValues(), g.getMoneyInvestBank(), g.getCardsInvestBank(), g.getPausedRemainingSeconds(),
-					g.getStartingGoods(), g.isStrictTrm(), g.getPin(), g.computeCurrentDU());
+					g.getStartingGoods(), g.isStrictTrm(), g.getPin(), g.computeCurrentDU(),
+					g.getWeakCardValueInDU());
 		}
 	}
 
 	// Corps de requête pour la création de partie
 	public record CreateGameRequest(int moneySystem, int nbTurnsPlanned, String animatorPseudo, String animatorEmail,
 			String description, String curDate, String location, int moneyCardsFactor, int turnDurationSeconds,
-			double weakCoinValue, boolean tokenPenalty, int startingGoods, boolean strictTrm)
+			double weakCoinValue, boolean tokenPenalty, int startingGoods, boolean strictTrm,
+			double weakCardValueInDU)
 	{
 	}
 

@@ -158,7 +158,8 @@ public class GameService
 	public Game createGame(final int pMoneySystem, final int pNbTurnsPlanned, final String pAnimatorPseudo,
 			final String pAnimatorEmail, final String pDescription, final String pCurDate, final String pLocation,
 			final int pMoneyCardsFactor, final int pTurnDurationSeconds, final double pWeakCoinValue,
-			final boolean pTokenPenalty, final int pStartingGoods, final boolean pStrictTrm)
+			final boolean pTokenPenalty, final int pStartingGoods, final boolean pStrictTrm,
+			final double pWeakCardValueInDU)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -167,6 +168,13 @@ public class GameService
 					pCurDate, pLocation, pMoneyCardsFactor);
 			if (pWeakCoinValue > 0)
 				game.setWeakCoinValue(pWeakCoinValue);
+			// Remonté par l'utilisateur (13/09/2026) : prix d'une carte faible en
+			// monnaie libre smartphone, en DU - réglable par partie (défaut 0.5,
+			// voir Game.weakCardValueInDU), au lieu d'une constante fixe pour
+			// toutes les parties. 0 ou négatif : garde la valeur par défaut du
+			// moteur.
+			if (pWeakCardValueInDU > 0)
+				game.setWeakCardValueInDU(pWeakCardValueInDU);
 			game.setTokenPenalty(pTokenPenalty);
 			// Remonté par un utilisateur : mode "strict TRM", propre à la monnaie
 			// libre et réglable uniquement ici, à la création - jamais modifiable en
@@ -1693,7 +1701,10 @@ public class GameService
 	{
 		// Réutilise Game.cardPriceInDU comme SEULE source de vérité pour ces
 		// proportions - jamais une seconde copie ici qui pourrait diverger.
-		final double priceInDU = Game.cardPriceInDU(pLevel);
+		// Devenue une méthode d'instance le 13/09/2026 (voir Game.java) : le
+		// prix d'une carte faible en DU est désormais réglable par partie
+		// (weakCardValueInDU), plus une constante figée à 0.5 pour tous.
+		final double priceInDU = pGame.cardPriceInDU(pLevel);
 		if (priceInDU == 0)
 			return 0; // niveau inconnu (ne devrait jamais arriver) : prix nul plutôt qu'une exception
 		final double weakCoinValue = (pGame.getWeakCoinValue() == 0) ? 1 : pGame.getWeakCoinValue();

@@ -152,6 +152,18 @@ msgstr "La masse monétaire ne diminue jamais à la mort d'un joueur - sa renais
 msgid "newgame.token_penalty_title"
 msgstr "Règles officielles : geconomicus.glibre.org/libre_money.html - un jeton est retiré au joueur lors de la rotation de la monnaie. Facultatif."
 
+msgid "newgame.advanced_settings_label"
+msgstr "Réglages avancés"
+
+msgid "newgame.weak_coin_label_smartphone"
+msgstr "1 jeton = combien d'unités monétaires (ex. : combien de G1) ?"
+
+msgid "newgame.weak_card_value_du_label"
+msgstr "Valeur d'une carte faible en DU ?"
+
+msgid "newgame.weak_card_value_du_title"
+msgstr "Prix d'une carte faible en monnaie libre smartphone, exprimé en DU (les cartes moyenne/forte/tresforte suivent automatiquement les mêmes proportions : x2/x4/x8)."
+
 msgid "newgame.players_label"
 msgstr "Joueurs"
 
@@ -1154,6 +1166,12 @@ msgstr "Richesse finale par joueur"
 msgid "report.chart_money_mass_title"
 msgstr "Évolution de la masse monétaire"
 
+msgid "report.chart_money_mass_explainer"
+msgstr "Valeurs exprimées en unités monétaires (ex. : G1), jamais en nombre de jetons."
+
+msgid "report.chart_money_mass_axis"
+msgstr "Unités monétaires"
+
 msgid "report.chart_bank_profit_title"
 msgstr "Bénéfices de la banque"
 
@@ -1793,6 +1811,12 @@ msgstr "Profil"
 
 msgid "playerView.stat_unit_coins"
 msgstr "jetons"
+
+msgid "playerView.balance_monetary_equiv"
+msgstr "soit {n} unités monétaires"
+
+msgid "playerView.stat_coins_monetary_equiv"
+msgstr "soit {n} unités monétaires"
 
 msgid "playerView.stat_cards_in_hand"
 msgstr "Cartes en main"

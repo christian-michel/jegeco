@@ -670,29 +670,54 @@ public class Game implements Serializable
 	}
 
 	/**
-	 * Remonté par l'utilisateur (09/09/2026) : "il faut fixer le prix d'une
-	 * carte de monnaie libre en DU. Par exemple, une carte faible est égale
-	 * à 0.5DU." Prix en DU pour chaque niveau, dans les mêmes proportions
-	 * que l'ancienne échelle abstraite fixe (3/6/12/24, voir levelValue) -
-	 * 1 DU = 6 unités de cette échelle, ce qui redonne exactement l'exemple
-	 * donné (carte faible : 3/6 = 0,5 DU). Uniquement pour la monnaie LIBRE
-	 * suivie par smartphone - la monnaie dette garde son propre prix fixe en
-	 * jetons (voir GameService.LEVEL_JETON_PRICE côté serveur, inchangé), et
-	 * le mode classique (sans smartphone) reprend le code existant
-	 * (levelValue), non concerné par ce calcul.
+	 * Remonté par l'utilisateur (13/09/2026) : "remplacer ce champ... par
+	 * 'Valeur d'une carte faible en DU ?' et pré-remplir avec la valeur 0.5
+	 * ... Si on change cette valeur par exemple 0.2DU pour la valeur d'une
+	 * carte faible alors tous les calculs sont automatiquement adaptés et
+	 * les ratios entre les valeurs des cartes faibles, moyennes et fortes en
+	 * DU sont aussi automatiquement adaptés." Auparavant une constante FIXE
+	 * (0,5 DU, voir l'ancienne méthode statique cardPriceInDU) - devient un
+	 * réglage de partie, réglable uniquement à la création (comme
+	 * weakCoinValue) : les niveaux supérieurs restent des MULTIPLES de
+	 * cette valeur, dans les mêmes proportions qu'avant (1/2/4/8 pour
+	 * faible/moyenne/forte/tresforte - jamais changées, seule la base
+	 * change désormais). Uniquement pour la monnaie LIBRE suivie par
+	 * smartphone - la monnaie dette garde son propre prix fixe en jetons
+	 * (voir GameService.LEVEL_JETON_PRICE côté serveur, inchangé), et le
+	 * mode classique (sans smartphone) reprend le code existant
+	 * (levelValue), non concerné par ce réglage.
 	 */
-	public static double cardPriceInDU(final String pLevel)
+	private double weakCardValueInDU = 0.5;
+
+	public double getWeakCardValueInDU()
+	{
+		return weakCardValueInDU;
+	}
+
+	public void setWeakCardValueInDU(final double pWeakCardValueInDU)
+	{
+		weakCardValueInDU = pWeakCardValueInDU;
+	}
+
+	/**
+	 * Prix en DU pour chaque niveau, dans les mêmes proportions que
+	 * l'ancienne échelle abstraite fixe (3/6/12/24, voir levelValue) - 1 DU
+	 * = 6 unités de cette échelle. La base (niveau "faible") est désormais
+	 * {@link #weakCardValueInDU}, réglable par partie plutôt qu'une
+	 * constante fixe à 0,5 - voir son commentaire pour le détail complet.
+	 */
+	public double cardPriceInDU(final String pLevel)
 	{
 		switch (pLevel)
 		{
 			case "faible":
-				return 0.5;
+				return weakCardValueInDU;
 			case "moyenne":
-				return 1;
+				return weakCardValueInDU * 2;
 			case "forte":
-				return 2;
+				return weakCardValueInDU * 4;
 			case "tresforte":
-				return 4;
+				return weakCardValueInDU * 8;
 			default:
 				return 0;
 		}

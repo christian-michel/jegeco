@@ -57,6 +57,14 @@
 				<span class="card-subtitle" data-i18n="trade.balance_label">Solde jetons (échanges)</span>
 				<div class="balance-amount"><span id="balanceCardValue">0</span></div>
 				<span class="balance-unit" data-i18n="playerView.stat_unit_coins">jetons</span>
+				<!-- Équivalent en unités monétaires (remonté par l'utilisateur,
+				     13/09/2026 : "limiter le risque de confusion chez les joueurs
+				     entre les jetons et les unités monétaires") - même classe CSS
+				     que la ligne "jetons" juste au-dessus (même police/couleur/
+				     taille/style), forcée sur sa propre ligne (voir
+				     renderDashboard() dans player-view.js). Masquée par défaut :
+				     sans objet pour le troc (pas de jetons), affichée sinon. -->
+				<span class="balance-unit" id="balanceMonetaryEquiv" style="display:block;"></span>
 				<!-- Décomposition en jetons physiques (31/08/2026) - voir
 				     renderDashboard()/computeTokenBreakdown() dans player-view.js. -->
 				<div class="token-breakdown" id="balanceCardBreakdown"></div>
@@ -121,6 +129,10 @@
 				<div class="stat-card">
 					<div class="stat-header"><span class="stat-icon" aria-hidden="true">🪙</span><span class="stat-value" id="statCoins">0</span></div>
 					<span class="stat-label" data-i18n="playerView.stat_unit_coins">jetons</span>
+					<!-- Remonté par l'utilisateur (13/09/2026) : clarification "soit XXX
+					     unités monétaires" à côté du nombre de jetons - voir
+					     renderProfile() dans player-view.js. -->
+					<span class="stat-label" id="statCoinsMonetaryEquiv"></span>
 					<div class="token-breakdown" id="statCoinsBreakdown" style="margin-top:0.3rem;"></div>
 				</div>
 				<div class="stat-card">

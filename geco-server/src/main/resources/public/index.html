@@ -117,17 +117,11 @@
 						</select>
 
 						<div class="field-row" id="fMoneyValueRow">
-							<div>
+							<div id="fMoneyCardsFactorWrap">
 								<label class="field-label" data-i18n="newgame.factor_label"
 									data-i18n-title="newgame.factor_title"
 									title="Nombre d'unités monétaires équivalent à une carte valeur">Facteur carte/monnaie</label>
 								<input id="fMoneyCardsFactor" type="number" class="field-input" value="1" min="1">
-							</div>
-							<div>
-								<label class="field-label" data-i18n="newgame.weak_coin_label"
-									data-i18n-title="newgame.weak_coin_title"
-									title="Valeur d'une seule pièce/jeton faible">Valeur d'une pièce faible</label>
-								<input id="fWeakCoinValue" type="number" class="field-input" value="1" min="0.1" step="0.1">
 							</div>
 						</div>
 
@@ -143,12 +137,57 @@
 							     la monnaie fraîche à hauteur du DU du moment plutôt qu'un bonus
 							     fixe. Réglable uniquement ici, à la création - jamais modifiable en
 							     cours de partie. Verrouille le facteur carte/monnaie à 1 (voir
-							     selectMoneyChoice() dans app.js) pour un terrain de jeu simplifié. -->
+							     selectMoneyChoice() dans app.js) pour un terrain de jeu simplifié.
+							     Correctif (13/09/2026), remonté par l'utilisateur : en monnaie libre
+							     ET mode smartphone, cette case n'a plus lieu d'être proposée - elle
+							     est cochée automatiquement et masquée (voir
+							     updateNewGameAdvancedFields() dans app.js) puisqu'un smartphone qui
+							     suit chaque jeton individuellement a de toute façon besoin d'une
+							     masse monétaire strictement croissante pour rester cohérent. Reste
+							     visible et modifiable pour la monnaie libre CLASSIQUE (sans
+							     smartphone, suivi manuel par l'animateur). -->
 							<label class="checkbox-label" data-i18n-title="newgame.strict_trm_title"
 								title="La masse monétaire ne diminue jamais à la mort d'un joueur - sa renaissance crée de la monnaie fraîche à hauteur du DU, plutôt qu'un bonus fixe. Verrouille le facteur carte/monnaie à 1. Réglable uniquement à la création de la partie.">
 								<input id="fStrictTrm" type="checkbox">
 								<span data-i18n="newgame.strict_trm_label">Mode strict TRM (masse monétaire toujours croissante)</span>
 							</label>
+						</div>
+
+						<!-- "Réglages avancés" : accordéon animé (remonté par l'utilisateur,
+						     13/09/2026 - "les options se dérouleraient dans un effet animé
+						     façon accordéon"). Regroupe les deux réglages techniques que la
+						     plupart des animateurs laissent à leur valeur par défaut : "1
+						     jeton = combien d'unités monétaires" (renommé depuis "Valeur d'une
+						     pièce faible" pour lever l'ambiguïté jeton/unité monétaire) et,
+						     uniquement en monnaie libre + smartphone, "Valeur d'une carte
+						     faible en DU" (remplace alors le "Facteur carte/monnaie" masqué
+						     ci-dessus - voir Game.weakCardValueInDU et
+						     updateNewGameAdvancedFields() dans app.js pour la bascule). -->
+						<div class="advanced-settings" id="advancedSettingsSection">
+							<button type="button" id="btnToggleAdvanced" class="advanced-settings-toggle" aria-expanded="false">
+								<span data-i18n="newgame.advanced_settings_label">Réglages avancés</span>
+								<span class="accordion-chevron" aria-hidden="true"></span>
+							</button>
+							<div id="advancedSettingsPanel" class="advanced-settings-panel">
+								<div class="advanced-settings-panel-inner">
+									<div class="advanced-settings-content">
+										<div class="field-row">
+											<div>
+												<label id="fWeakCoinValueLabel" class="field-label" data-i18n="newgame.weak_coin_label"
+													data-i18n-title="newgame.weak_coin_title"
+													title="Valeur d'une seule pièce/jeton faible">Valeur d'une pièce faible</label>
+												<input id="fWeakCoinValue" type="number" class="field-input" value="1" min="0.1" step="0.1">
+											</div>
+											<div id="fWeakCardValueInDUWrap" class="hidden">
+												<label class="field-label" data-i18n="newgame.weak_card_value_du_label"
+													data-i18n-title="newgame.weak_card_value_du_title"
+													title="Prix d'une carte faible en monnaie libre smartphone, exprimé en DU">Valeur d'une carte faible en DU ?</label>
+												<input id="fWeakCardValueInDU" type="number" class="field-input" value="0.5" min="0.1" step="0.1">
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
 						</div>
 
 						<label class="field-label" data-i18n="newgame.players_label">Joueurs</label>
@@ -579,6 +618,11 @@
 					</div>
 					<div class="panel-card">
 						<h3 class="chart-title" data-i18n="report.chart_money_mass_title">Évolution de la masse monétaire</h3>
+						<!-- Remonté par l'utilisateur (13/09/2026) : clarifier que les valeurs
+						     sont des UNITÉS MONÉTAIRES (ex. : G1), jamais un nombre de jetons -
+						     même risque de confusion que partout ailleurs dans le mode libre
+						     smartphone (voir CLAUDE.md, "Le calcul du DU"). -->
+						<p class="galilee-explainer" data-i18n="report.chart_money_mass_explainer">Valeurs exprimées en unités monétaires (ex. : G1), jamais en nombre de jetons.</p>
 						<div class="chart-container"><canvas id="chartReportMoneyMass"></canvas></div>
 					</div>
 				</div>

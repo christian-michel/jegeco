@@ -455,6 +455,36 @@ body.money-libre .panel-actions .btn.active-mode { background: var(--accent-libr
 }
 .death-inventory-player legend { font-weight: 700; font-size: 0.85rem; padding: 0 0.4rem; }
 
+/* ============ "Réglages avancés" (écran Nouvelle partie) : accordéon animé ============ */
+/* Remonté par l'utilisateur (13/09/2026) : "quand on cliquerait sur les
+   options avancées, alors les options se dérouleraient dans un effet animé
+   façon accordéon [...] avec l'effet accordéon qui se referme." Technique
+   grid-template-rows 0fr -> 1fr : anime la hauteur sans jamais avoir besoin
+   de la mesurer en JS (contrairement à max-height, qui exige une valeur fixe
+   arbitraire) - le enfant .advanced-settings-panel-inner porte l'overflow
+   masqué pendant la transition. */
+.advanced-settings { margin: 1rem 0; }
+.advanced-settings-toggle {
+	display: flex; align-items: center; justify-content: space-between; width: 100%;
+	background: none; border: 1px solid var(--border); border-radius: 8px;
+	padding: 0.55rem 0.9rem; font-size: 0.82rem; font-weight: 700; color: var(--text-dim);
+	cursor: pointer;
+}
+.advanced-settings-toggle:hover { background: rgba(0,0,0,0.03); }
+.advanced-settings-toggle .accordion-chevron {
+	display: inline-block; width: 0; height: 0; margin-left: 0.5rem;
+	border-left: 5px solid transparent; border-right: 5px solid transparent;
+	border-top: 6px solid currentColor;
+	transition: transform 0.25s ease;
+}
+.advanced-settings-toggle[aria-expanded="true"] .accordion-chevron { transform: rotate(180deg); }
+.advanced-settings-panel {
+	display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.25s ease;
+}
+.advanced-settings-panel.open { grid-template-rows: 1fr; }
+.advanced-settings-panel-inner { overflow: hidden; }
+.advanced-settings-content { padding-top: 0.8rem; }
+
 /* ============ Case à cocher avec libellé (options monnaie libre) ============ */
 .checkbox-label {
 	display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.85rem;
