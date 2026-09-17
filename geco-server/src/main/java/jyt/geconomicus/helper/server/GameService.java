@@ -632,6 +632,37 @@ public class GameService
 				seller.setJetonMedium(seller.getJetonMedium() + actualMediumCoins - actualMediumChange);
 				seller.setJetonStrong(seller.getJetonStrong() + actualStrongCoins - actualStrongChange);
 			}
+			// BUG TROUVÉ ET CORRIGÉ (campagne de test, 17/09/2026) : la dette
+			// suivie par smartphone (ba1e8d8) a bien introduit un prix fixe en
+			// jetons (LEVEL_JETON_PRICE côté player-view.js) et un crédit de
+			// player.jetonWeak à la banque (NEW_CREDIT, voir Event.java), mais
+			// cette méthode ne déplaçait JAMAIS réellement ces jetons entre
+			// acheteur et vendeur pour la dette - seule la branche MONEY_LIBRE
+			// ci-dessus le faisait. Un joueur en dette+smartphone pouvait donc
+			// acheter des cartes sans jamais voir son solde diminuer (ni le
+			// vendeur augmenter), pendant que la carte, elle, changeait bien de
+			// main (inventaire dérivé de Transaction, indépendant des jetons) -
+			// confirmé par playtest (jetonWeak inchangé après un achat validé).
+			// Pas de recherche de rendu de monnaie ici (contrairement à la
+			// libre) : le prix dette est un montant FIXE, une seule dénomination
+			// (uniquement des jetons faibles depuis ba1e8d8), jamais négocié -
+			// actualWeakCoins/actualMediumCoins/actualStrongCoins valent donc
+			// toujours pWeakCoins/pMediumCoins/pStrongCoins tels quels pour ce
+			// système monétaire (jamais réassignés plus haut). Gaté sur
+			// startingCardsJson (comme partout ailleurs dans ce fichier, jamais
+			// sur un réglage global) : jamais pour la dette CLASSIQUE (aucun
+			// joueur n'a de pioche smartphone dans ce mode, ce code reste alors
+			// mort) ni pour la libre/le troc (déjà couverts ci-dessus/dessous).
+			else if ((game.getMoneySystem() == Game.MONEY_DEBT) && (buyer.getStartingCardsJson() != null)
+					&& (seller.getStartingCardsJson() != null))
+			{
+				buyer.setJetonWeak(buyer.getJetonWeak() - actualWeakCoins);
+				buyer.setJetonMedium(buyer.getJetonMedium() - actualMediumCoins);
+				buyer.setJetonStrong(buyer.getJetonStrong() - actualStrongCoins);
+				seller.setJetonWeak(seller.getJetonWeak() + actualWeakCoins);
+				seller.setJetonMedium(seller.getJetonMedium() + actualMediumCoins);
+				seller.setJetonStrong(seller.getJetonStrong() + actualStrongCoins);
+			}
 			// Troc uniquement (voir Transaction.isGoodsTrade()) : les jetons en
 			// monnaie libre sont désormais suivis en direct eux aussi (voir
 			// juste au-dessus, Player.jetonWeak&co) - la dette, pas encore
@@ -800,8 +831,20 @@ public class GameService
 			// concernée par ce compte réel, voir la note d'architecture du
 			// 06/09/2026) et comme repli si, pour une raison quelconque, ce
 			// joueur n'a pas encore de compte réel initialisé.
-			if ((game != null) && (game.getMoneySystem() == Game.MONEY_LIBRE) && (player != null)
-					&& (player.getStartingCardsJson() != null))
+			// Élargi à la dette (17/09/2026, campagne de test) : depuis ba1e8d8,
+			// la dette suivie par smartphone tient elle aussi un compte réel et
+			// mutable (jetonWeak crédité par NEW_CREDIT, débité par
+			// REIMB_CREDIT/INTEREST_ONLY/saisie, voir Event.java) - le laisser
+			// sur l'ancien système de reconstruction ci-dessous était doublement
+			// faux pour elle : sa base de repli ("+7" quand aucun point de
+			// contrôle n'a encore été posé, quelques lignes plus bas) est une
+			// constante propre à la dotation de départ GRATUITE de la libre
+			// (jamais versée en dette, qui démarre à 0 et emprunte), et elle
+			// n'aurait de toute façon jamais tenu compte des crédits/
+			// remboursements (seuls des WEALTH_CHECKPOINT/DEATH/QUIT et des
+			// Transaction sont pris en compte ci-dessous, jamais un NEW_CREDIT).
+			if ((game != null) && ((game.getMoneySystem() == Game.MONEY_LIBRE) || (game.getMoneySystem() == Game.MONEY_DEBT))
+					&& (player != null) && (player.getStartingCardsJson() != null))
 			{
 				return player.getJetonWeak() + (2 * player.getJetonMedium()) + (4 * player.getJetonStrong());
 			}
