@@ -3700,6 +3700,21 @@ async function openEndOfTurnWizard() {
 	const isSmartphoneLibre = !isDebt && !isTroc
 		&& game.players.some((p) => p.active && p.hasStartingAllocation);
 
+	// Étape 3, monnaie dette + smartphone (17/09/2026, remonté par l'utilisateur :
+	// "les étapes de l'assistant à l'entre deux tour sont les mêmes que pour la
+	// partie en monnaie dette classique... on parle d'unités monétaires, pas de
+	// jetons... il faut aussi que l'assistant ait la proposition de l'inventaire
+	// des cartes des joueurs, au moment où ils meurent, au moment où ils
+	// quittent la partie en fin de partie") - même détection exacte que
+	// isSmartphoneLibre ci-dessus (au moins un joueur actif avec une dotation de
+	// départ smartphone, voir hasStartingAllocation), jamais une lecture du
+	// réglage global AppSettings.gameMode. La dette CLASSIQUE (isSmartphoneDebt
+	// === false) garde le déroulé de l'assistant totalement inchangé - voir
+	// renderStepDeathInventory/renderEndGameInventory ci-dessous, qui ne
+	// changent de comportement QUE pour les joueurs individuellement suivis
+	// (p.hasStartingAllocation), jamais pour la partie entière.
+	const isSmartphoneDebt = isDebt && game.players.some((p) => p.active && p.hasStartingAllocation);
+
 	// Étape 3, monnaie libre uniquement : charge l'historique des transactions
 	// smartphone une seule fois, avant toute étape de l'assistant (voir
 	// allTransactionsThisGame plus haut) - inutile en dette/troc, qui n'ont pas
@@ -4466,6 +4481,85 @@ async function openEndOfTurnWizard() {
 			return;
 		}
 
+		// Étape 3, monnaie dette + SMARTPHONE (17/09/2026, remonté par
+		// l'utilisateur : "il faut aussi que l'assistant ait la proposition de
+		// l'inventaire des cartes des joueurs... au moment où ils quittent la
+		// partie en fin de partie") - mêmes étapes que la dette CLASSIQUE
+		// ci-dessous (un seul champ monétaire + 3 champs de cartes par niveau),
+		// mais préremplies depuis le VRAI solde/inventaire du téléphone
+		// (computeEndGamePrefill, déjà générique - voir son propre commentaire)
+		// et relabellisées "Unités monétaires" plutôt que "Monnaie restante"
+		// (isSmartphoneDebt, voir plus haut) - jamais pour la dette CLASSIQUE,
+		// qui tombe directement dans le bloc suivant, inchangé.
+		if (isDebt && isSmartphoneDebt)
+		{
+			el("dlgTitle").textContent = t("wiz.end_inventory_title");
+			el("dlgBody").innerHTML = `<p style="color:var(--text-dim);">${t("settings.catalog_loading")}</p>`;
+			let levelById = new Map();
+			try {
+				const catalog = await Api.getCatalog("cartes");
+				levelById = new Map(catalog.map((c) => [c.id, c.niveau]));
+			} catch (err) {
+				pushDebugLog("ERREUR", "renderEndGameInventory (dette smartphone): échec du chargement du catalogue -", err);
+			}
+			const prefills = await Promise.all(activePlayers.map((p) => computeEndGamePrefill(p, levelById)));
+			const prefillByPlayerId = new Map(activePlayers.map((p, i) => [p.id, prefills[i]]));
+			el("dlgBody").innerHTML = `
+				<p>${t("wiz.end_inventory_intro")}</p>
+				<p class="du-remaining" style="font-weight:600;"></p>
+				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
+					const pre = prefillByPlayerId.get(p.id);
+					const displayCoins = round2(pre.coins * game.weakCoinValue);
+					return `
+					<fieldset class="death-inventory-player" data-player-id="${p.id}">
+						<legend>${escapeHtml(p.name)}</legend>
+						<div class="field-row">
+							<div><label>${t("wiz.field_monetary_units_simple")}</label><input type="number" class="eqMoney" value="${displayCoins}" min="0" step="0.1"></div>
+							<div><label>${t("game.field_weak_cards")}</label><input type="number" class="eqWeak" value="${pre.weak}" min="0"></div>
+						</div>
+						<div class="field-row">
+							<div><label>${t("game.field_medium_cards")}</label><input type="number" class="eqMedium" value="${pre.medium}" min="0"></div>
+							<div><label>${t("game.field_strong_cards")}</label><input type="number" class="eqStrong" value="${pre.strong}" min="0"></div>
+						</div>
+					</fieldset>`;
+				}).join("")}
+				<button type="button" class="btn btn-primary btn-block" id="wizNextEndInventory">${t("wiz.validate_continue_btn")}</button>`;
+			el("wizNextEndInventory").onclick = async () => {
+				for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
+					const playerId = parseInt(fieldset.dataset.playerId, 10);
+					const enteredCoins = parseFloat(fieldset.querySelector(".eqMoney").value || "0");
+					const money = Math.max(0, Math.round(enteredCoins / (game.weakCoinValue || 1)));
+					await Api.recordEvent(state.currentGameId, {
+						type: "Q", playerId,
+						principal: money, interest: 0,
+						weakCards: parseInt(fieldset.querySelector(".eqWeak").value || "0", 10),
+						mediumCards: parseInt(fieldset.querySelector(".eqMedium").value || "0", 10),
+						strongCards: parseInt(fieldset.querySelector(".eqStrong").value || "0", 10),
+					});
+				}
+				state.currentGame = await Api.getGame(state.currentGameId);
+				Object.assign(game, state.currentGame);
+				renderEndGameSummary();
+			};
+
+			function updateRemainingDebtSmartphone() {
+				let collected = 0;
+				document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
+					const entered = parseFloat(fieldset.querySelector(".eqMoney").value || "0");
+					collected += entered;
+				});
+				const remaining = game.moneyMass - collected;
+				const el3 = document.querySelector(".du-remaining");
+				el3.textContent = t("wiz.remaining_to_collect", { remaining, mass: game.moneyMass, collected });
+				el3.style.color = remaining === 0 ? "var(--accent-libre)" : "var(--text-dim)";
+			}
+			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
+				fieldset.addEventListener("input", updateRemainingDebtSmartphone);
+			});
+			updateRemainingDebtSmartphone();
+			return;
+		}
+
 		el("dlgTitle").textContent = t("wiz.end_inventory_title");
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.end_inventory_intro")}</p>
@@ -4620,19 +4714,44 @@ async function openEndOfTurnWizard() {
 	// étape s'intercale entre la sélection des morts et les nouveaux-nés - après
 	// le bilan des joueurs endettés (étape 0), qui a déjà géré la saisie
 	// éventuelle par la banque avant que l'animateur ne fasse cet inventaire.
-	function renderStepDeathInventory() {
+	async function renderStepDeathInventory() {
 		hideGenericButtons();
 		if (selectedDeathIds.length === 0) {
 			renderStep3();
 			return;
 		}
 		el("dlgTitle").textContent = t("wiz.death_inventory_title");
+		// Étape 3, monnaie dette + smartphone (17/09/2026, remonté par
+		// l'utilisateur : "il faut aussi que l'assistant ait la proposition de
+		// l'inventaire des cartes des joueurs, au moment où ils meurent") - pour
+		// un joueur INDIVIDUELLEMENT suivi par smartphone (hasStartingAllocation,
+		// jamais vrai en dette classique), préremplit ce même formulaire avec son
+		// VRAI solde/inventaire (même fonction que la fin de partie libre/dette
+        // smartphone, voir computeEndGamePrefill) plutôt que de laisser
+		// l'animateur deviner - ce dernier garde toujours la main pour corriger
+		// si la réalité physique diffère. Un joueur classique dans la même
+		// partie (mélange improbable mais jamais exclu techniquement) garde le
+		// comportement historique (0, saisie manuelle intégrale).
+		let levelById = new Map();
+		if (selectedDeathIds.some((id) => game.players.find((pl) => pl.id === id)?.hasStartingAllocation)) {
+			try {
+				const catalog = await Api.getCatalog("cartes");
+				levelById = new Map(catalog.map((c) => [c.id, c.niveau]));
+			} catch (err) {
+				pushDebugLog("ERREUR", "renderStepDeathInventory: échec du chargement du catalogue -", err);
+			}
+		}
+		const dyingPlayers = selectedDeathIds.map((id) => game.players.find((pl) => pl.id === id));
+		const prefills = await Promise.all(dyingPlayers.map((p) => computeEndGamePrefill(p, levelById)));
+		const prefillByPlayerId = new Map(dyingPlayers.map((p, i) => [p.id, prefills[i]]));
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.death_inventory_intro")}</p>
-			${selectedDeathIds.map((id) => {
-				const p = game.players.find((pl) => pl.id === id);
+			${dyingPlayers.map((p) => {
+				const tracked = !!p.hasStartingAllocation;
+				const pre = prefillByPlayerId.get(p.id);
+				const displayCoins = tracked ? round2(pre.coins * game.weakCoinValue) : 0;
 				return `
-				<fieldset class="death-inventory-player" data-player-id="${id}">
+				<fieldset class="death-inventory-player" data-player-id="${p.id}">
 					<legend>${escapeHtml(p.name)}</legend>
 					<!-- Remonté par un utilisateur : la monnaie dette n'a jamais eu qu'un
 					     seul type de jeton (contrairement aux cartes valeurs, qui existent
@@ -4640,14 +4759,17 @@ async function openEndOfTurnWizard() {
 					     l'application Swing d'origine (StatsFrame.addFromEvent). Retour à
 					     un seul champ "Monnaie restante", après une tentative erronée
 					     d'alignement sur un tableur transmis qui ne reflétait pas
-					     fidèlement les règles réelles. -->
+					     fidèlement les règles réelles. En dette SMARTPHONE (17/09/2026),
+					     ce même champ unique se relabellise "Unités monétaires" et se
+					     préremplit depuis le vrai solde du téléphone (jetonWeak) -
+					     jamais en dette classique, qui garde "Monnaie restante" à 0. -->
 					<div class="field-row">
-						<div><label>${t("game.field_remaining_money")}</label><input type="number" class="diMoney" value="0"></div>
-						<div><label>${t("game.field_weak_cards")}</label><input type="number" class="diWeak" value="0"></div>
+						<div><label>${t(tracked ? "wiz.field_monetary_units_simple" : "game.field_remaining_money")}</label><input type="number" class="diMoney" value="${displayCoins}" min="0" step="${tracked ? "0.1" : "1"}"></div>
+						<div><label>${t("game.field_weak_cards")}</label><input type="number" class="diWeak" value="${tracked ? pre.weak : 0}" min="0"></div>
 					</div>
 					<div class="field-row">
-						<div><label>${t("game.field_medium_cards")}</label><input type="number" class="diMedium" value="0"></div>
-						<div><label>${t("game.field_strong_cards")}</label><input type="number" class="diStrong" value="0"></div>
+						<div><label>${t("game.field_medium_cards")}</label><input type="number" class="diMedium" value="${tracked ? pre.medium : 0}" min="0"></div>
+						<div><label>${t("game.field_strong_cards")}</label><input type="number" class="diStrong" value="${tracked ? pre.strong : 0}" min="0"></div>
 					</div>
 				</fieldset>`;
 			}).join("")}
@@ -4655,7 +4777,15 @@ async function openEndOfTurnWizard() {
 		el("wizNextDeathInventory").onclick = async () => {
 			for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
-				const money = parseInt(fieldset.querySelector(".diMoney").value || "0", 10);
+				const player = game.players.find((pl) => pl.id === playerId);
+				const tracked = !!player.hasStartingAllocation;
+				const enteredMoney = parseFloat(fieldset.querySelector(".diMoney").value || "0");
+				// Reconversion en jetons (voir la même logique déjà en place pour la
+				// libre+smartphone, renderEndGameInventory ci-dessus) - seulement
+				// nécessaire pour un joueur suivi, où l'animateur vient de saisir une
+				// valeur monétaire, jamais un compte de jetons.
+				const money = tracked ? Math.max(0, Math.round(enteredMoney / (game.weakCoinValue || 1)))
+					: Math.max(0, Math.round(enteredMoney));
 				const weakCards = parseInt(fieldset.querySelector(".diWeak").value || "0", 10);
 				const mediumCards = parseInt(fieldset.querySelector(".diMedium").value || "0", 10);
 				const strongCards = parseInt(fieldset.querySelector(".diStrong").value || "0", 10);

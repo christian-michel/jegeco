@@ -383,10 +383,20 @@ public class GameService
 			int weakCardsForEvent = pWeakCards;
 			int mediumCardsForEvent = pMediumCards;
 			int strongCardsForEvent = pStrongCards;
-			final boolean isLibreSmartphoneDeath = (type == EventType.DEATH)
-					&& (game.getMoneySystem() == Game.MONEY_LIBRE) && (player != null)
-					&& (player.getStartingCardsJson() != null);
-			if (isLibreSmartphoneDeath)
+			// Élargi à la dette (17/09/2026, remonté par l'utilisateur : "il faut
+			// aussi que l'assistant ait la proposition de l'inventaire des cartes
+			// des joueurs, au moment où ils meurent... en partie monnaie dette avec
+			// smartphone") - même mécanisme EXACT que la libre+smartphone (pioche
+			// commune, voir dealStartingHandsForLibreIfNeeded) : recalcule
+			// l'inventaire réel au moment de la mort et redistribue une main
+			// fraîche à la renaissance, plutôt que de laisser l'animateur saisir ça
+			// à la main comme en dette classique (qui n'a de toute façon aucune
+			// notion de carte suivie par smartphone - player.getStartingCardsJson()
+			// y reste toujours null, condition inchangée ci-dessous).
+			final boolean isSmartphoneCardTrackedDeath = (type == EventType.DEATH)
+					&& ((game.getMoneySystem() == Game.MONEY_LIBRE) || (game.getMoneySystem() == Game.MONEY_DEBT))
+					&& (player != null) && (player.getStartingCardsJson() != null);
+			if (isSmartphoneCardTrackedDeath)
 			{
 				final java.util.Map<String, Integer> inventoryAtDeath = computePlayerCardInventory(em, pGameId,
 						pPlayerId);
@@ -1056,7 +1066,19 @@ public class GameService
 			final Game game = em.find(Game.class, pGameId);
 			if (game == null)
 				return;
-			if ((game.getMoneySystem() != Game.MONEY_LIBRE) || (game.getTurnNumber() != 1)
+			// Remonté par l'utilisateur (17/09/2026) : "est-il possible de mettre le
+			// système de gestion de la pioche commun aux différents types de
+			// parties (monnaie dette, monnaie libre et troc) ? Ainsi, si je
+			// détecte un bug, je le notifie et il sera pris en compte sur les
+			// trois systèmes en même temps." La pioche/carré/promotion elle-même
+			// (voir checkAndCashInSquares) était déjà entièrement agnostique du
+			// système monétaire - seule cette capture et dealStartingHandsForLibreIfNeeded
+			// ci-dessous excluaient explicitement la dette. Élargi à la dette : le
+			// TROC reste exclu (pas encore engineReady, voir app.js - et par
+			// principe, il n'a "jamais de monnaie ni de jeton d'aucune sorte", voir
+			// plugins/troc/manifest.json - la notion même de pioche de cartes
+			// contre jetons ne s'y applique pas).
+			if ((game.getMoneySystem() == Game.MONEY_TROC) || (game.getTurnNumber() != 1)
 					|| (game.getDeckPlayerCount() != null))
 				return;
 			final long activeCount = game.getPlayers().stream().filter(Player::isActive).count();
@@ -1112,7 +1134,15 @@ public class GameService
 			final Game game = em.find(Game.class, pGameId);
 			if (game == null)
 				return;
-			if ((game.getMoneySystem() != Game.MONEY_LIBRE) || (game.getDeckPlayerCount() == null)
+			// Élargi à la dette le 17/09/2026 (voir le commentaire de
+			// captureDeckPlayerCountIfNeeded ci-dessus pour le raisonnement complet
+			// sur la pioche commune) - le TROC reste seul exclu. La distribution de
+			// cartes ci-dessous (mise en place de la pioche + main de départ) est
+			// désormais commune dette/libre ; seule la dotation en JETONS de départ
+			// plus bas reste spécifique à la libre (la dette démarre à 0 jeton, un
+			// joueur emprunte à la banque - voir CreditRequestService - jamais de
+			// dotation gratuite comme la libre).
+			if ((game.getMoneySystem() == Game.MONEY_TROC) || (game.getDeckPlayerCount() == null)
 					|| (game.getSmartphoneCardPileJson() != null))
 				return; // déjà fait, ou conditions non réunies - jamais recalculé
 
@@ -1211,10 +1241,19 @@ public class GameService
 					// unités monétaires, jamais mise à l'échelle elle-même - voir
 					// Event.java, cas JOIN) converti en nombre de jetons faibles
 					// PHYSIQUES via Game.computeStartingJetonsPerPlayer.
-					final int[] startingJetons = computeDuBreakdown(game.computeStartingJetonsPerPlayer());
-					player.setJetonWeak(startingJetons[0]);
-					player.setJetonMedium(startingJetons[1]);
-					player.setJetonStrong(startingJetons[2]);
+					// Réservé à la LIBRE (17/09/2026, voir le commentaire de gate plus
+					// haut) : la dette+smartphone partage la pioche de cartes ci-dessus,
+					// mais jamais cette dotation gratuite - un joueur en dette démarre à
+					// 0 jeton, comme en dette classique, et emprunte à la banque (voir
+					// CreditRequestService/Event.java cas NEW_CREDIT, qui crédite
+					// désormais son jetonWeak directement pour ce mode).
+					if (game.getMoneySystem() == Game.MONEY_LIBRE)
+					{
+						final int[] startingJetons = computeDuBreakdown(game.computeStartingJetonsPerPlayer());
+						player.setJetonWeak(startingJetons[0]);
+						player.setJetonMedium(startingJetons[1]);
+						player.setJetonStrong(startingJetons[2]);
+					}
 				}
 			}
 			writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
@@ -1238,7 +1277,11 @@ public class GameService
 			// vient de se terminer pour une partie strict TRM - la même
 			// garantie "masse toujours exacte" que celle déjà assurée par
 			// Event.java pour tous les tours suivants, étendue au tout premier.
-			if (game.isStrictTrm())
+			// Réglage "Mode strict TRM" propre à la libre uniquement - gate
+			// explicite ajouté ici par prudence en élargissant cette méthode à la
+			// dette (17/09/2026), même si Game.isStrictTrm() ne devrait déjà jamais
+			// être vrai pour une partie en dette (case à cocher non proposée hors libre).
+			if ((game.getMoneySystem() == Game.MONEY_LIBRE) && game.isStrictTrm())
 				game.setMoneyMass(game.computeMoneyMassFromActivePlayersJetons());
 			em.getTransaction().commit();
 		}

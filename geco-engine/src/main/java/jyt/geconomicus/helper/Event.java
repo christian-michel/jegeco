@@ -420,6 +420,21 @@ public class Event implements Serializable
 			// Money and/or cards get taken from a player
 			game.seizeValues(weakCards, mediumCards, strongCards);
 			game.gainInterest(interest);
+			// Étape 3, monnaie dette suivie par SMARTPHONE (17/09/2026, remonté par
+			// l'utilisateur) : ces jetons repris (weakCards/mediumCards/strongCards,
+			// saisis/pré-remplis par l'assistant depuis le VRAI solde du joueur -
+			// voir GameService.recordEvent) doivent aussi quitter le solde
+			// PHYSIQUE de son téléphone, sans quoi il resterait affiché comme
+			// possédant des jetons déjà repris par la banque. Jamais pour la
+			// dette CLASSIQUE (startingCardsJson toujours null dans ce mode, donc
+			// isSmartphoneTrackedGame() reste faux) ni pour la libre/le troc (seule
+			// la dette a ce mécanisme de saisie).
+			if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT))
+			{
+				player.setJetonWeak(Math.max(0, player.getJetonWeak() - weakCards));
+				player.setJetonMedium(Math.max(0, player.getJetonMedium() - mediumCards));
+				player.setJetonStrong(Math.max(0, player.getJetonStrong() - strongCards));
+			}
 			// and then it's just like quitting: don't break here!
 
 		case QUIT:
@@ -471,6 +486,25 @@ public class Event implements Serializable
 			{
 				player.setCurDebt(0);
 				player.setCurInterest(0);
+				// Étape 3, monnaie dette suivie par SMARTPHONE (17/09/2026) : à la
+				// mort/sortie/saisie d'un joueur, son solde physique de jetons est
+				// remis à zéro - voir plugins/dette/manifest.json,
+				// deathRebirth.note : "une renaissance en dette ne redonne pas de
+				// dotation fixe, le joueur reprend simplement à 0 dette" - son
+				// jetonWeak suit exactement la même règle (jamais de dotation
+				// gratuite comme la libre, voir le cas NEW_CREDIT plus bas). Ce qui
+				// vient d'être compté dans weakCards/mediumCards/strongCards
+				// (inventaire à cet instant, voir GameService.recordEvent) a déjà
+				// été pris en compte pour les statistiques avant ce point - jamais
+				// pour la dette CLASSIQUE (isSmartphoneTrackedGame() y reste
+				// toujours faux) ni pour la libre/le troc (mécanisme propre à la
+				// dette).
+				if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT))
+				{
+					player.setJetonWeak(0);
+					player.setJetonMedium(0);
+					player.setJetonStrong(0);
+				}
 			}
 			player.setVisitedBank(true);
 			if ((game.getMoneySystem() == Game.MONEY_LIBRE) && EventType.DEATH.equals(evt))
@@ -564,6 +598,14 @@ public class Event implements Serializable
 			// comme les devant toujours en intégralité.
 			player.setCurInterest(Math.max(0, player.getCurInterest() - interest));
 			player.setVisitedBank(true);
+			// Étape 3, monnaie dette suivie par SMARTPHONE (17/09/2026) : même
+			// raisonnement que REIMB_CREDIT ci-dessus - l'intérêt payé ici quitte
+			// aussi le solde physique du téléphone du joueur (INTEREST_ONLY ne
+			// passe jamais par weakCards/mediumCards/strongCards, seulement par
+			// "interest", d'où ce traitement séparé plutôt que de dupliquer le cas
+			// REIMB_CREDIT ci-dessus).
+			if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT))
+				player.setJetonWeak(Math.max(0, player.getJetonWeak() - interest));
 			break;
 		case MM_CHANGE:
 			game.changeMoneyMass(principal);
@@ -571,6 +613,18 @@ public class Event implements Serializable
 		case NEW_CREDIT:
 			player.setCurDebt(player.getCurDebt() + principal);
 			player.setCurInterest(player.getCurInterest() + interest);
+			// Étape 3, monnaie dette suivie par SMARTPHONE (17/09/2026, remonté par
+			// l'utilisateur : "1 jeton faible = 1 unité monétaire... il n'y a que
+			// des jetons faibles") - contrairement à la libre (dotation de départ
+			// GRATUITE, voir dealStartingHandsForLibreIfNeeded), la dette ne crée
+			// de jetons pour un joueur QUE lorsqu'il emprunte : c'est ce même
+			// "principal" qui alimentait déjà uniquement la masse monétaire
+			// globale ci-dessous qu'il faut aussi verser physiquement sur son
+			// téléphone, sans quoi son solde resterait à 0 malgré un crédit
+			// accordé. Jamais pour la dette CLASSIQUE (aucun joueur n'a de
+			// startingCardsJson dans ce mode).
+			if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT))
+				player.setJetonWeak(player.getJetonWeak() + principal);
 			player.setVisitedBank(true);
 			game.changeMoneyMass(principal);
 			break;

@@ -69,7 +69,8 @@ public class Dtos
 			boolean visitedBank, Integer declaredAge, String favoriteColor, String avatarConfigJson,
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
 			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused, int jetonWeak,
-			int jetonMedium, int jetonStrong, int currentDuValue, double weakCardValueInDU)
+			int jetonMedium, int jetonStrong, int currentDuValue, double weakCardValueInDU,
+			boolean hasStartingAllocation)
 	{
 		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
 				final boolean pTradingAllowed, final double pWeakCoinValue, final boolean pIsPaused,
@@ -79,7 +80,17 @@ public class Dtos
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
 					p.getGoodsCount(), p.getAccessToken(), pTradeBalance, p.getWeakGoods(), p.getMediumGoods(),
 					p.getStrongGoods(), pMoneySystem, pTradingAllowed, pWeakCoinValue, pIsPaused, p.getJetonWeak(),
-					p.getJetonMedium(), p.getJetonStrong(), pCurrentDuValue, pWeakCardValueInDU);
+					p.getJetonMedium(), p.getJetonStrong(), pCurrentDuValue, pWeakCardValueInDU,
+					// hasStartingAllocation : ajouté le 17/09/2026 (étape 3, monnaie
+					// dette + smartphone) - même champ que PlayerDto (voir plus haut),
+					// manquant ici jusqu'ici. Nécessaire côté player-view.js pour
+					// distinguer un joueur RÉELLEMENT suivi par smartphone (pioche de
+					// cartes + jetons physiques, quel que soit le système monétaire) d'un
+					// joueur classique qui ouvrirait cette page par erreur (aucun des
+					// deux ne doit être confondu avec isDebtGame()/isLibreGame() seuls,
+					// qui ne reflètent que le système MONÉTAIRE, pas le mode de suivi) -
+					// voir isSmartphoneTrackedPlayer() dans player-view.js.
+					p.getStartingCardsJson() != null);
 		}
 	}
 

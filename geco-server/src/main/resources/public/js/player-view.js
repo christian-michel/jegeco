@@ -296,6 +296,35 @@ function isDebtGame() {
 	return state.player && (state.player.moneySystem === 1);
 }
 
+// Étape 3, monnaie dette + smartphone (17/09/2026, remonté par l'utilisateur :
+// "1 jeton faible = 1 unité monétaire... disparition des jetons forts, moyens
+// et faibles... on parle d'unités monétaires, pas de jetons") - vrai
+// uniquement pour un joueur RÉELLEMENT suivi par smartphone (pioche de
+// cartes + jetons physiques, voir PlayerSelfViewDto.hasStartingAllocation,
+// dérivé de Player.startingCardsJson != null côté serveur), jamais pour un
+// simple réglage global "mode smartphone" qui aurait pu changer depuis la
+// création de CETTE partie (même principe déjà établi ailleurs, voir
+// Event.isSmartphoneTrackedGame côté moteur). Consigne explicite de
+// l'utilisateur : "les consignes qui vont suivre pour définir la partie
+// monnaie dette avec smartphone ne doivent en rien affecter la partie
+// classique" - la dette CLASSIQUE n'a jamais de startingCardsJson (aucune
+// pioche n'y est jamais distribuée, voir GameService.dealStartingHandsForLibreIfNeeded),
+// donc cette fonction y reste FAUSSE par construction, sans jamais avoir
+// besoin de consulter le réglage global AppSettings.gameMode ici.
+function isSmartphoneTrackedPlayer() {
+	return !!(state.player && state.player.hasStartingAllocation);
+}
+
+// Vrai si cet écran doit n'afficher/manipuler QUE des unités monétaires,
+// jamais un nombre de jetons brut - la libre l'a toujours fait (voir
+// isLibreGame ci-dessus), la dette rejoint cette règle UNIQUEMENT quand elle
+// est suivie par smartphone (voir isSmartphoneTrackedPlayer ci-dessus) : la
+// dette classique garde intégralement son affichage historique (nombre de
+// jetons + ligne "soit X unités monétaires").
+function usesMonetaryUnitsOnly() {
+	return isLibreGame() || (isDebtGame() && isSmartphoneTrackedPlayer());
+}
+
 async function refreshPlayer() {
 	if (!state.gameId || !state.token) {
 		el("viewError").classList.remove("hidden");
@@ -416,7 +445,7 @@ async function renderDashboard() {
 		// DETTE, elle, n'est pas concernée par cette demande (prix des cartes
 		// FIXE en jetons, jamais en DU) : elle garde le double affichage déjà
 		// en place (nombre de jetons + ligne "soit X unités monétaires").
-		if (isLibreGame()) {
+		if (usesMonetaryUnitsOnly()) {
 			el("balanceCardSubtitle").textContent = t("trade.balance_label_monetary");
 			el("balanceCardValue").textContent = jetonsToMonetaryUnits(state.player.tradeBalance);
 			el("balanceUnitLabel").textContent = t("playerView.stat_unit_monetary");
@@ -463,7 +492,7 @@ async function renderDashboard() {
 		// appliqué ici par cohérence - delta est un mouvement de JETONS
 		// (Transaction.totalCoinsValue), jamais converti. En monnaie libre,
 		// affiché en unités monétaires comme le reste de cet écran.
-		const displayDelta = isLibreGame() ? jetonsToMonetaryUnits(delta) : delta;
+		const displayDelta = usesMonetaryUnitsOnly() ? jetonsToMonetaryUnits(delta) : delta;
 		amountEl.textContent = (displayDelta >= 0 ? "+" : "") + displayDelta;
 		amountEl.classList.toggle("negative", displayDelta < 0);
 		renderEvolutionSparkline(thisTurnTxs, state.player.id);
@@ -492,8 +521,8 @@ async function renderDashboard() {
 		// autre usage.
 		const amountLabel = latest.isGoodsTrade
 			? t("playerView.history_goods_amount_short", { n: latest.buyerWeakGoods + latest.buyerMediumGoods + latest.buyerStrongGoods })
-			: t(isLibreGame() ? "playerView.transactions_amount_monetary" : "game.transactions_amount",
-				{ n: isLibreGame() ? jetonsToMonetaryUnits(latest.totalCoinsValue) : latest.totalCoinsValue });
+			: t(usesMonetaryUnitsOnly() ? "playerView.transactions_amount_monetary" : "game.transactions_amount",
+				{ n: usesMonetaryUnitsOnly() ? jetonsToMonetaryUnits(latest.totalCoinsValue) : latest.totalCoinsValue });
 		el("activityText").innerHTML = t(verbKey, {
 			card: `<strong>${escapeHtmlLocal(cardName)}</strong>`,
 			name: `<strong>${escapeHtmlLocal(partner)}</strong>`,
@@ -577,7 +606,7 @@ async function renderProfile() {
 		el("statCoins").textContent = "—";
 		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_coins");
 		el("statCoinsMonetaryEquiv").textContent = "";
-	} else if (isLibreGame()) {
+	} else if (usesMonetaryUnitsOnly()) {
 		el("statCoins").textContent = jetonsToMonetaryUnits(state.player.tradeBalance);
 		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_monetary");
 		el("statCoinsMonetaryEquiv").textContent = "";
@@ -600,7 +629,16 @@ async function renderProfile() {
 	// cartes") et on en fait la somme - goodsCount reste utilisé tel quel
 	// pour les autres systèmes (troc/dette), où il est correctement
 	// maintenu.
-	if (isLibreGame()) {
+	// Élargi à la dette+smartphone (17/09/2026) : depuis que la dette partage la
+	// même pioche/mécanique de carrés que la libre (voir
+	// GameService.dealStartingHandsForLibreIfNeeded), son inventaire réel se
+	// dérive lui aussi de l'historique des transactions, jamais de goodsCount
+	// (jamais mis à jour pour dette/libre, voir le commentaire ci-dessus) -
+	// gardé sur isSmartphoneTrackedPlayer() plutôt que usesMonetaryUnitsOnly()
+	// car ce choix dépend du MÉCANISME de suivi des cartes, pas du libellé
+	// jeton/unité monétaire (les deux coïncident en pratique pour la dette,
+	// mais la distinction reste plus juste).
+	if (isLibreGame() || (isDebtGame() && isSmartphoneTrackedPlayer())) {
 		try {
 			const inventory = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`).then((r) => r.json());
 			el("statCards").textContent = Object.values(inventory).reduce((sum, n) => sum + n, 0);
@@ -846,11 +884,22 @@ function wireCardModalClicks(container, items) {
 // FAIBLES uniquement via le DU COURANT - un prix qui varie donc réellement
 // d'un tour à l'autre, suivant le DU, contrairement au prix fixe de la
 // monnaie dette.
+// Remonté par l'utilisateur (17/09/2026) : "1 jeton faible = 1 unité
+// monétaire... disparition des jetons forts, moyens et faibles. En partie
+// monnaie dette avec smartphone, il n'y a que des jetons faibles." - ce
+// tableau ne servait jusqu'ici QUE pour la dette (voir openCardModal
+// ci-dessous, jamais atteint par la libre/le troc), qui n'avait encore
+// jamais de pioche de cartes réelle (voir dealStartingHandsForLibreIfNeeded,
+// désormais élargi à la dette). Toutes les valeurs converties en jetons
+// FAIBLES uniquement, en conservant EXACTEMENT le même barème de valeur
+// qu'avant (faible=3, moyenne=3×2=6, forte=3×4=12, tresforte=6×4=24 -
+// convention weak=1/medium=2/strong=4 déjà utilisée partout ailleurs dans ce
+// fichier, voir Game.computeMoneyMassFromActivePlayersJetons côté moteur).
 const LEVEL_JETON_PRICE = {
 	faible: { weak: 3, medium: 0, strong: 0 },
-	moyenne: { weak: 0, medium: 3, strong: 0 },
-	forte: { weak: 0, medium: 0, strong: 3 },
-	tresforte: { weak: 0, medium: 0, strong: 6 },
+	moyenne: { weak: 6, medium: 0, strong: 0 },
+	forte: { weak: 12, medium: 0, strong: 0 },
+	tresforte: { weak: 24, medium: 0, strong: 0 },
 };
 
 // Remonté par l'utilisateur (09/09/2026) : "il faut fixer le prix d'une carte
@@ -1324,7 +1373,7 @@ async function openSellPicker() {
 	if (!state.cardsCatalog) state.cardsCatalog = await fetch("/api/catalogs/cartes").then((r) => r.json());
 	if (!state.visualsCatalog) state.visualsCatalog = await fetch("/api/catalogs/visuels").then((r) => r.json());
 
-	// Étape 3, monnaie libre : contrairement à dette/troc (pas encore de vrai
+	// Étape 3, monnaie libre : contrairement au troc (pas encore de vrai
 	// inventaire suivi), le stock de cartes est ici RÉEL et fini (voir le
 	// document de cadrage du 28/08/2026 et GameService.
 	// dealStartingHandsForLibreIfNeeded) - un joueur ne doit donc pouvoir
@@ -1332,8 +1381,12 @@ async function openSellPicker() {
 	// du catalogue comme c'était le cas jusqu'ici (un vrai trou : rien
 	// n'empêchait de "vendre" une carte jamais possédée, créant une carte
 	// fantôme et cassant le stock fixe qu'on vient tout juste de construire).
+	// Élargi à la dette+smartphone (17/09/2026) : depuis qu'elle partage la
+	// même pioche/mécanique de carrés que la libre, exactement le même risque
+	// de carte fantôme s'applique - jamais pour la dette CLASSIQUE, qui n'a
+	// toujours aucun inventaire suivi (voir isSmartphoneTrackedPlayer).
 	let ownedCounts = null;
-	if (isLibreGame()) {
+	if (isLibreGame() || (isDebtGame() && isSmartphoneTrackedPlayer())) {
 		try {
 			ownedCounts = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`)
 				.then((r) => r.json());
