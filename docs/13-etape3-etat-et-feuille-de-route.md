@@ -73,13 +73,76 @@ ce dépôt).
   seul champ "Jetons" par joueur (plus de faible/moyen/fort affichés),
   cohérent avec le fait que seuls les jetons faibles circulent désormais.
 
-### Autres systèmes monétaires
-- **Troc** : jouable sur smartphone (échange carte contre carte,
-  entièrement fonctionnel).
-- **Dette** : mécanismes communs au smartphone (pioche, carrés, compte à
-  rebours, comptage de cartes) déjà réutilisables — **extension complète
-  au smartphone (banque/crédits) pas encore commencée**, voir feuille de
-  route.
+### Monnaie dette + smartphone (construite le 17/09/2026)
+- **Pioche/carré/promotion partagée avec la libre** : `checkAndCashInSquares`
+  était déjà agnostique du système monétaire ; `captureDeckPlayerCountIfNeeded`/
+  `dealStartingHandsForLibreIfNeeded` élargies pour ne plus exclure la dette
+  (ni, depuis le 18/09/2026, le troc — voir plus bas) — un même correctif sur
+  la pioche bénéficie désormais aux trois systèmes à la fois.
+- **1 jeton faible = 1 unité monétaire, plus aucun jeton moyen/fort** en
+  dette+smartphone (contrairement à la dette classique, qui garde jetons
+  faible/moyen/fort inchangés) — `LEVEL_JETON_PRICE` (prix fixe des cartes)
+  converti en jetons faibles uniquement (3/6/12/24, même barème de valeur
+  qu'avant).
+- **Crédits/remboursements/intérêts/saisies alimentent réellement le solde
+  physique du téléphone** (`Player.jetonWeak`, jusque-là seulement mis à
+  jour par les achats de cartes) — un crédit accordé crédite désormais le
+  téléphone, un remboursement le débite, une mort/sortie/saisie le remet à
+  zéro (jamais de dotation gratuite comme en libre, la dette démarre
+  toujours à 0 et emprunte).
+- **Terminologie "unités monétaires"** (jamais "jetons") sur les écrans
+  concernés (app ET smartphones), uniquement pour un joueur RÉELLEMENT suivi
+  par smartphone (`hasStartingAllocation`, jamais une lecture du réglage
+  global) — la dette classique garde entièrement son affichage historique.
+- **Nouvel inventaire de cartes préempli à la mort et à la sortie de fin de
+  partie** depuis le vrai solde/inventaire du joueur (assistant animateur),
+  y compris pour l'écran "Ne peut pas payer" — l'animateur garde toujours la
+  main pour corriger avant de valider.
+- Voir `CLAUDE.md` et l'historique des commits (`ba1e8d8`, `5d2d5cd`,
+  `50c175c`, `a044d72`) pour le détail complet, y compris deux bugs réels
+  trouvés en campagne de test (jetons jamais déplacés lors d'un achat/
+  remboursement) et corrigés le jour même.
+
+### Monnaie troc + smartphone (construite le 18/09/2026)
+- **Même pioche/carré partagée** que la libre/la dette (voir ci-dessus) —
+  toujours ni jeton ni unité monétaire (règle intangible du troc, voir
+  `10-etape-plugins-troc.md`), mais les cartes de valeur (faible/moyenne/
+  forte/tresforte) et leur circulation suivent désormais le même mécanisme
+  robuste que les deux autres systèmes.
+- **Système d'échange entièrement repensé** : l'ancien mécanisme (quantité
+  de biens négociée via des compteurs, jamais réellement utilisable faute de
+  pioche partagée) est remplacé par un VRAI échange carte-contre-carte
+  1-pour-1 : chaque joueur retourne sa propre carte (QR), scanne celle de
+  l'autre via un nouveau bouton "Échanger" - le serveur vérifie que les deux
+  cartes ont la MÊME VALEUR et que chacun des deux joueurs possède DÉJÀ au
+  moins un exemplaire du modèle qu'il va recevoir (réciprocité
+  bidirectionnelle) ; sinon "Échange refusé" (infobulle 3 secondes), sans
+  aucun changement d'état des deux côtés. Niveaux redérivés côté serveur
+  depuis le catalogue de la partie (jamais depuis ce que le client prétend),
+  pour ne pas pouvoir être contournés.
+- **Mort/renaissance et inventaire de sortie** suivent le même principe que
+  la dette+smartphone : inventaire réel capturé avant la mort, main fraîche
+  de 4 cartes à la renaissance, préremplissage de l'assistant — troc
+  CLASSIQUE (déjà sans champ monétaire, déjà à 3 champs faible/moyenne/
+  forte) entièrement inchangé.
+- Historique des échanges (écran animateur) affiche "carte ⇄ carte" pour un
+  échange direct plutôt qu'un montant en jetons (toujours 0, jamais correct
+  pour ce système).
+- Voir l'historique des commits (`957b0f5`, `6af249a`, `997d715`) pour le
+  détail complet, y compris trois bugs réels trouvés en campagne de test
+  (carré jamais auto-encaissé en dette+smartphone après un achat ; classement
+  en direct jamais mis à jour pour un joueur troc+smartphone ; vérification
+  "même valeur" contournable via des niveaux déclarés par le client plutôt
+  que revérifiés côté serveur) et corrigés le jour même.
+- **Point connu, non corrigé à ce stade** : la validation d'un échange
+  (`GameService.recordCardSwap`, comme `recordTransaction` avant elle pour
+  dette/libre) n'utilise pas de verrou base de données - deux échanges
+  distincts portant sur la même carte rare, redimés quasi simultanément,
+  pourraient théoriquement passer tous les deux (fenêtre de temps très
+  courte). Schéma déjà présent depuis le début pour dette/libre, pas une
+  régression introduite le 18/09/2026 - à corriger si confirmé gênant en
+  usage réel (nécessiterait un verrou explicite ou une transaction DB
+  sérialisée sur la paire de joueurs concernée).
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
@@ -91,12 +154,21 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    une partie fraîche plutôt que de continuer une ancienne partie, le
    format de données ayant changé.
 2. **Écran animateur pour traiter les demandes de crédit** (monnaie dette,
-   smartphone) — le reste de la chaîne (demande côté joueur, backend)
-   fonctionne déjà.
-3. **Extension du smartphone à la monnaie dette** (au-delà des demandes de
-   crédit) : banque, remboursements, intérêts. Voir la note d'architecture
-   du 06/09/2026 dans `03-architecture-technique.md` sur ce qui est déjà
-   commun aux trois systèmes et ce qui reste propre à chacun.
+   smartphone) — la demande côté joueur et le backend
+   (`CreditRequestService`, approbation via `recordEvent`) fonctionnent déjà
+   depuis un moment ; seul l'écran de traitement dédié côté animateur (liste
+   des demandes en attente, bouton approuver/refuser) reste à construire —
+   l'animateur peut toujours accorder un crédit manuellement via l'étape
+   "Nouveaux crédits" de l'assistant en attendant, mais sans visibilité sur
+   les demandes explicitement faites par les joueurs depuis leur téléphone.
+3. **Verrou de concurrence sur les échanges smartphone (troc, dette, libre)**
+   : `recordTransaction`/`recordCardSwap` valident (solde, réciprocité...)
+   puis persistent sans verrou base de données explicite - deux échanges
+   distincts portant sur la même ressource rare, rédimés quasi
+   simultanément, pourraient théoriquement passer tous les deux. Schéma
+   présent depuis le début pour dette/libre, identifié explicitement le
+   18/09/2026 en revue croisée du troc+smartphone - à corriger si confirmé
+   gênant en usage réel.
 4. **Retirer les traces de diagnostic temporaires** une fois un test
    concluant confirmé (voir le code pour les commentaires "[DIAG]" restants
    éventuels — la plupart ont déjà été retirées ou pérennisées via le
@@ -108,7 +180,18 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    idée mentionnée par l'utilisateur pour exploiter les données réelles
    d'une partie jouée en mode smartphone avec le DU désormais calculé
    correctement ; pas encore commencé, dépend de la validation du point 1.
-7. **Mode "monnaie numérique"** (alternative sans dénominations physiques,
+7. **Documentation intégrée à l'app (vue "Documentation" d'`index.html`)
+   jamais traduite** (texte français en dur, sans `data-i18n`) — identifié
+   le 18/09/2026 en vérifiant la couverture multilingue complète après le
+   travail dette/troc+smartphone ; toutes les chaînes d'interface elles-
+   mêmes sont, elles, intégralement couvertes en français ET en anglais
+   (vérifié par un contrôle automatisé comparant chaque clé `data-i18n`/
+   `t("...")` utilisée dans le code aux fichiers `lang/fr.po`/`lang/en.po` -
+   aucune clé manquante des deux côtés). Ce bloc de documentation reste donc
+   le seul texte utilisateur non traduisible identifié à ce jour - à
+   traduire si confirmé prioritaire (un travail de traduction à part
+   entière, pas une simple vérification).
+8. **Mode "monnaie numérique"** (alternative sans dénominations physiques,
    un solde global par joueur) — évoqué comme variante future de la
    monnaie libre, voir la note d'architecture du 07/09/2026 dans
    `03-architecture-technique.md`. Reconsidéré depuis : la décision prise
@@ -117,7 +200,7 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    `03-architecture-technique.md`, entrée du 09/09/2026, pour le
    raisonnement complet) — ce point de la feuille de route est donc
    probablement caduc, à confirmer avant de le reprendre.
-8. Objectifs non encore abordés du cahier des charges d'origine à
+9. Objectifs non encore abordés du cahier des charges d'origine à
    revérifier : profils joueurs persistants au-delà de la reprise par nom,
    statistiques avancées spécifiques à l'étape 3 (voir
    `CAHIER_DES_CHARGES_ETAPE3.md` §5.2-5.4 pour le détail).

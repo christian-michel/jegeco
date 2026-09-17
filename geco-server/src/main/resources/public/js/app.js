@@ -2899,9 +2899,22 @@ async function renderTransactionsPanel(gameId) {
 	const totalVolume = transactions.reduce((s, tx) => s + tx.totalCoinsValue, 0);
 	const sortedPlayers = [...byPlayer.entries()].sort((a, b) => (b[1].sellCount + b[1].buyCount) - (a[1].sellCount + a[1].buyCount));
 
+	// Remonté par l'utilisateur (18/09/2026) : "en troc, tu peux nettoyer les
+	// historiques 'volume cumulé de 0 jetons'" - totalVolume/sellVolume/
+	// buyVolume dérivent tous de tx.totalCoinsValue, TOUJOURS 0 en troc (ni
+	// l'ancien mécanisme à quantité négociée ni le nouvel échange direct,
+	// voir Transaction.isCardSwap, n'ont jamais renseigné ce champ, propre
+	// aux jetons dette/libre) - un "volume" en jetons n'a d'ailleurs aucun
+	// sens pour un système qui n'en a par principe aucun (voir
+	// docs/10-etape-plugins-troc.md, règle 3). Résumé réduit au seul
+	// décompte, colonnes "volume" retirées du tableau (les décomptes
+	// vente/achat restent pertinents, eux) - jamais pour dette/libre,
+	// inchangés.
+	const isTroc = state.currentGame && (state.currentGame.moneySystem === 2); // Game.MONEY_TROC
 	const summaryHtml = `
 		<p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:0.9rem;">
-			${t("game.transactions_summary", { count: transactions.length, volume: totalVolume })}
+			${isTroc ? t("game.transactions_summary_troc", { count: transactions.length })
+				: t("game.transactions_summary", { count: transactions.length, volume: totalVolume })}
 		</p>`;
 
 	const activityHtml = `
@@ -2910,8 +2923,8 @@ async function renderTransactionsPanel(gameId) {
 				<th>${t("game.transactions_col_player")}</th>
 				<th>${t("game.transactions_col_sells")}</th>
 				<th>${t("game.transactions_col_buys")}</th>
-				<th>${t("game.transactions_col_sell_volume")}</th>
-				<th>${t("game.transactions_col_buy_volume")}</th>
+				${isTroc ? "" : `<th>${t("game.transactions_col_sell_volume")}</th>
+				<th>${t("game.transactions_col_buy_volume")}</th>`}
 				<th>${t("game.transactions_col_top_partner")}</th>
 			</tr></thead>
 			<tbody>
@@ -2920,8 +2933,8 @@ async function renderTransactionsPanel(gameId) {
 					<td>${escapeHtml(name)}</td>
 					<td>${s.sellCount}</td>
 					<td>${s.buyCount}</td>
-					<td>${s.sellVolume}</td>
-					<td>${s.buyVolume}</td>
+					${isTroc ? "" : `<td>${s.sellVolume}</td>
+					<td>${s.buyVolume}</td>`}
 					<td>${topPartner(s)}</td>
 				</tr>`).join("")}
 			</tbody>

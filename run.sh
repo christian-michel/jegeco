@@ -135,16 +135,31 @@ install_package()
 }
 
 # --- 3. Vérification de Java 21+ (système, seulement si pas de portable) ---
+# BUG TROUVÉ ET CORRIGÉ (18/09/2026, remonté par l'utilisateur : "vérifie
+# qu'il n'y ait pas d'erreur dans les logs serveurs au moment de la
+# compilation") : `head -1` supposait que la toute première ligne de
+# `java -version` (écrite sur stderr) est toujours la ligne de version -
+# faux dès qu'une variable d'environnement comme JAVA_TOOL_OPTIONS force la
+# JVM à imprimer une ligne "Picked up JAVA_TOOL_OPTIONS: ..." AVANT celle-ci
+# (constaté dans un environnement de développement distant avec proxy TLS,
+# mais un poste utilisateur réel peut tout à fait avoir cette variable
+# positionnée aussi, ex. configuration d'entreprise). Résultat : `ver` restait
+# vide, `java_ok` répondait FAUX même avec un Java 21 parfaitement installé -
+# le script proposait alors à tort de réinstaller Java. Corrigé en cherchant
+# le motif de version sur la sortie ENTIÈRE plutôt que sur sa première ligne
+# seulement - fonctionne dans les deux cas (avec ou sans ligne(s)
+# supplémentaire(s) avant la version), jamais de régression pour le cas
+# normal (une seule ligne, motif encore trouvé de la même façon).
 java_ok()
 {
 	command -v "$JAVA_BIN" >/dev/null 2>&1 || return 1
 	local ver
-	ver="$("$JAVA_BIN" -version 2>&1 | head -1 | grep -oE '"[0-9]+' | tr -d '"')"
+	ver="$("$JAVA_BIN" -version 2>&1 | grep -oE '"[0-9]+' | head -1 | tr -d '"')"
 	[ -n "$ver" ] && [ "$ver" -ge 21 ]
 }
 
 if java_ok; then
-	info "Java détecté : $("$JAVA_BIN" -version 2>&1 | head -1)"
+	info "Java détecté : $("$JAVA_BIN" -version 2>&1 | grep 'version' | head -1)"
 elif [ "$JAVA_BIN" != "java" ]; then
 	# Le JDK portable existe mais ne convient pas (version trop ancienne,
 	# archive corrompue...) - jamais de repli automatique vers une

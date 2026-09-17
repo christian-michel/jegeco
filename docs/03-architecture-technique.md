@@ -1525,6 +1525,87 @@ même, un vrai bug (un accroc réseau passager effaçait toute l'application
 du joueur) - la valeur de ce système a été démontrée en conditions réelles
 dès sa mise en place.
 
+**Monnaie dette + smartphone (17/09/2026)** : demande explicite de
+l'utilisateur, avec une question d'architecture posée directement - "est-il
+possible de mettre le système de gestion de la pioche commun aux différents
+types de parties (monnaie dette, monnaie libre et troc) ? Ainsi, si je
+détecte un bug, je le notifie et il sera pris en compte sur les trois
+systèmes en même temps." Réponse trouvée en auditant le code existant :
+`checkAndCashInSquares` (le mécanisme du carré lui-même) était déjà
+entièrement agnostique du système monétaire - seules
+`captureDeckPlayerCountIfNeeded`/`dealStartingHandsForLibreIfNeeded`
+excluaient explicitement la dette (et le troc, rejoint le lendemain, voir
+plus bas). Élargies : un même correctif sur la pioche bénéficie désormais à
+plusieurs systèmes à la fois, exactement comme demandé.
+
+Réutilise donc directement l'infrastructure de la monnaie libre (pioche
+partagée par modèle, carrés, `Player.jetonWeak` pour un compte réel et
+mutable) avec les adaptations propres à la dette : "1 jeton faible = 1
+unité monétaire", plus de jetons moyens/forts, prix des cartes fixe en
+jetons faibles (3/6/12/24, même barème de valeur qu'avant), terminologie
+"unités monétaires" au lieu de "jetons" (uniquement pour un joueur
+réellement suivi par smartphone, jamais pour la dette classique). Un vrai
+bug trouvé en jouant plusieurs parties complètes via l'API REST plutôt
+qu'en se contentant d'une relecture de code (méthode déjà éprouvée dans ce
+projet, voir plus haut) : `NEW_CREDIT`/`REIMB_CREDIT`/`INTEREST_ONLY` ne
+mettaient jamais à jour `Player.jetonWeak` - un crédit accordé n'alimentait
+donc jamais le solde physique du téléphone du joueur. Un second bug trouvé
+en seconde relecture indépendante (l'utilisateur a explicitement demandé la
+mise en place d'un second agent de contrôle pour cette phase de travail,
+suivi depuis pour toutes les phases suivantes) : un achat de carte ne
+déplaçait pas non plus réellement les jetons entre acheteur et vendeur en
+dette+smartphone. Les deux corrigés le jour même, voir l'historique des
+commits (`ba1e8d8`, `5d2d5cd`, `50c175c`, `a044d72`).
+
+**Monnaie troc + smartphone (18/09/2026)**, suite directe du travail de la
+veille sur la dette. Même question d'architecture reposée et reconfirmée
+pour le troc : la pioche/le carré sont désormais partagés par les **trois**
+systèmes monétaires sans aucune exclusion. Contrairement à la dette, le
+troc n'a par principe "jamais de monnaie ni de jeton d'aucune sorte" (voir
+`docs/10-etape-plugins-troc.md`) - seule la mécanique de CARTES (modèles,
+carrés) est concernée par le partage, jamais une notion de jeton.
+
+Le système d'échange smartphone du troc a été **entièrement repensé** sur
+demande explicite de l'utilisateur, qui a fourni une proposition de
+parcours détaillée (carte retournée → QR → bouton "Échanger" → scan de la
+carte de l'autre joueur) : remplace un ancien mécanisme (quantité de biens
+négociée via des compteurs) jamais réellement implémenté en pratique faute
+de pioche partagée pour le troc avant ce jour. Deux règles de validation
+ont été confirmées explicitement par l'utilisateur (question posée par
+Claude, réponse actée) avant toute implémentation : même valeur obligatoire
+(jamais faible contre fort) et réciprocité BIDIRECTIONNELLE (chacun des
+deux joueurs doit déjà posséder au moins un exemplaire du modèle qu'il va
+recevoir). Voir `docs/10-etape-plugins-troc.md` pour le détail complet des
+règles et `CLAUDE.md` pour les fichiers/méthodes concernés
+(`GameService.recordCardSwap`, `Transaction.forCardSwap`).
+
+Trois bugs réels trouvés en campagne de test (là encore, en jouant de
+vraies parties via l'API REST, jamais en se fiant à une simple relecture) :
+un carré resté non auto-encaissé après un achat en dette+smartphone (bug de
+la veille, découvert seulement maintenant faute d'avoir déclenché un carré
+par hasard le 17/09/2026), le classement en direct jamais mis à jour pour
+un joueur troc+smartphone (`Player.weakGoods&co`, jamais touchés par le
+nouveau mécanisme d'échange direct), et - trouvé spécifiquement par le
+second agent de relecture indépendante - la vérification "même valeur"
+comparait des niveaux déclarés PAR CHAQUE CLIENT, jamais revérifiés côté
+serveur contre le vrai catalogue : un client modifié aurait pu faire passer
+un échange faible-contre-forte pour valide. Les trois corrigés le jour
+même, voir l'historique des commits (`957b0f5`, `6af249a`, `997d715`).
+
+**Méthode de travail consolidée sur ces deux chantiers** (à retenir pour la
+suite) : (1) auditer le code existant et poser les questions d'architecture
+ouvertes AVANT de coder plutôt que de deviner ; (2) pour toute règle
+ambiguë touchant à une mécanique de jeu sensible (ici, la réciprocité d'un
+échange), poser une question fermée à choix multiples plutôt que de
+présumer une interprétation ; (3) une fois implémenté, rejouer de VRAIES
+parties complètes via l'API REST (jamais une simulation de la logique en
+Python) - c'est systématiquement cette étape, et elle seule, qui a révélé
+les bugs réels ci-dessus, invisibles à la seule lecture du code ; (4) faire
+relire le travail par un second agent indépendant, qui ne voit que le code
+et les résultats, jamais le raisonnement du premier - a trouvé un bug de
+sécurité réel (le contournement "même valeur" ci-dessus) qu'une simple
+relecture par le même agent n'aurait probablement pas détecté.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

@@ -83,23 +83,60 @@ docs/           documentation DE TRAVAIL (jamais servie aux utilisateurs
                 intégrée à l'app)
 ```
 
-## Les trois systèmes monétaires — et une distinction importante à l'intérieur de la monnaie libre
+## Les trois systèmes monétaires — et une distinction classique/smartphone qui s'applique désormais AUX TROIS
 
-- **Troc** : échange carte contre carte(s), jamais de jetons ni de valeur
-  monétaire.
-- **Dette** : banque, crédits, intérêts. Les cartes ont un prix FIXE en
-  jetons (voir `player-view.js`, `LEVEL_JETON_PRICE` — jamais changé).
+Depuis le 18/09/2026, les **trois** systèmes ont une variante "classique"
+(animateur seul, sans smartphone, code ancien inchangé) et une variante
+"smartphone" (chaque joueur a son téléphone) — **jamais l'une n'affecte
+l'autre**, sauf demande explicite. Le discriminant qui fait foi n'est
+JAMAIS le réglage global `AppSettings.gameMode` (qui a pu changer depuis la
+création de la partie), mais toujours une donnée PROPRE à la partie/au
+joueur : `Player.startingCardsJson != null` côté moteur
+(`Event.isSmartphoneTrackedGame()`), `hasStartingAllocation` côté DTO.
+
+- **Troc** : échange carte contre carte(s), **jamais de jetons ni de valeur
+  monétaire, sur rien** — vrai dans les deux modes, c'est la seule règle
+  intangible du troc (voir `docs/10-etape-plugins-troc.md`, règle 6).
+  - *Classique* : échange bien-contre-bien négocié librement, enregistré
+    par l'animateur (`GOODS_TRADE`, tableau de bord "Échange entre
+    joueurs") — `Player.weakGoods/mediumGoods/strongGoods`.
+  - *Smartphone* (construit le 18/09/2026) : échange DIRECT carte-contre-
+    carte 1-pour-1 par QR (carte retournée → QR → bouton "Échanger" → scan
+    de la carte de l'autre joueur) — voir `GameService.recordCardSwap` :
+    même valeur obligatoire ET réciprocité bidirectionnelle (chacun possède
+    déjà au moins un exemplaire du modèle qu'il va recevoir), sinon
+    "Échange refusé". Détail complet dans `docs/10-etape-plugins-troc.md`.
+- **Dette** : banque, crédits, intérêts.
+  - *Classique* : cartes à prix FIXE en jetons faible/moyen/fort (voir
+    `player-view.js`, `LEVEL_JETON_PRICE` — jamais changé pour ce mode).
+  - *Smartphone* (construit le 17/09/2026) : "1 jeton faible = 1 unité
+    monétaire", plus aucun jeton moyen/fort, prix fixe en jetons faibles
+    uniquement (barème de valeur inchangé), `Player.jetonWeak` alimenté
+    réellement par les crédits/remboursements/saisies (voir
+    `Event.applyEvent()`, cas `NEW_CREDIT`/`REIMB_CREDIT`/`INTEREST_ONLY`/
+    `BANKRUPT`/`PRISON`/`CANNOT_PAY`).
 - **Libre** : Dividende Universel (DU) régulier à chaque joueur, sans dette.
-  **Deux variantes à ne jamais confondre** :
-  - **Mode classique** (sans suivi par smartphone) : l'animateur suit tout
-    manuellement dans l'assistant de fin de tour — code plus ancien,
-    largement inchangé depuis l'étape 2.
-  - **Mode smartphone** (le cœur de l'étape 3) : chaque joueur a son
-    téléphone, ses jetons réels sont suivis avec précision
-    (`Player.jetonWeak/jetonMedium/jetonStrong`), et **seuls les jetons
+  - *Classique* : l'animateur suit tout manuellement dans l'assistant de
+    fin de tour — code plus ancien, largement inchangé depuis l'étape 2.
+  - *Smartphone* (le premier des trois construit, cœur de l'étape 3) :
+    jetons réels suivis avec précision
+    (`Player.jetonWeak/jetonMedium/jetonStrong`), **seuls les jetons
     FAIBLES circulent réellement** (voir plus bas, "Le calcul du DU").
-    Un correctif touchant l'un des deux modes ne doit, sauf demande
-    explicite, jamais affecter l'autre.
+
+**Pioche/carré/promotion PARTAGÉE par les trois systèmes** (réponse
+explicite à une question d'architecture posée par l'utilisateur le
+17/09/2026, "est-il possible de mettre le système de gestion de la pioche
+commun aux différents types de parties ? Ainsi, si je détecte un bug, je le
+notifie et il sera pris en compte sur les trois systèmes en même temps.") :
+`GameService.checkAndCashInSquares` (le mécanisme du carré) est entièrement
+agnostique du système monétaire — seul `Game.smartphoneCardPileJson != null`
+compte, jamais une liste de systèmes monétaires à maintenir à jour à chaque
+nouveau système qui la rejoint. `captureDeckPlayerCountIfNeeded`/
+`dealStartingHandsForLibreIfNeeded` (mise en place initiale de la pioche)
+suivent le même principe. Un correctif sur cette mécanique bénéficie donc
+**automatiquement** aux trois systèmes à la fois, exactement comme demandé
+— **sauf** la dotation gratuite de jetons de départ (7 unités), qui reste
+réservée à la libre (ni la dette ni le troc n'ont de jetons de départ).
 
 ## Le calcul du DU (Dividende Universel) — lire avant de toucher à la monnaie libre
 
@@ -193,8 +230,18 @@ html_keys = set(re.findall(r'data-i18n(?:-title)?="([^"]+)"', open('index.html')
 js_keys = set(re.findall(r'\bt\("([^"]+)"', open('js/app.js').read())) \
     | set(re.findall(r'\bt\("([^"]+)"', open('js/player-view.js').read()))
 fr_keys = set(re.findall(r'^msgid "(.*)"$', open('lang/fr.po', encoding='utf-8').read(), re.M))
-print('manquantes:', sorted((html_keys | js_keys) - fr_keys))
+en_keys = set(re.findall(r'^msgid "(.*)"$', open('lang/en.po', encoding='utf-8').read(), re.M))
+print('manquantes fr:', sorted((html_keys | js_keys) - fr_keys))
+print('manquantes en:', sorted((html_keys | js_keys) - en_keys))
 ```
+
+**Seul le jeu de clés `data-i18n`/`t("...")` est vérifié par ce script** —
+pas les quelques textes construits par du HTML injecté directement (ex.
+`el(...).innerHTML = "texte en dur"`, sans passer par `t()`) : ceux-là
+échappent au script ci-dessus. Un audit manuel du 18/09/2026 en a trouvé
+quelques-uns, pré-existants, mineurs (un panneau de diagnostic HTTPS, un
+message de repli QR) — vérifie visuellement les nouvelles chaînes que tu
+ajoutes, pas seulement via ce script.
 
 ## Méthode de travail qui a bien fonctionné jusqu'ici
 
@@ -217,6 +264,15 @@ print('manquantes:', sorted((html_keys | js_keys) - fr_keys))
   convention systématique dans ce projet, à continuer.
 - Messages de commit détaillés : quel bug/besoin, ce qui a été vérifié,
   les limites connues restantes le cas échéant — pas de commit laconique.
+- **Seconde relecture indépendante** pour un chantier conséquent (nouveau
+  mécanisme, pas juste un correctif ponctuel) : un second agent qui n'a vu
+  ni le raisonnement ni les hypothèses du premier, relit le diff, revérifie
+  les tests, rejoue lui-même des scénarios (jamais seulement ceux du
+  premier agent) et inspecte les captures d'écran. A trouvé un vrai bug de
+  sécurité le 18/09/2026 (vérification "même valeur" d'un échange troc
+  contournable via des niveaux déclarés par le client, jamais revérifiés
+  côté serveur) qu'une relecture par le même agent n'aurait probablement
+  pas détecté — vaut le coût pour tout chantier de cette taille.
 
 ## Pièges déjà rencontrés, à ne pas reproduire
 
@@ -231,3 +287,13 @@ print('manquantes:', sorted((html_keys | js_keys) - fr_keys))
   reconnexion WebSocket...) peuvent se déclencher presque simultanément —
   un garde-fou "déjà en cours" simple protège contre ça, quelle que soit
   la cause exacte du déclenchement multiple.
+- **Connu, non corrigé** (identifié le 18/09/2026 en seconde relecture
+  indépendante du troc+smartphone) : les échanges smartphone
+  (`GameService.recordTransaction`/`recordCardSwap`) valident (solde,
+  réciprocité...) puis persistent SANS verrou base de données explicite —
+  deux échanges distincts portant sur la même ressource rare, rédimés
+  quasi simultanément, pourraient théoriquement passer tous les deux.
+  Présent depuis le début pour dette/libre, pas une régression du
+  18/09/2026 — à corriger si confirmé gênant en usage réel (verrou
+  explicite ou transaction DB sérialisée sur la paire de joueurs
+  concernée).

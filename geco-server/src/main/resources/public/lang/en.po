@@ -2034,3 +2034,17 @@ msgstr "Swap completed: {received} for {given}."
 
 msgid "trade.swap_refused_toast"
 msgstr "Swap refused"
+
+# ============ Barter + smartphone: dedicated "swap" title/button (18/09/2026) ============
+msgid "trade.confirm_title_swap"
+msgstr "Confirm the swap?"
+
+msgid "trade.btn_confirm_swap"
+msgstr "Confirm swap"
+
+msgid "trade.btn_confirming_swap"
+msgstr "Swapping..."
+
+# ============ Trade summary, barter + smartphone (18/09/2026) ============
+msgid "game.transactions_summary_troc"
+msgstr "{count} trade(s) in total."

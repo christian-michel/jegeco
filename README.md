@@ -15,11 +15,19 @@ d'en comparer concrètement les effets.
 
 - **Trois systèmes d'échange jouables** : monnaie dette, monnaie libre (avec un
   mode "strict TRM" optionnel), et troc — via une architecture à plugins,
-  conçue pour en accueillir d'autres (une monnaie digitale de banque centrale
-  est envisagée pour l'étape 3).
+  conçue pour en accueillir d'autres.
+- **Jeu sur smartphone** (en plus du mode classique animateur-seul, au choix
+  dans les réglages) pour les trois systèmes : chaque joueur a son téléphone,
+  ses cartes/jetons réels sont suivis avec précision, une même pioche/
+  mécanique de carré partagée par les trois systèmes. La monnaie libre suit
+  un Dividende Universel calculé selon la vraie formule de la Théorie
+  Relative de la Monnaie ; la dette collecte ses crédits/remboursements
+  directement sur le téléphone du joueur ; le troc propose un échange direct
+  carte-contre-carte par QR code (même valeur, réciprocité vérifiée).
 - **Assistant d'entre-deux-tours** qui guide l'animateur pas à pas (gestion des
   crédits, morts/renaissances, distribution du DU, contrôles de cohérence en
-  temps réel).
+  temps réel), avec des champs préremplis depuis le vrai solde/inventaire du
+  téléphone en mode smartphone.
 - **Statistiques complètes** : histogrammes de richesse, historique de la masse
   monétaire, comparaison entre parties, export JSON.
 - **Multilingue** (français/anglais intégrés), avec import/export de langues
@@ -95,10 +103,18 @@ geco-parent/            (pom.xml racine, multi-module)
 - ✅ **Étape 2** — Interface web moderne, trois systèmes d'échange jouables
   (dette, libre, troc), assistant complet, statistiques, i18n, sauvegarde/
   export, protection par code optionnelle, tests automatisés.
-- 🚧 **Étape 3** (planification en cours) — jeu sur smartphone en complément du
-  mode classique (cartes/jetons physiques), au choix de l'animateur : cartes
-  numériques identifiables, profils et avatars persistants, transactions
-  individuelles entre joueurs, statistiques plus fines (module Galilée).
+- 🚧 **Étape 3** (en cours, cœur fonctionnel construit) — jeu sur smartphone
+  en complément du mode classique (cartes/jetons physiques), au choix de
+  l'animateur. Les trois systèmes d'échange sont désormais jouables sur
+  smartphone : cartes numériques identifiables et pioche partagée, profils
+  et avatars, transactions individuelles entre joueurs (achat par QR en
+  dette/libre, échange direct carte-contre-carte en troc), gestion complète
+  des crédits en dette, calcul du DU conforme à la Théorie Relative de la
+  Monnaie en libre. Reste à faire : écran animateur dédié pour traiter les
+  demandes de crédit, déploiement Phase 2 (Docker + Caddy), statistiques
+  plus fines (module Galilée) — voir
+  **[docs/13-etape3-etat-et-feuille-de-route.md](docs/13-etape3-etat-et-feuille-de-route.md)**
+  pour l'état d'avancement détaillé et à jour.
 
 Voir **[CAHIER_DES_CHARGES_ETAPE3.md](CAHIER_DES_CHARGES_ETAPE3.md)** pour le
 détail complet de cette feuille de route.

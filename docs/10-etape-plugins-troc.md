@@ -201,3 +201,78 @@ cartes faibles.
 guide de négociation... il ne change RIEN à la règle 7 déjà actée...~~ -
 **Corrigé ci-dessus : ce n'est plus le cas**, la règle 7 a été explicitement
 abandonnée le même jour.
+
+## Mise à jour (18/09/2026) : le troc rejoint le smartphone, échange direct carte-contre-carte
+
+Le troc jouable sur smartphone évoqué plus haut (mise à jour du 23/08/2026,
+"documentation en jeu adaptée") ne portait que sur l'écran de règles - la
+mécanique d'échange elle-même sur smartphone n'a été construite que
+maintenant, en réutilisant le mécanisme de pioche/carré déjà éprouvé par la
+monnaie libre (voir `CLAUDE.md`) puis la monnaie dette (17/09/2026) :
+`captureDeckPlayerCountIfNeeded`/`dealStartingHandsForLibreIfNeeded` ne
+distinguent plus aucun système monétaire, et le troc bénéficie donc lui
+aussi désormais de vrais modèles de cartes en pioche partagée (au lieu du
+simple décompte `Player.weakGoods/mediumGoods/strongGoods` par niveau,
+toujours le seul mécanisme du troc CLASSIQUE, inchangé).
+
+**Système d'échange smartphone, repensé sur demande explicite de
+l'utilisateur** (l'ancien mécanisme envisagé - une quantité de biens
+négociée via des compteurs incrémentaux, jamais réellement implémentée en
+pratique faute de pioche partagée pour le troc avant ce jour - est
+abandonné) :
+
+1. Un joueur sélectionne une carte qu'il possède, la retourne (glissement) :
+   elle affiche son QR code.
+2. Un bouton "Échanger" apparaît sous le QR. Le joueur qui clique dessus
+   ouvre son scanner et scanne le QR de la carte que l'AUTRE joueur a, de
+   son côté, indépendamment retournée sur son propre téléphone.
+3. Le serveur (`GameService.recordCardSwap`) vérifie deux conditions,
+   toutes deux confirmées explicitement par l'utilisateur avant
+   implémentation :
+   - **Même valeur obligatoire** : les deux cartes doivent être du même
+     niveau (faible/moyenne/forte/tresforte) - jamais un faible contre un
+     fort, même si la réciprocité ci-dessous serait par ailleurs
+     satisfaite. Le niveau réel de chaque carte est redérivé côté serveur
+     depuis la pioche partagée de la partie, jamais lu tel quel depuis ce
+     que chaque client prétend (correctif du 18/09/2026, trouvé en seconde
+     relecture indépendante : les niveaux déclarés par le client n'étaient
+     initialement jamais revérifiés, un contournement possible de cette
+     règle).
+   - **Réciprocité bidirectionnelle** : chacun des deux joueurs doit DÉJÀ
+     posséder, avant cet échange précis, au moins un exemplaire du modèle
+     qu'il va recevoir - "le joueur 1 possède une carte qui intéresse le
+     joueur 2 et le joueur 2 possède une carte de même valeur qui intéresse
+     le joueur 1", vérifié concrètement comme "j'ai déjà commencé à
+     collectionner ce modèle" plutôt qu'un critère d'intérêt purement
+     déclaratif.
+   - Si l'une des deux conditions échoue : l'échange est REFUSÉ, aucun
+     changement d'inventaire des deux côtés, le joueur qui a scanné voit une
+     infobulle "Échange refusé" pendant 3 secondes.
+4. Mort/renaissance suit le même principe que dette/libre+smartphone :
+   inventaire réel capturé au moment de la mort, main fraîche de 4 cartes à
+   la renaissance ("comme s'il recommençait une nouvelle partie") - le troc
+   CLASSIQUE garde son ancien comportement entièrement inchangé
+   (`Player.weakGoods/mediumGoods/strongGoods`, jamais cette donnée
+   renseignée).
+
+Toujours vrai, sans changement : **jamais de jeton ni d'unité monétaire, sur
+rien** (règle 6 de la section "Règles du troc" ci-dessus, inchangée depuis
+le 22/08/2026) - l'assistant de fin de tour du troc n'a d'ailleurs jamais eu
+de champ monétaire, contrairement à la dette+smartphone qui a dû
+explicitement en retirer un.
+
+Voir `CLAUDE.md` et l'historique des commits (`957b0f5`, `6af249a`,
+`997d715`) pour le détail technique complet (nouveaux champs
+`Transaction.swapCardTypeId`/`swapCardLevel`, nouvelle route
+`POST /trade-offers/{code}/redeem-swap`), y compris les bugs réels trouvés
+et corrigés en campagne de test le jour même (carré jamais auto-encaissé en
+dette+smartphone après un achat, classement en direct jamais mis à jour
+pour un joueur troc+smartphone, et le contournement de la règle "même
+valeur" ci-dessus).
+
+**Point connu, non corrigé à ce stade** (identifié en revue croisée, pas
+une régression) : la validation d'un échange ne pose pas de verrou base de
+données explicite - un schéma déjà présent depuis le début pour les achats
+en dette/libre, à corriger si confirmé gênant en usage réel (deux échanges
+distincts portant sur la même carte rare, rédimés quasi simultanément,
+pourraient théoriquement passer tous les deux).

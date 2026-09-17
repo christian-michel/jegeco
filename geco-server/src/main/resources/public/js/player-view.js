@@ -1793,6 +1793,20 @@ async function resolveCode(code, pFromCamera) {
 
 
 function renderScanConfirm(offer) {
+	// Remonté par l'utilisateur (18/09/2026) : "Confirmer l'achat devient
+	// Confirmer l'échange" en troc, où il ne s'agit justement jamais d'un
+	// achat (aucun jeton, échange direct carte-contre-carte - voir
+	// GameService.recordCardSwap) - ce titre/bouton étaient jusqu'ici
+	// partagés tels quels avec dette/libre (SCREEN_HEADERS/data-i18n
+	// statiques dans player-view.html), corrects pour ces deux systèmes,
+	// trompeurs pour le troc. Mis à jour ICI (appelée à chaque fois que cet
+	// écran se peuple, voir resolveCode) plutôt que dans SCREEN_HEADERS (une
+	// seule clé statique par écran, ne peut pas varier par système
+	// monétaire) - h2 ET bouton haut, le bouton du bas (id=btnConfirmBuy)
+	// est remis à son état normal par confirmPurchase() à la fin, qui suit
+	// la même logique.
+	document.querySelector("#scanConfirm h2").textContent = t(isTrocGame() ? "trade.confirm_title_swap" : "trade.confirm_title");
+	el("btnConfirmBuy").textContent = t(isTrocGame() ? "trade.btn_confirm_swap" : "trade.btn_confirm_buy");
 	const infoEl = el("scanConfirmInfo");
 	infoEl.className = `trade-card-info level-${offer.cardLevel}`;
 	// Reconstitue une "entrée catalogue" à partir de l'offre (elle ne porte
@@ -1896,7 +1910,9 @@ async function confirmPurchase() {
 		return;
 	}
 	btn.disabled = true;
-	btn.textContent = t("trade.btn_confirming");
+	// "Confirmer l'échange" en troc, jamais "Confirmer l'achat" - voir le
+	// même raisonnement dans renderScanConfirm ci-dessus.
+	btn.textContent = t(isTrocGame() ? "trade.btn_confirming_swap" : "trade.btn_confirming");
 	try {
 		// Étape 3, troc + smartphone (18/09/2026, remonté par l'utilisateur :
 		// "le système d'échange de cartes doit être repensé") : route DÉDIÉE
@@ -1981,7 +1997,7 @@ async function confirmPurchase() {
 		}
 	} finally {
 		btn.disabled = false;
-		btn.textContent = t("trade.btn_confirm_buy");
+		btn.textContent = t(isTrocGame() ? "trade.btn_confirm_swap" : "trade.btn_confirm_buy");
 	}
 }
 

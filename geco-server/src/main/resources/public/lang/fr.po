@@ -2038,3 +2038,17 @@ msgstr "Échange effectué : {received} contre {given}."
 
 msgid "trade.swap_refused_toast"
 msgstr "Échange refusé"
+
+# ============ Troc + smartphone : titre/bouton dédiés "échange" (18/09/2026) ============
+msgid "trade.confirm_title_swap"
+msgstr "Confirmer l'échange ?"
+
+msgid "trade.btn_confirm_swap"
+msgstr "Confirmer l'échange"
+
+msgid "trade.btn_confirming_swap"
+msgstr "Échange en cours..."
+
+# ============ Résumé des échanges, troc + smartphone (18/09/2026) ============
+msgid "game.transactions_summary_troc"
+msgstr "{count} échange(s) au total."
