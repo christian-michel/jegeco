@@ -1180,20 +1180,77 @@ public class GameService
 	 * complète de la richesse totale du jeu (dotation de départ, DU perçus
 	 * au fil des tours...), qui demanderait de rejouer tout l'historique
 	 * d'événements plutôt que les seules transactions.
+	 * <p>
+	 * Bug trouvé en testant le troc+smartphone (18/09/2026, campagne de test
+	 * qui a suivi le commit 957b0f5) : pour un joueur troc suivi par
+	 * smartphone, {@code Player.weakGoods/mediumGoods/strongGoods} ne sont
+	 * JAMAIS mis à jour - {@link #recordCardSwap} (le nouveau mécanisme
+	 * d'échange direct) ne touche que l'historique {@code Transaction}, tout
+	 * comme le reste du suivi par smartphone (voir
+	 * {@link #computePlayerCardInventory}) ; ces champs restent bloqués à
+	 * {@code Game.startingGoods} (ex. 4) pour toute la partie. Ce classement
+	 * (écran "Classement" côté joueur, consulté EN DIRECT pendant la partie -
+	 * contrairement à {@code StatsService.computeGain}, qui rejoue les
+	 * événements DEATH/QUIT dont les champs weakCards&co SONT correctement
+	 * calculés depuis le vrai inventaire, voir {@code isSmartphoneCardTrackedDeath}
+	 * ci-dessus) affichait donc TOUJOURS la même valeur pour tous les joueurs
+	 * troc+smartphone, quel que soit le nombre d'échanges ou de carrés
+	 * réellement joués - même classe de bug que jetonWeak jamais déplacé en
+	 * dette+smartphone avant les correctifs ba1e8d8/5d2d5cd le même jour.
+	 * Corrigé en dérivant la valeur de {@link #computePlayerCardInventory}
+	 * (comme "Mes cartes") plutôt que de ces champs Player, mais UNIQUEMENT
+	 * pour un joueur réellement suivi par smartphone
+	 * ({@code Player.startingCardsJson != null}) - le troc classique (jamais
+	 * cette donnée renseignée) garde son calcul historique inchangé.
 	 */
 	public List<Dtos.LeaderboardEntryDto> computeLeaderboard(final int pGameId)
 	{
 		final Game game = getGame(pGameId);
 		if (game == null)
 			return List.of();
+		java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel = null;
+		if ((game.getMoneySystem() == Game.MONEY_TROC) && (game.getSmartphoneCardPileJson() != null))
+		{
+			try
+			{
+				pilesByLevel = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+						game.getSmartphoneCardPileJson(),
+						new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.Map<String, Integer>>>()
+						{
+						});
+			}
+			catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+			{
+				// Donnée corrompue (ne devrait jamais arriver) : repli sur le calcul
+				// historique ci-dessous plutôt que de faire échouer tout l'écran.
+				pilesByLevel = null;
+			}
+		}
 		final List<Dtos.LeaderboardEntryDto> entries = new java.util.ArrayList<>();
 		for (final Player p : game.getPlayers())
 		{
 			if (!p.isActive())
 				continue;
-			final int value = (game.getMoneySystem() == Game.MONEY_TROC)
-					? p.getWeakGoods() + (4 * p.getMediumGoods()) + (16 * p.getStrongGoods())
-					: computeTradeBalance(pGameId, p.getId());
+			final int value;
+			if ((game.getMoneySystem() == Game.MONEY_TROC) && (p.getStartingCardsJson() != null) && (pilesByLevel != null))
+			{
+				int v = 0;
+				for (final java.util.Map.Entry<String, Integer> e : computePlayerCardInventory(pGameId, p.getId()).entrySet())
+				{
+					final String level = findLevelOfCard(pilesByLevel, e.getKey());
+					if ("faible".equals(level)) //$NON-NLS-1$
+						v += e.getValue();
+					else if ("moyenne".equals(level)) //$NON-NLS-1$
+						v += 4 * e.getValue();
+					else if ("forte".equals(level) || "tresforte".equals(level)) //$NON-NLS-1$ //$NON-NLS-2$
+						v += 16 * e.getValue();
+				}
+				value = v;
+			}
+			else if (game.getMoneySystem() == Game.MONEY_TROC)
+				value = p.getWeakGoods() + (4 * p.getMediumGoods()) + (16 * p.getStrongGoods());
+			else
+				value = computeTradeBalance(pGameId, p.getId());
 			entries.add(new Dtos.LeaderboardEntryDto(p.getId(), p.getName(), value, 0));
 		}
 		entries.sort((a, b) -> Integer.compare(b.value(), a.value()));
