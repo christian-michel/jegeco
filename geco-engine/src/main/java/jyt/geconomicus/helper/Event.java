@@ -429,9 +429,38 @@ public class Event implements Serializable
 			// dette CLASSIQUE (startingCardsJson toujours null dans ce mode, donc
 			// isSmartphoneTrackedGame() reste faux) ni pour la libre/le troc (seule
 			// la dette a ce mécanisme de saisie).
+			//
+			// BUG TROUVÉ ET CORRIGÉ (18/09/2026, seconde relecture indépendante,
+			// vérifié en rejouant le scénario en direct via l'API REST) : cette
+			// ligne débitait TOUJOURS jetonWeak sur weakCards, quel que soit
+			// l'évènement - correct pour BANKRUPT/PRISON/CANNOT_PAY (le seul cas
+			// où weakCards est réellement rempli, via openPlayerEventDialog "C",
+			// avec l'inventaire saisi/reconstitué par l'animateur), mais FAUX pour
+			// REIMB_CREDIT : ses deux seuls points d'entrée réels (le bouton
+			// rapide "Rembourser le crédit" du bilan de tour ET la boîte de
+			// dialogue générique principal/intérêt, voir app.js
+			// openPlayerEventDialog, cas "R") n'envoient JAMAIS weakCards/
+			// mediumCards/strongCards - seulement principal/interest. Un joueur en
+			// dette+smartphone remboursait donc intégralement son crédit
+			// (curDebt/curInterest correctement remis à 0, masse monétaire
+			// correctement débitée de principal+interest via le bloc QUIT/DEATH
+			// ci-dessous, commun à tous ces cas) SANS QUE SON PROPRE SOLDE DE
+			// JETONS NE BOUGE D'UN JETON - argent gratuit et illimité, confirmé en
+			// rejouant le scénario via l'API REST (crédit de 10+1 d'intérêt,
+			// remboursement complet, jetonWeak strictement inchangé avant/après).
+			// Corrigé : REIMB_CREDIT débite désormais jetonWeak du même montant
+			// EXACT (principal+interest) que la masse monétaire globale, en
+			// miroir de NEW_CREDIT (qui le crédite de "principal" au moment de
+			// l'emprunt, voir plus bas) - couvre aussi bien un remboursement
+			// complet que partiel. BANKRUPT/PRISON/CANNOT_PAY gardent weakCards
+			// inchangé (leur valeur ici n'a de toute façon aucun effet observable :
+			// ces 3 cas tombent tous dans le bloc "sinon" du QUIT/DEATH ci-dessous,
+			// qui remet TOUJOURS jetonWeak à 0 pour eux, quelle que soit la valeur
+			// posée à cette étape).
 			if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT))
 			{
-				player.setJetonWeak(Math.max(0, player.getJetonWeak() - weakCards));
+				final int weakDebit = EventType.REIMB_CREDIT.equals(evt) ? (principal + interest) : weakCards;
+				player.setJetonWeak(Math.max(0, player.getJetonWeak() - weakDebit));
 				player.setJetonMedium(Math.max(0, player.getJetonMedium() - mediumCards));
 				player.setJetonStrong(Math.max(0, player.getJetonStrong() - strongCards));
 			}
