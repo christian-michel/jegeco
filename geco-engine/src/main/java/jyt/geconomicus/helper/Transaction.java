@@ -161,6 +161,27 @@ public class Transaction implements Serializable
 	private int buyerMediumGoods;
 	private int buyerStrongGoods;
 
+	// Étape 3, troc + SMARTPHONE (18/09/2026, remonté par l'utilisateur : "le
+	// système d'échange de cartes doit être repensé... au moment précis [du
+	// scan], le logiciel vérifie que cette carte à acquérir est déjà présente
+	// en au moins 1 exemplaire parmi les cartes que possède déjà le joueur qui
+	// souhaite en faire l'acquisition") - un VRAI échange carte-contre-carte,
+	// 1 exemplaire précis contre 1 exemplaire précis, contrairement à
+	// buyerWeakGoods&co ci-dessus (une simple QUANTITÉ par niveau, jamais
+	// utilisable pour la pioche partagée par modèle précis - voir
+	// GameService.dealStartingHandsForLibreIfNeeded). Rempli UNIQUEMENT pour
+	// un échange troc+smartphone validé (même valeur des deux côtés,
+	// réciprocité vérifiée dans les deux sens - voir GameService.recordCardSwap) ;
+	// null pour toute autre transaction (dette/libre en jetons, ou l'ancien
+	// mécanisme troc buyerWeakGoods&co, laissé inchangé pour ne jamais casser
+	// l'échange "Échange entre joueurs" du tableau de bord ANIMATEUR en troc
+	// classique). cardTypeId/cardLevel ci-dessus restent la carte donnée par
+	// le VENDEUR (seller) ; swapCardTypeId/swapCardLevel sont la carte donnée
+	// en retour par l'ACHETEUR (buyer) - toujours le MÊME niveau que
+	// cardLevel, vérifié avant l'enregistrement.
+	private String swapCardTypeId;
+	private String swapCardLevel;
+
 	// Utilisé par EclipseLink pour instancier des objets vides.
 	@SuppressWarnings("unused")
 	private Transaction()
@@ -209,6 +230,44 @@ public class Transaction implements Serializable
 		buyerWeakGoods = pBuyerWeakGoods;
 		buyerMediumGoods = pBuyerMediumGoods;
 		buyerStrongGoods = pBuyerStrongGoods;
+	}
+
+	/**
+	 * Étape 3, troc + SMARTPHONE (18/09/2026) : construit une transaction
+	 * d'échange DIRECT carte-contre-carte (voir swapCardTypeId/swapCardLevel
+	 * ci-dessus) - un constructeur dédié plutôt qu'un énième groupe de
+	 * paramètres à 0 sur le constructeur complet ci-dessus, pour que
+	 * l'intention (un VRAI échange 1-pour-1, jamais un paiement en
+	 * jetons/quantité de biens) soit visible à l'appel. pSeller/pCardTypeId/
+	 * pCardLevel restent le joueur qui a créé l'offre scannée et sa carte ;
+	 * pBuyer/pSwapCardTypeId/pSwapCardLevel sont le joueur qui a scanné et la
+	 * carte qu'il donne en retour (déjà vérifiée de même niveau que
+	 * pCardLevel par l'appelant, voir GameService.recordCardSwap).
+	 */
+	public static Transaction forCardSwap(final Game pGame, final Player pSeller, final Player pBuyer,
+			final String pCardTypeId, final String pCardLevel, final String pSwapCardTypeId,
+			final String pSwapCardLevel, final String pNonce)
+	{
+		final Transaction t = new Transaction(pGame, pSeller, pBuyer, pCardTypeId, pCardLevel, 0, 0, 0, pNonce);
+		t.swapCardTypeId = pSwapCardTypeId;
+		t.swapCardLevel = pSwapCardLevel;
+		return t;
+	}
+
+	public String getSwapCardTypeId()
+	{
+		return swapCardTypeId;
+	}
+
+	public String getSwapCardLevel()
+	{
+		return swapCardLevel;
+	}
+
+	/** Vrai si cette transaction est un échange DIRECT carte-contre-carte (troc+smartphone), voir swapCardTypeId. */
+	public boolean isCardSwap()
+	{
+		return swapCardTypeId != null;
 	}
 
 	public int getWeakChangeCoins()

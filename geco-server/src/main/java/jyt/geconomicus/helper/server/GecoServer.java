@@ -1511,10 +1511,20 @@ public class GecoServer
 				// 31/08/2026) : une VRAIE animation doit se déclencher sur le
 				// téléphone du joueur concerné, ce qui nécessite de diffuser
 				// l'événement (voir broadcast(), accessible seulement ici).
-				// Monnaie libre uniquement (seul système avec un vrai inventaire
-				// suivi aujourd'hui) - le vendeur ET l'acheteur sont vérifiés,
-				// l'un des deux peut avoir complété un carré par cet échange précis.
-				if (game.getMoneySystem() == Game.MONEY_LIBRE)
+				// BUG TROUVÉ ET CORRIGÉ (18/09/2026, en auditant le code avant de
+				// démarrer le troc+smartphone) : ce gate était resté "monnaie libre
+				// uniquement" alors que la dette+smartphone (ba1e8d8) partage
+				// pourtant EXACTEMENT la même pioche/mécanique de carré depuis son
+				// introduction - un carré en dette+smartphone n'était donc jamais
+				// automatiquement encaissé après un achat (silencieux : aucune des
+				// 3 parties de test jouées à l'époque n'avait déclenché de carré par
+				// hasard, voir le commit ba1e8d8). checkAndCashInSquares lui-même
+				// est déjà agnostique du système monétaire (seul
+				// Game.smartphoneCardPileJson compte) - le bon test ici est donc "ce
+				// joueur a-t-il une VRAIE pioche partagée", pas une liste figée de
+				// systèmes monétaires qu'il faudrait mettre à jour à chaque nouveau
+				// système qui la rejoint (dette hier, troc aujourd'hui).
+				if (game.getSmartphoneCardPileJson() != null)
 				{
 					for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, offer.sellerPlayerId()))
 						broadcast(id, "square", Dtos.CardSquareEventDto.from(square)); //$NON-NLS-1$
@@ -1527,6 +1537,78 @@ public class GecoServer
 			{
 				System.out.println("[DIAG achat] exception attrapée : " + e.getClass().getSimpleName() + " - " //$NON-NLS-1$ //$NON-NLS-2$
 						+ e.getMessage());
+				throw new BadRequestResponse(e.getMessage());
+			}
+		});
+
+		// Étape 3, troc + SMARTPHONE (18/09/2026) : redemption d'une offre en
+		// échange DIRECT carte-contre-carte, jamais contre des jetons (voir
+		// /trade-offers/{code}/redeem juste au-dessus, qui reste inchangé pour
+		// la dette/la libre) - voir GameService.recordCardSwap pour les règles
+		// de validation (même valeur des deux côtés, réciprocité
+		// bidirectionnelle). Réutilise la MÊME offre/le même code/le même QR
+		// que l'écran de vente habituel (TradeOfferService, /trade-offers en
+		// POST, jamais modifié) : les deux joueurs d'un échange troc créent
+		// chacun leur propre offre (leur propre carte retournée + QR), l'un
+		// des deux scanne le code de l'autre pour déclencher CETTE route.
+		pApp.post("/api/games/{id}/trade-offers/{code}/redeem-swap", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final String code = ctx.pathParam("code"); //$NON-NLS-1$
+			// Même garde-fou anti-force-brute que /redeem ci-dessus.
+			if (!allowRequest(ctx, "redeem", 30, 60)) //$NON-NLS-1$
+			{
+				ctx.status(429).json(java.util.Map.of("error", "Trop de tentatives, réessayez dans un instant.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			final Dtos.RedeemSwapOfferRequest req = ctx.bodyAsClass(Dtos.RedeemSwapOfferRequest.class);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			if (mAppSettings.isProtectionEnabled())
+			{
+				final boolean tokenMatches = game.getPlayers().stream()
+						.anyMatch(p -> p.getId().equals(req.buyerPlayerId()) && (p.getAccessToken() != null)
+								&& p.getAccessToken().equals(req.buyerAccessToken()));
+				if (!tokenMatches)
+					throw new ForbiddenResponse("Jeton du joueur qui scanne requis ou incorrect."); //$NON-NLS-1$
+			}
+			if (!mGameService.isTradingAllowed(game))
+				throw new BadRequestResponse("Les échanges sont actuellement en pause."); //$NON-NLS-1$
+			// redeem() retire l'offre de façon atomique - mêmes garanties anti-rejeu
+			// que /redeem ci-dessus (voir TradeOfferService).
+			final TradeOfferService.Offer offer = mTradeOfferService.redeem(code);
+			if ((offer == null) || (offer.gameId() != id))
+			{
+				throw new BadRequestResponse("Ce code est invalide, déjà utilisé, ou a expiré."); //$NON-NLS-1$
+			}
+			if (offer.sellerPlayerId() == req.buyerPlayerId())
+				throw new BadRequestResponse("Vous ne pouvez pas échanger avec vous-même."); //$NON-NLS-1$
+			try
+			{
+				final Transaction transaction = mGameService.recordCardSwap(id, offer.sellerPlayerId(),
+						req.buyerPlayerId(), offer.cardTypeId(), offer.cardLevel(), req.offeredCardTypeId(),
+						req.offeredCardLevel(), code, offer.expiresAtEpochMs());
+				broadcast(id, "transaction", Dtos.TransactionDto.from(transaction)); //$NON-NLS-1$
+				// Encaissement automatique des carrés pour les DEUX joueurs, même
+				// principe que /redeem ci-dessus - un échange peut faire compléter un
+				// carré à l'un comme à l'autre.
+				for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, offer.sellerPlayerId()))
+					broadcast(id, "square", Dtos.CardSquareEventDto.from(square)); //$NON-NLS-1$
+				for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, req.buyerPlayerId()))
+					broadcast(id, "square", Dtos.CardSquareEventDto.from(square)); //$NON-NLS-1$
+				ctx.status(201).json(Dtos.TransactionDto.from(transaction));
+			}
+			catch (final IllegalArgumentException | PlayerNotFoundException e)
+			{
+				// Remonté par l'utilisateur : "si ce n'est pas le cas, la transaction
+				// est refusée. Une infobulle s'affiche 3 secondes à l'écran avec le
+				// texte 'Echange refusé'." - le message précis importe peu au joueur
+				// (voir player-view.js, qui affiche toujours le même texte fixe quel
+				// que soit le détail retourné ici), mais reste utile en journal
+				// serveur/débogage (voir pushDebugLog côté client).
 				throw new BadRequestResponse(e.getMessage());
 			}
 		});

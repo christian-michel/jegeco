@@ -383,18 +383,19 @@ public class GameService
 			int weakCardsForEvent = pWeakCards;
 			int mediumCardsForEvent = pMediumCards;
 			int strongCardsForEvent = pStrongCards;
-			// Élargi à la dette (17/09/2026, remonté par l'utilisateur : "il faut
-			// aussi que l'assistant ait la proposition de l'inventaire des cartes
-			// des joueurs, au moment où ils meurent... en partie monnaie dette avec
-			// smartphone") - même mécanisme EXACT que la libre+smartphone (pioche
-			// commune, voir dealStartingHandsForLibreIfNeeded) : recalcule
+			// Élargi à la dette (17/09/2026), puis au troc (18/09/2026, remonté par
+			// l'utilisateur : "la partie troc sur smartphone... a des morts aussi.
+			// À la mort d'un joueur, il faut dresser son inventaire de cartes
+			// avant de le faire mourir puis renaître. Lorsqu'il renaît, c'est
+			// comme s'il recommençait une nouvelle partie. Il a de nouvelles
+			// cartes.") - même mécanisme EXACT que la libre/dette+smartphone
+			// (pioche commune, voir dealStartingHandsForLibreIfNeeded) : recalcule
 			// l'inventaire réel au moment de la mort et redistribue une main
 			// fraîche à la renaissance, plutôt que de laisser l'animateur saisir ça
-			// à la main comme en dette classique (qui n'a de toute façon aucune
+			// à la main comme en mode classique (qui n'a de toute façon aucune
 			// notion de carte suivie par smartphone - player.getStartingCardsJson()
 			// y reste toujours null, condition inchangée ci-dessous).
 			final boolean isSmartphoneCardTrackedDeath = (type == EventType.DEATH)
-					&& ((game.getMoneySystem() == Game.MONEY_LIBRE) || (game.getMoneySystem() == Game.MONEY_DEBT))
 					&& (player != null) && (player.getStartingCardsJson() != null);
 			if (isSmartphoneCardTrackedDeath)
 			{
@@ -707,6 +708,113 @@ public class GameService
 		}
 	}
 
+	/**
+	 * Étape 3, troc + SMARTPHONE (18/09/2026, remonté par l'utilisateur -
+	 * mécanique repensée par rapport à l'ancien système buyerWeakGoods&co,
+	 * jamais réellement utilisable faute de pioche partagée pour le troc
+	 * avant ce jour) : enregistre un échange DIRECT carte-contre-carte entre
+	 * deux joueurs. pSellerPlayerId/pCardTypeId/pCardLevel identifient le
+	 * joueur qui a créé l'offre scannée (celui qui avait retourné sa carte en
+	 * premier) et sa carte ; pBuyerPlayerId/pOfferedCardTypeId/
+	 * pOfferedCardLevel sont le joueur qui a scanné et la carte qu'IL donne
+	 * en retour (déjà retournée/sélectionnée sur son propre téléphone avant
+	 * de scanner, voir player-view.js).
+	 * <p>
+	 * Règles de validation, confirmées explicitement par l'utilisateur avant
+	 * implémentation (deux questions posées, deux réponses actées) :
+	 * <ul>
+	 * <li>MÊME VALEUR obligatoire : pCardLevel doit être strictement égal à
+	 * pOfferedCardLevel - jamais un échange faible contre forte, même si la
+	 * réciprocité ci-dessous serait par ailleurs satisfaite.</li>
+	 * <li>RÉCIPROCITÉ BIDIRECTIONNELLE : chacun des deux joueurs doit déjà
+	 * posséder, AVANT cet échange, au moins 1 exemplaire du modèle qu'il va
+	 * recevoir - "le joueur 1 possède une carte qui intéresse le joueur 2 et
+	 * le joueur 2 possède une carte de même valeur qui intéresse le joueur
+	 * 1." Un échange qui ne remplit pas ces deux conditions est REFUSÉ (voir
+	 * IllegalArgumentException ci-dessous, remontée telle quelle jusqu'au
+	 * texte "Échange refusé" affiché 3 secondes côté joueur - voir
+	 * player-view.js).</li>
+	 * </ul>
+	 * Ne modifie aucun état du moteur au-delà de la Transaction elle-même
+	 * (même principe que recordTransaction ci-dessus) : l'inventoire de
+	 * chaque joueur reste entièrement DÉRIVÉ de l'historique des Transaction
+	 * (voir computePlayerCardInventory, désormais sensible à
+	 * Transaction.isCardSwap()) - jamais un champ Player mis à jour
+	 * séparément, qui risquerait de diverger.
+	 */
+	public Transaction recordCardSwap(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
+			final String pCardTypeId, final String pCardLevel, final String pOfferedCardTypeId,
+			final String pOfferedCardLevel, final String pNonce, final long pExpiresAtEpochMs)
+			throws PlayerNotFoundException
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				throw new IllegalArgumentException("Game not found: " + pGameId); //$NON-NLS-1$
+			final Player seller = em.find(Player.class, pSellerPlayerId);
+			if ((seller == null) || !seller.getGame().equals(game))
+				throw new PlayerNotFoundException(String.valueOf(pSellerPlayerId));
+			final Player buyer = em.find(Player.class, pBuyerPlayerId);
+			if ((buyer == null) || !buyer.getGame().equals(game))
+				throw new PlayerNotFoundException(String.valueOf(pBuyerPlayerId));
+			if (seller.equals(buyer))
+				throw new IllegalArgumentException("Le vendeur et l'acheteur ne peuvent pas être le même joueur."); //$NON-NLS-1$
+			// Même protection anti-rejeu que recordTransaction ci-dessus (le
+			// TradeOfferService côté appelant protège déjà contre une double
+			// rédemption du même code, celle-ci est une seconde protection
+			// redondante par design, voir Transaction.java).
+			if ((pNonce == null) || pNonce.isBlank())
+				throw new IllegalArgumentException("Nonce manquant."); //$NON-NLS-1$
+			final long nonceCount = em.createQuery("SELECT COUNT(t) FROM Transaction t WHERE t.nonce = :nonce", //$NON-NLS-1$
+					Long.class).setParameter("nonce", pNonce).getSingleResult(); //$NON-NLS-1$
+			if (nonceCount > 0)
+				throw new IllegalArgumentException("Ce QR code a déjà été utilisé."); //$NON-NLS-1$
+			if (System.currentTimeMillis() > pExpiresAtEpochMs)
+				throw new IllegalArgumentException("Ce QR code a expiré, demandez-en un nouveau au vendeur."); //$NON-NLS-1$
+			if (!pCardLevel.equals(pOfferedCardLevel))
+				throw new IllegalArgumentException("Échange refusé : les deux cartes n'ont pas la même valeur."); //$NON-NLS-1$
+			final java.util.Map<String, Integer> sellerInventory = computePlayerCardInventory(em, pGameId, pSellerPlayerId);
+			final java.util.Map<String, Integer> buyerInventory = computePlayerCardInventory(em, pGameId, pBuyerPlayerId);
+			// Vérifie que chacun possède TOUJOURS, au moment précis de ce scan,
+			// la carte qu'il propose - contrairement à recordTransaction
+			// ci-dessus (dette/libre), qui ne revérifie jamais côté vendeur
+			// (protection déjà assurée en amont par openSellPicker, restreint à
+			// l'inventaire réel au moment de la SÉLECTION) : ici, les DEUX
+			// joueurs sélectionnent leur carte indépendamment, à des instants
+			// potentiellement différents (le QR reste valable ~90s) - l'un des
+			// deux a pu entre-temps échanger cette même carte ailleurs. Filet de
+			// sécurité peu coûteux, ces deux inventaires étant de toute façon
+			// déjà chargés pour la réciprocité ci-dessous.
+			if (sellerInventory.getOrDefault(pCardTypeId, 0) <= 0)
+				throw new IllegalArgumentException("Échange refusé : cette carte n'est plus dans les mains du vendeur."); //$NON-NLS-1$
+			if (buyerInventory.getOrDefault(pOfferedCardTypeId, 0) <= 0)
+				throw new IllegalArgumentException("Échange refusé : cette carte n'est plus dans vos mains."); //$NON-NLS-1$
+			// Réciprocité bidirectionnelle (voir le commentaire de tête de
+			// méthode) : chacun doit déjà posséder AVANT cet échange au moins 1
+			// exemplaire du modèle qu'il va recevoir. sellerInventory doit encore
+			// contenir pCardTypeId à ce stade (pas encore retiré, la transaction
+			// n'est pas encore persistée) - un exemplaire lui appartenant ne
+			// compte donc jamais pour sa PROPRE réciprocité, seul ce qu'il
+			// possède DÉJÀ EN PLUS de la carte offerte importe ici.
+			if (sellerInventory.getOrDefault(pOfferedCardTypeId, 0) <= 0)
+				throw new IllegalArgumentException("Échange refusé : le vendeur ne possède pas déjà ce modèle."); //$NON-NLS-1$
+			if (buyerInventory.getOrDefault(pCardTypeId, 0) <= 0)
+				throw new IllegalArgumentException("Échange refusé : l'acheteur ne possède pas déjà ce modèle."); //$NON-NLS-1$
+			em.getTransaction().begin();
+			final Transaction transaction = Transaction.forCardSwap(game, seller, buyer, pCardTypeId, pCardLevel,
+					pOfferedCardTypeId, pOfferedCardLevel, pNonce);
+			em.persist(transaction);
+			em.getTransaction().commit();
+			return transaction;
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
 	// Applique un delta (positif ou négatif) au champ de biens correspondant
 	// au niveau donné - voir recordTransaction ci-dessus (troc uniquement).
 	// "tresforte" volontairement absent : aucune carte de ce niveau ne peut
@@ -1004,6 +1112,20 @@ public class GameService
 				inventory.merge(t.getCardTypeId(), 1, Integer::sum);
 			if (t.getSeller().getId().equals(pPlayerId))
 				inventory.merge(t.getCardTypeId(), -1, Integer::sum);
+			// Étape 3, troc + smartphone (18/09/2026) : un échange DIRECT
+			// (Transaction.isCardSwap()) fait aussi voyager une carte dans l'AUTRE
+			// sens - le vendeur reçoit swapCardTypeId (donnée par l'acheteur en
+			// retour), l'acheteur la perd. Jamais vrai pour dette/libre (achat
+			// contre jetons) ni pour l'ancien mécanisme troc buyerWeakGoods&co
+			// (une simple quantité par niveau, jamais un modèle précis - voir
+			// Transaction.forCardSwap).
+			if (t.isCardSwap())
+			{
+				if (t.getSeller().getId().equals(pPlayerId))
+					inventory.merge(t.getSwapCardTypeId(), 1, Integer::sum);
+				if (t.getBuyer().getId().equals(pPlayerId))
+					inventory.merge(t.getSwapCardTypeId(), -1, Integer::sum);
+			}
 		}
 		// Historique des carrés déjà encaissés (voir CardSquareEvent,
 		// checkAndCashInSquares) : les 4 cartes défaussées quittent
@@ -1116,13 +1238,18 @@ public class GameService
 			// trois systèmes en même temps." La pioche/carré/promotion elle-même
 			// (voir checkAndCashInSquares) était déjà entièrement agnostique du
 			// système monétaire - seule cette capture et dealStartingHandsForLibreIfNeeded
-			// ci-dessous excluaient explicitement la dette. Élargi à la dette : le
-			// TROC reste exclu (pas encore engineReady, voir app.js - et par
-			// principe, il n'a "jamais de monnaie ni de jeton d'aucune sorte", voir
-			// plugins/troc/manifest.json - la notion même de pioche de cartes
-			// contre jetons ne s'y applique pas).
-			if ((game.getMoneySystem() == Game.MONEY_TROC) || (game.getTurnNumber() != 1)
-					|| (game.getDeckPlayerCount() != null))
+			// ci-dessous excluaient explicitement la dette puis le troc. Élargi à
+			// la dette le 17/09/2026, puis au troc le 18/09/2026 (remonté par
+			// l'utilisateur : "le fonctionnement de la pioche et la règle des
+			// carrés... sont les mêmes qu'en monnaie libre avec smartphone" -
+			// contrairement à la dette/la libre, le troc n'a "jamais de monnaie ni
+			// de jeton d'aucune sorte" [plugins/troc/manifest.json], mais les
+			// CARTES elles-mêmes [faible/moyenne/forte/tresforte] restent
+			// pertinentes : c'est justement sur elles, pas sur des jetons, que
+			// portent tous les échanges troc). Plus aucune exclusion par système
+			// monétaire ici : les trois partagent désormais entièrement ce
+			// mécanisme.
+			if ((game.getTurnNumber() != 1) || (game.getDeckPlayerCount() != null))
 				return;
 			final long activeCount = game.getPlayers().stream().filter(Player::isActive).count();
 			em.getTransaction().begin();
@@ -1177,16 +1304,14 @@ public class GameService
 			final Game game = em.find(Game.class, pGameId);
 			if (game == null)
 				return;
-			// Élargi à la dette le 17/09/2026 (voir le commentaire de
-			// captureDeckPlayerCountIfNeeded ci-dessus pour le raisonnement complet
-			// sur la pioche commune) - le TROC reste seul exclu. La distribution de
-			// cartes ci-dessous (mise en place de la pioche + main de départ) est
-			// désormais commune dette/libre ; seule la dotation en JETONS de départ
-			// plus bas reste spécifique à la libre (la dette démarre à 0 jeton, un
-			// joueur emprunte à la banque - voir CreditRequestService - jamais de
-			// dotation gratuite comme la libre).
-			if ((game.getMoneySystem() == Game.MONEY_TROC) || (game.getDeckPlayerCount() == null)
-					|| (game.getSmartphoneCardPileJson() != null))
+			// Élargi à la dette le 17/09/2026, puis au troc le 18/09/2026 (voir le
+			// commentaire de captureDeckPlayerCountIfNeeded ci-dessus). La
+			// distribution de cartes ci-dessous (mise en place de la pioche + main
+			// de départ) est désormais commune aux trois systèmes ; seule la
+			// dotation en JETONS de départ plus bas reste spécifique à la libre (ni
+			// la dette - qui démarre à 0 et emprunte à la banque - ni le troc -
+			// "jamais de monnaie ni de jeton d'aucune sorte" - n'ont de jetons).
+			if ((game.getDeckPlayerCount() == null) || (game.getSmartphoneCardPileJson() != null))
 				return; // déjà fait, ou conditions non réunies - jamais recalculé
 
 			final int nbPlayers = game.getDeckPlayerCount();

@@ -2930,12 +2930,20 @@ async function renderTransactionsPanel(gameId) {
 	// Historique brut, du plus récent au plus ancien (déjà l'ordre renvoyé par
 	// GameService.listTransactions) - qui a échangé quoi, avec qui, à quel
 	// tour, pour quel montant.
+	// Étape 3, troc + smartphone (18/09/2026) : une transaction "échange" (voir
+	// Transaction.isCardSwap()) n'a pas de valeur en jetons (toujours 0, voir
+	// totalCoinsValue - jamais renseignée pour un swap) - afficher "0 jetons"
+	// serait trompeur pour un système qui n'en a par principe aucun (voir
+	// docs/10-etape-plugins-troc.md, règle 3). Montre à la place les deux
+	// cartes échangées, dans les deux sens.
 	const historyHtml = `
 		<ul class="events-list">
 			${transactions.map((tx) => `
 			<li>
 				<strong>${escapeHtml(tx.sellerPlayerName)} → ${escapeHtml(tx.buyerPlayerName)}</strong>
-				<span class="event-meta">${escapeHtml(cardName(tx.cardTypeId))} · ${t("game.transactions_turn_label", { n: tx.turnNumber })} · ${t("game.transactions_amount", { n: tx.totalCoinsValue })}</span>
+				<span class="event-meta">${tx.isCardSwap
+					? `${escapeHtml(cardName(tx.cardTypeId))} ⇄ ${escapeHtml(cardName(tx.swapCardTypeId))} · ${t("game.transactions_turn_label", { n: tx.turnNumber })}`
+					: `${escapeHtml(cardName(tx.cardTypeId))} · ${t("game.transactions_turn_label", { n: tx.turnNumber })} · ${t("game.transactions_amount", { n: tx.totalCoinsValue })}`}</span>
 			</li>`).join("")}
 		</ul>`;
 
@@ -4085,7 +4093,7 @@ async function openEndOfTurnWizard() {
 	// entièrement automatique (voir Event.applyEvent, cas TURN) dès que
 	// l'animateur valide le récap de fin de tour (renderStep4) - les échanges
 	// eux-mêmes se font en plein tour, pas ici (voir btnTrocTrade).
-	function renderStepDeathTroc() {
+	async function renderStepDeathTroc() {
 		hideGenericButtons();
 		if (selectedDeathIds.length === 0)
 		// Personne ne meurt ce tour : rien à faire ici, direction le récap.
@@ -4095,20 +4103,49 @@ async function openEndOfTurnWizard() {
 		}
 		const dying = sortByName(game.players.filter((p) => p.active && selectedDeathIds.includes(p.id)));
 
+		// Étape 3, troc + SMARTPHONE (18/09/2026, remonté par l'utilisateur :
+		// "la partie troc sur smartphone... a des morts aussi. À la mort d'un
+		// joueur, il faut dresser son inventaire de cartes avant de le faire
+		// mourir puis renaître.") - même principe que la dette+smartphone
+		// (renderStepDeathInventory) : pour un joueur INDIVIDUELLEMENT suivi
+		// par smartphone (hasStartingAllocation), préremplit depuis son VRAI
+		// inventaire (pioche partagée, voir computeEndGamePrefill - déjà
+		// générique, jamais spécifique à un système monétaire) plutôt que
+		// depuis p.weakGoods/mediumGoods/strongGoods (jamais mis à jour par un
+		// échange smartphone, seulement par "Échange entre joueurs" côté
+		// animateur en troc CLASSIQUE - voir GameService.applyGoodsLevelDelta).
+		// Un joueur classique dans la même partie garde le comportement
+		// historique inchangé (p.weakGoods&co, déjà à jour dans ce mode).
+		let levelById = new Map();
+		if (dying.some((p) => p.hasStartingAllocation)) {
+			try {
+				const catalog = await Api.getCatalog("cartes");
+				levelById = new Map(catalog.map((c) => [c.id, c.niveau]));
+			} catch (err) {
+				pushDebugLog("ERREUR", "renderStepDeathTroc: échec du chargement du catalogue -", err);
+			}
+		}
+		const prefills = await Promise.all(dying.map((p) => computeEndGamePrefill(p, levelById)));
+		const prefillByPlayerId = new Map(dying.map((p, i) => [p.id, prefills[i]]));
+
 		el("dlgTitle").textContent = t("wiz.death_troc_title");
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.death_troc_intro", { n: game.startingGoods })}</p>
 			<p class="galilee-explainer">${t("wiz.death_troc_prefill_note")}</p>
-			${dying.map((p) => `
-			<fieldset class="death-inventory-player" data-player-id="${p.id}">
-				<legend>${t("wiz.dying_this_turn", { name: escapeHtml(p.name) })}</legend>
-				<label>${t("game.field_weak_cards")}</label>
-				<input type="number" class="trocWeak" value="${p.weakGoods}" min="0">
-				<label>${t("game.field_medium_cards")}</label>
-				<input type="number" class="trocMedium" value="${p.mediumGoods}" min="0">
-				<label>${t("game.field_strong_cards")}</label>
-				<input type="number" class="trocStrong" value="${p.strongGoods}" min="0">
-			</fieldset>`).join("")}
+			${dying.map((p) => {
+				const tracked = !!p.hasStartingAllocation;
+				const pre = prefillByPlayerId.get(p.id);
+				return `
+				<fieldset class="death-inventory-player" data-player-id="${p.id}">
+					<legend>${t("wiz.dying_this_turn", { name: escapeHtml(p.name) })}</legend>
+					<label>${t("game.field_weak_cards")}</label>
+					<input type="number" class="trocWeak" value="${tracked ? pre.weak : p.weakGoods}" min="0">
+					<label>${t("game.field_medium_cards")}</label>
+					<input type="number" class="trocMedium" value="${tracked ? pre.medium : p.mediumGoods}" min="0">
+					<label>${t("game.field_strong_cards")}</label>
+					<input type="number" class="trocStrong" value="${tracked ? pre.strong : p.strongGoods}" min="0">
+				</fieldset>`;
+			}).join("")}
 			<button type="button" class="btn btn-primary btn-block" id="wizNextDeathTroc">${t("wiz.validate_rebirth_btn")}</button>`;
 		el("wizNextDeathTroc").onclick = async () => {
 			for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
@@ -4367,18 +4404,39 @@ async function openEndOfTurnWizard() {
 			// Event.applyEvent, cas GOODS_TRADE) - même prérempli que celui déjà
 			// utilisé en cours de partie pour la mort/renaissance (voir
 			// renderStepDeathTroc), aucun appel réseau nécessaire ici.
+			// Élargi au troc+smartphone (18/09/2026) : un joueur INDIVIDUELLEMENT
+			// suivi (hasStartingAllocation) a désormais un vrai inventoire par
+			// modèle (pioche partagée, voir dealStartingHandsForLibreIfNeeded) que
+			// weakGoods&co ne reflète plus (jamais mis à jour par un échange
+			// smartphone) - même source que renderStepDeathTroc ci-dessus
+			// (computeEndGamePrefill, déjà générique).
+			let levelById = new Map();
+			if (activePlayers.some((p) => p.hasStartingAllocation)) {
+				try {
+					const catalog = await Api.getCatalog("cartes");
+					levelById = new Map(catalog.map((c) => [c.id, c.niveau]));
+				} catch (err) {
+					pushDebugLog("ERREUR", "renderEndGameInventory (troc smartphone): échec du chargement du catalogue -", err);
+				}
+			}
+			const prefills = await Promise.all(activePlayers.map((p) => computeEndGamePrefill(p, levelById)));
+			const prefillByPlayerId = new Map(activePlayers.map((p, i) => [p.id, prefills[i]]));
 			el("dlgBody").innerHTML = `
 				<p>${t("wiz.end_inventory_intro")}</p>
-				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => `
+				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
+					const tracked = !!p.hasStartingAllocation;
+					const pre = prefillByPlayerId.get(p.id);
+					return `
 					<fieldset class="death-inventory-player" data-player-id="${p.id}">
 						<legend>${escapeHtml(p.name)}</legend>
 						<label>${t("game.field_weak_cards")}</label>
-						<input type="number" class="eqWeak" value="${p.weakGoods}" min="0">
+						<input type="number" class="eqWeak" value="${tracked ? pre.weak : p.weakGoods}" min="0">
 						<label>${t("game.field_medium_cards")}</label>
-						<input type="number" class="eqMedium" value="${p.mediumGoods}" min="0">
+						<input type="number" class="eqMedium" value="${tracked ? pre.medium : p.mediumGoods}" min="0">
 						<label>${t("game.field_strong_cards")}</label>
-						<input type="number" class="eqStrong" value="${p.strongGoods}" min="0">
-					</fieldset>`).join("")}
+						<input type="number" class="eqStrong" value="${tracked ? pre.strong : p.strongGoods}" min="0">
+					</fieldset>`;
+				}).join("")}
 				<button type="button" class="btn btn-primary btn-block" id="wizNextEndInventory">${t("wiz.validate_continue_btn")}</button>`;
 			el("wizNextEndInventory").onclick = async () => {
 				for (const fieldset of document.querySelectorAll(".death-inventory-player")) {

@@ -629,16 +629,19 @@ async function renderProfile() {
 	// cartes") et on en fait la somme - goodsCount reste utilisé tel quel
 	// pour les autres systèmes (troc/dette), où il est correctement
 	// maintenu.
-	// Élargi à la dette+smartphone (17/09/2026) : depuis que la dette partage la
-	// même pioche/mécanique de carrés que la libre (voir
-	// GameService.dealStartingHandsForLibreIfNeeded), son inventaire réel se
-	// dérive lui aussi de l'historique des transactions, jamais de goodsCount
-	// (jamais mis à jour pour dette/libre, voir le commentaire ci-dessus) -
-	// gardé sur isSmartphoneTrackedPlayer() plutôt que usesMonetaryUnitsOnly()
-	// car ce choix dépend du MÉCANISME de suivi des cartes, pas du libellé
-	// jeton/unité monétaire (les deux coïncident en pratique pour la dette,
-	// mais la distinction reste plus juste).
-	if (isLibreGame() || (isDebtGame() && isSmartphoneTrackedPlayer())) {
+	// Élargi à la dette+smartphone (17/09/2026), puis au troc+smartphone
+	// (18/09/2026) : depuis qu'elles partagent la même pioche/mécanique de
+	// carrés que la libre (voir GameService.dealStartingHandsForLibreIfNeeded,
+	// désormais commune aux trois), leur inventaire réel se dérive lui aussi
+	// de l'historique des transactions, jamais de goodsCount (jamais mis à
+	// jour par un échange smartphone, voir le commentaire ci-dessus - reste
+	// juste pour le troc CLASSIQUE, dont le tableau de bord "Échange entre
+	// joueurs" le maintient toujours à jour) - gardé sur
+	// isSmartphoneTrackedPlayer() plutôt que usesMonetaryUnitsOnly() car ce
+	// choix dépend du MÉCANISME de suivi des cartes, pas du libellé jeton/
+	// unité monétaire (sans objet pour le troc, qui n'a jamais eu ni l'un ni
+	// l'autre).
+	if (isLibreGame() || ((isDebtGame() || isTrocGame()) && isSmartphoneTrackedPlayer())) {
 		try {
 			const inventory = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/card-inventory`).then((r) => r.json());
 			el("statCards").textContent = Object.values(inventory).reduce((sum, n) => sum + n, 0);
@@ -982,13 +985,17 @@ function openCardModal(item) {
 	// Dette/libre : prix automatique, le QR est généré tout de suite (prêt
 	// dès que le joueur swipe, pas d'étape manuelle intermédiaire) - "la
 	// personne clique sur la carte, swipe pour la vendre", rien de plus.
-	// Troc : pas de valeur en jetons par principe (voir docs/10-etape-
-	// plugins-troc.md, règle 3) - garde l'étape manuelle existante
-	// (steppers de cartes voulues en retour, librement négocié).
-	if (isTrocGame()) {
-		renderCardModalPriceStep(item);
-	} else {
-		el("cardModalBackBody").innerHTML = `<p style="color:#666;font-size:0.85rem;">${escapeHtmlLocal(t("settings.catalog_loading"))}</p>`;
+	// Troc + SMARTPHONE (18/09/2026, remonté par l'utilisateur : "le système
+	// d'échange de cartes doit être repensé... [le joueur] la swipe, ce qui
+	// la retourne. La carte présente son QRcode.") : rejoint désormais
+	// EXACTEMENT le même chemin immédiat que dette/libre - plus de steppers,
+	// plus de "prix" à négocier (jamais de jetons ni d'unité monétaire en
+	// troc, voir docs/10-etape-plugins-troc.md, règle 3) - le QR encode
+	// directement CETTE carte précise, prête à être scannée par l'autre
+	// joueur pour un échange 1-pour-1 (voir generateCardModalQr,
+	// GameService.recordCardSwap pour les règles de validation côté serveur).
+	el("cardModalBackBody").innerHTML = `<p style="color:#666;font-size:0.85rem;">${escapeHtmlLocal(t("settings.catalog_loading"))}</p>`;
+	if (!isTrocGame()) {
 		// Remonté par l'utilisateur (09/09/2026) : "les cartes ne se calculent
 		// en DU que sur la partie monnaie libre avec le smartphone... en
 		// monnaie dette les cartes ont un prix en jetons" - LEVEL_JETON_PRICE
@@ -997,8 +1004,8 @@ function openCardModal(item) {
 		const p = isLibreGame() ? computeLibreCardPrice(item.entry.niveau)
 			: (LEVEL_JETON_PRICE[item.entry.niveau] || { weak: 0, medium: 0, strong: 0 });
 		state.cardModalPrice = { ...p };
-		generateCardModalQr(item);
 	}
+	generateCardModalQr(item);
 }
 
 function closeCardModal() {
@@ -1021,46 +1028,6 @@ function closeCardModal() {
 	setTimeout(() => { el("cardModalFlip").classList.remove("is-flipped"); }, 300);
 }
 
-// Étape "prix" au dos de la carte, avant de générer le QR - steppers
-// compacts (voir .modal-price-steppers). TROC UNIQUEMENT désormais (voir
-// openCardModal) : demande des cartes en retour, librement négocié, comme
-// openSellPrice. Le prix en jetons (dette/libre) est automatique, voir
-// LEVEL_JETON_PRICE ci-dessus.
-function renderCardModalPriceStep(item) {
-	const isTroc = isTrocGame();
-	const labels = isTroc
-		? [t("trade.goods_wanted_weak"), t("trade.goods_wanted_medium"), t("trade.goods_wanted_strong")]
-		: [t("trade.coin_weak"), t("trade.coin_medium"), t("trade.coin_strong")];
-	const coins = ["weak", "medium", "strong"];
-	el("cardModalBackBody").innerHTML = `
-		<div class="modal-price-steppers">
-			${coins.map((coin, i) => `
-			<div class="modal-price-stepper" data-modal-coin="${coin}">
-				<span>${escapeHtmlLocal(labels[i])}</span>
-				<div class="modal-price-stepper-controls">
-					<button type="button" class="modal-stepper-btn" data-modal-delta="-1">−</button>
-					<span class="modal-stepper-value" data-modal-value="${coin}">0</span>
-					<button type="button" class="modal-stepper-btn" data-modal-delta="1">+</button>
-				</div>
-			</div>`).join("")}
-		</div>
-		<button type="button" class="modal-generate-qr-btn" id="cardModalGenerateBtn">${escapeHtmlLocal(t("trade.btn_generate_qr"))}</button>`;
-
-	el("cardModalBackBody").querySelectorAll(".modal-stepper-btn").forEach((btn) => {
-		btn.addEventListener("click", (e) => {
-			e.stopPropagation(); // ne doit jamais déclencher le retournement de la carte
-			const coin = btn.closest("[data-modal-coin]").dataset.modalCoin;
-			const delta = parseInt(btn.dataset.modalDelta, 10);
-			state.cardModalPrice[coin] = Math.max(0, state.cardModalPrice[coin] + delta);
-			el("cardModalBackBody").querySelector(`[data-modal-value="${coin}"]`).textContent = state.cardModalPrice[coin];
-		});
-	});
-	el("cardModalGenerateBtn").addEventListener("click", (e) => {
-		e.stopPropagation();
-		generateCardModalQr(item);
-	});
-}
-
 async function generateCardModalQr(item) {
 	const btn = el("cardModalGenerateBtn");
 	if (btn) btn.disabled = true;
@@ -1080,12 +1047,27 @@ async function generateCardModalQr(item) {
 		}
 		const priceLine = (priceParts.length > 0)
 			? `<p class="qr-instruction" style="font-weight:700;margin-bottom:-4px;">${escapeHtmlLocal(priceParts.join(" + "))}</p>` : "";
+		// Étape 3, troc + smartphone (18/09/2026) : bouton "Échanger" ajouté sous
+		// le QR - remonté par l'utilisateur : "Ajout d'un bouton échange dessous
+		// le QRcode. Le joueur clique sur le bouton. Le scan de QRcode s'ouvre.
+		// Le joueur peut scanner le QRcode de la carte de l'autre joueur qu'il
+		// souhaite échanger avec lui." L'AUTRE joueur doit avoir fait de même
+		// sur SON téléphone (retourné une de ses cartes, obtenu son propre QR)
+		// avant que l'un des deux ne scanne le code de l'autre - voir
+		// state.trocSwapOfferedItem, qui retient CETTE carte précise (celle
+		// affichée ici) comme "ce que je donne" pour la suite du scan (voir
+		// openScan ci-dessous et confirmPurchase, qui l'utilise pour appeler
+		// /redeem-swap plutôt que /redeem).
+		const swapBtnHtml = isTrocGame()
+			? `<button type="button" class="btn-primary" id="cardModalSwapBtn" style="margin-top:0.4rem;">${escapeHtmlLocal(t("trade.btn_swap"))}</button>`
+			: "";
 		el("cardModalBackBody").innerHTML = `
 			${priceLine}
 			<div class="qr-container"><div id="cardModalQrBox"></div></div>
 			<p class="qr-code-text" id="cardModalQrCodeText"></p>
 			<p class="qr-instruction">${escapeHtmlLocal(t("trade.qr_instructions"))}</p>
 			<div class="qr-timer"><span aria-hidden="true">⏱️</span><span id="cardModalCountdownValue">01:30</span></div>
+			${swapBtnHtml}
 			<button type="button" class="btn-cancel-link" id="cardModalCancelBtn" style="color:#fff;">${escapeHtmlLocal(t("trade.btn_cancel_sell"))}</button>`;
 		// eslint-disable-next-line no-undef
 		new QRCode(el("cardModalQrBox"), { text: offer.code, width: 140, height: 140, correctLevel: QRCode.CorrectLevel.M });
@@ -1101,6 +1083,21 @@ async function generateCardModalQr(item) {
 		// - mais jusque-là accessible uniquement via ce SECOND écran).
 		el("cardModalQrCodeText").textContent = offer.code;
 		el("cardModalCancelBtn").addEventListener("click", (e) => { e.stopPropagation(); closeCardModal(); });
+		if (isTrocGame()) {
+			el("cardModalSwapBtn").addEventListener("click", (e) => {
+				e.stopPropagation();
+				state.trocSwapOfferedItem = item;
+				// Masque juste le calque de la modale (sans réinitialiser
+				// cardModalItem/cardModalOffer/trocSwapOfferedItem comme le ferait
+				// closeCardModal()) : le scan reste un écran DISTINCT géré par
+				// showScreen (voir cette fonction, qui ne touche jamais
+				// cardModalOverlay), sans quoi les deux resteraient visuellement
+				// superposés.
+				el("cardModalOverlay").classList.remove("active");
+				clearCardModalCountdown();
+				openScan();
+			});
+		}
 		startCardModalCountdown(offer.expiresAt);
 	} catch (err) {
 		el("cardModalBackBody").innerHTML = `<p class="qr-instruction" style="color:#fff;">${escapeHtmlLocal(err.message)}</p>`;
@@ -1812,22 +1809,37 @@ function renderScanConfirm(offer) {
 	const cardHtml = buildGameCardHtml(entry, visual, "geco-card-lg");
 
 	if (isTrocGame()) {
-		// Troc : le "prix" est ce que L'ACHETEUR va donner en échange (des
-		// cartes, pas des jetons) - voir offer.weakGoodsWanted&co, posés par
-		// le vendeur à la création de l'offre.
-		const goodsParts = [];
-		if (offer.weakGoodsWanted > 0) goodsParts.push(t("trade.goods_wanted_weak_amount", { n: offer.weakGoodsWanted }));
-		if (offer.mediumGoodsWanted > 0) goodsParts.push(t("trade.goods_wanted_medium_amount", { n: offer.mediumGoodsWanted }));
-		if (offer.strongGoodsWanted > 0) goodsParts.push(t("trade.goods_wanted_strong_amount", { n: offer.strongGoodsWanted }));
-		const goodsText = goodsParts.length > 0 ? goodsParts.join(" + ") : t("trade.price_free");
+		// Étape 3, troc + smartphone (18/09/2026) : échange DIRECT carte-contre-
+		// carte, jamais de jetons ni de quantité négociée - voir
+		// state.trocSwapOfferedItem, la carte que CE joueur a déjà retournée
+		// avant de scanner (voir generateCardModalQr, bouton "Échanger").
+		const offered = state.trocSwapOfferedItem;
+		if (!offered) {
+			// Cas limite (scan lancé depuis l'icône générale de la barre de
+			// navigation plutôt que depuis le bouton "Échanger" d'une carte déjà
+			// retournée) : sans carte à offrir, aucun échange n'est possible -
+			// message explicite plutôt que de laisser deviner ou planter plus
+			// loin (voir confirmPurchase, qui a le même garde-fou par prudence).
+			infoEl.innerHTML = `
+				${cardHtml}
+				<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>`;
+			el("scanConfirmBalanceRows").innerHTML = "";
+			el("scanConfirmError").textContent = t("trade.swap_select_own_card_first");
+			el("scanConfirmError").classList.remove("hidden");
+			return;
+		}
+		const offeredCardHtml = buildGameCardHtml(offered.entry,
+			(state.visualsCatalog || []).find((v) => v.id === offered.entry.visualId), "geco-card-lg");
 		infoEl.innerHTML = `
 			${cardHtml}
 			<span class="trade-card-info-meta">${escapeHtmlLocal(catalogEnumLabel("level", offer.cardLevel))} · ${escapeHtmlLocal(t("trade.sold_by", { name: offer.sellerPlayerName }))}</span>
-			<span class="trade-card-info-price">${escapeHtmlLocal(t("trade.you_will_give", { goods: goodsText }))}</span>`;
+			<span class="trade-card-info-price">${escapeHtmlLocal(t("trade.you_will_receive"))}</span>`;
 		// Pas de lignes de solde en troc : il n'y a pas de jetons à suivre
-		// (voir docs/10-etape-plugins-troc.md, règle 3) - seulement des cartes,
-		// déjà résumées ci-dessus.
-		el("scanConfirmBalanceRows").innerHTML = "";
+		// (voir docs/10-etape-plugins-troc.md, règle 3) - à la place, montre la
+		// carte donnée en retour (voir state.trocSwapOfferedItem ci-dessus).
+		el("scanConfirmBalanceRows").innerHTML = `
+			<p class="trade-card-info-price" style="margin-top:0.6rem;">${escapeHtmlLocal(t("trade.you_will_give_card"))}</p>
+			${offeredCardHtml}`;
 		el("scanConfirmError").classList.add("hidden");
 		return;
 	}
@@ -1875,20 +1887,41 @@ async function confirmPurchase() {
 	console.log("[DIAG achat] confirmPurchase() appelée, offer =", state.pendingOffer); //$NON-NLS-1$
 	const offer = state.pendingOffer;
 	const btn = el("btnConfirmBuy");
+	// Étape 3, troc + smartphone (18/09/2026) : même garde-fou que
+	// renderScanConfirm ci-dessus - sans carte déjà retournée, cet échange ne
+	// peut pas aboutir (voir state.trocSwapOfferedItem).
+	if (isTrocGame() && !state.trocSwapOfferedItem) {
+		el("scanConfirmError").textContent = t("trade.swap_select_own_card_first");
+		el("scanConfirmError").classList.remove("hidden");
+		return;
+	}
 	btn.disabled = true;
 	btn.textContent = t("trade.btn_confirming");
 	try {
-		console.log("[DIAG achat] envoi de la requête vers", `/api/games/${state.gameId}/trade-offers/${offer.code}/redeem`); //$NON-NLS-1$
-		const res = await fetch(`/api/games/${state.gameId}/trade-offers/${offer.code}/redeem`, {
+		// Étape 3, troc + smartphone (18/09/2026, remonté par l'utilisateur :
+		// "le système d'échange de cartes doit être repensé") : route DÉDIÉE
+		// (/redeem-swap), jamais /redeem ci-dessous (dette/libre uniquement
+		// désormais) - voir GameService.recordCardSwap pour les règles de
+		// validation (même valeur, réciprocité bidirectionnelle).
+		const endpoint = isTrocGame() ? "redeem-swap" : "redeem";
+		const body = isTrocGame()
+			? {
+				buyerPlayerId: state.player.id, buyerAccessToken: state.token,
+				offeredCardTypeId: state.trocSwapOfferedItem.entry.id,
+				offeredCardLevel: state.trocSwapOfferedItem.entry.niveau,
+			}
+			: { buyerPlayerId: state.player.id, buyerAccessToken: state.token };
+		console.log("[DIAG achat] envoi de la requête vers", `/api/games/${state.gameId}/trade-offers/${offer.code}/${endpoint}`); //$NON-NLS-1$
+		const res = await fetch(`/api/games/${state.gameId}/trade-offers/${offer.code}/${endpoint}`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ buyerPlayerId: state.player.id, buyerAccessToken: state.token }),
+			body: JSON.stringify(body),
 		});
 		console.log("[DIAG achat] réponse reçue, status =", res.status, "ok =", res.ok); //$NON-NLS-1$ //$NON-NLS-2$
 		if (!res.ok) {
-			const body = await res.json().catch(() => ({}));
-			console.log("[DIAG achat] echec, corps de la reponse =", body); //$NON-NLS-1$
-			throw new Error(body.error || body.msg || t("join.generic_error", { status: res.status }));
+			const body2 = await res.json().catch(() => ({}));
+			console.log("[DIAG achat] echec, corps de la reponse =", body2); //$NON-NLS-1$
+			throw new Error(body2.error || body2.msg || t("join.generic_error", { status: res.status }));
 		}
 		// Le prix qui fait foi est celui renvoyé par le serveur (TransactionDto.
 		// totalCoinsValue), pas une estimation côté client - même s'ils
@@ -1900,7 +1933,10 @@ async function confirmPurchase() {
 			// Pas de solde en jetons à annoncer en troc - juste la confirmation
 			// de l'échange (le nouvel inventaire sera visible au rafraîchissement
 			// du hub, voir refreshPlayer()).
-			showTradeResult(true, t("trade.result_success_title"), t("trade.result_success_body_goods", { name: cardName }));
+			const givenName = catalogTextValue(state.trocSwapOfferedItem.entry.nom) || state.trocSwapOfferedItem.entry.id;
+			showTradeResult(true, t("trade.result_success_title"),
+				t("trade.result_success_body_swap", { received: cardName, given: givenName }));
+			state.trocSwapOfferedItem = null;
 		} else {
 			const newBalance = (state.player.tradeBalance || 0) - transaction.totalCoinsValue;
 			showTradeResult(true, t("trade.result_success_title"),
@@ -1929,6 +1965,16 @@ async function confirmPurchase() {
 			// le vendeur n'ont la pièce précise nécessaire pour tomber sur le
 			// compte exact (voir GameService.findPaymentWithChange).
 			showToast(t("trade.cannot_make_change_toast"));
+		} else if (err.message.includes("Échange refusé")) {
+			// Étape 3, troc + smartphone (18/09/2026) : "si ce n'est pas le cas,
+			// la transaction est refusée. Une infobulle s'affiche 3 secondes à
+			// l'écran avec le texte 'Echange refusé'." - GameService.recordCardSwap
+			// renvoie plusieurs messages distincts commençant tous par "Échange
+			// refusé" (même valeur, réciprocité, carte plus en main...) : un seul
+			// texte fixe affiché au joueur pour tous ces cas, comme demandé -
+			// le détail précis reste consultable côté journal serveur/débogage.
+			showToast(t("trade.swap_refused_toast"));
+			state.trocSwapOfferedItem = null;
 		} else {
 			el("scanConfirmError").textContent = err.message;
 			el("scanConfirmError").classList.remove("hidden");
@@ -2004,7 +2050,14 @@ function initTradeUI() {
 	el("scannerHistoryIcon").innerHTML = iconSvg("history");
 	el("scannerKeyboardIcon").innerHTML = iconSvg("keyboard");
 	el("scannerFlashBtn").innerHTML = iconSvg("zap");
-	el("scannerCloseBtn").addEventListener("click", () => showScreen("viewContent"));
+	el("scannerCloseBtn").addEventListener("click", () => {
+		// Troc + smartphone : referme aussi la sélection en attente (voir
+		// state.trocSwapOfferedItem) - un scan abandonné ne doit jamais laisser
+		// une carte "prête à échanger" traîner pour une prochaine tentative sans
+		// rapport.
+		state.trocSwapOfferedItem = null;
+		showScreen("viewContent");
+	});
 	el("scannerHistoryBtn").addEventListener("click", () => { renderHistory(); setActiveNav("navBtnProfile"); });
 	el("scannerFlashBtn").addEventListener("click", async () => {
 		const btn = el("scannerFlashBtn");

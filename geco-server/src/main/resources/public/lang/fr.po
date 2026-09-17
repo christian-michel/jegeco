@@ -2019,3 +2019,22 @@ msgstr "Journal de diagnostic"
 
 msgid "playerView.debug_log_copy"
 msgstr "Copier"
+
+# ============ Troc + smartphone : échange direct carte-contre-carte (18/09/2026) ============
+msgid "trade.btn_swap"
+msgstr "🔄 Échanger"
+
+msgid "trade.swap_select_own_card_first"
+msgstr "Sélectionnez d'abord votre propre carte à échanger."
+
+msgid "trade.you_will_receive"
+msgstr "Vous recevrez cette carte :"
+
+msgid "trade.you_will_give_card"
+msgstr "Vous donnerez cette carte :"
+
+msgid "trade.result_success_body_swap"
+msgstr "Échange effectué : {received} contre {given}."
+
+msgid "trade.swap_refused_toast"
+msgstr "Échange refusé"

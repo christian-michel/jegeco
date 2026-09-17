@@ -2015,3 +2015,22 @@ msgstr "Debug log"
 
 msgid "playerView.debug_log_copy"
 msgstr "Copy"
+
+# ============ Barter + smartphone: direct card-for-card swap (18/09/2026) ============
+msgid "trade.btn_swap"
+msgstr "🔄 Swap"
+
+msgid "trade.swap_select_own_card_first"
+msgstr "First select your own card to swap."
+
+msgid "trade.you_will_receive"
+msgstr "You will receive this card:"
+
+msgid "trade.you_will_give_card"
+msgstr "You will give this card:"
+
+msgid "trade.result_success_body_swap"
+msgstr "Swap completed: {received} for {given}."
+
+msgid "trade.swap_refused_toast"
+msgstr "Swap refused"

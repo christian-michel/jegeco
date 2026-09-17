@@ -127,7 +127,8 @@ public class Dtos
 			Integer buyerPlayerId, String buyerPlayerName, int turnNumber, long timestamp, String cardTypeId,
 			String cardLevel, int weakCoins, int mediumCoins, int strongCoins, int weakChangeCoins,
 			int mediumChangeCoins, int strongChangeCoins, int totalCoinsValue, int buyerWeakGoods,
-			int buyerMediumGoods, int buyerStrongGoods, boolean isGoodsTrade, int totalGoodsValue)
+			int buyerMediumGoods, int buyerStrongGoods, boolean isGoodsTrade, int totalGoodsValue,
+			String swapCardTypeId, String swapCardLevel, boolean isCardSwap)
 	{
 		static TransactionDto from(final jyt.geconomicus.helper.Transaction t)
 		{
@@ -142,7 +143,12 @@ public class Dtos
 					// Transaction.java, GameService.findPaymentWithChange).
 					t.getWeakChangeCoins(), t.getMediumChangeCoins(), t.getStrongChangeCoins(), t.totalCoinsValue(),
 					t.getBuyerWeakGoods(), t.getBuyerMediumGoods(), t.getBuyerStrongGoods(), t.isGoodsTrade(),
-					t.totalGoodsValue());
+					t.totalGoodsValue(),
+					// swapCardTypeId&co : ajoutés le 18/09/2026, troc+smartphone (voir
+					// Transaction.forCardSwap) - la carte donnée en retour par
+					// l'acheteur dans un VRAI échange direct, jamais renseignée pour
+					// les autres types de transaction.
+					t.getSwapCardTypeId(), t.getSwapCardLevel(), t.isCardSwap());
 		}
 	}
 
@@ -336,6 +342,18 @@ public class Dtos
 	public record CreateTradeOfferRequest(Integer sellerPlayerId, String sellerAccessToken, String cardTypeId,
 			String cardLevel, java.util.Map<String, Object> cardName, int weakCoins, int mediumCoins, int strongCoins,
 			int weakGoodsWanted, int mediumGoodsWanted, int strongGoodsWanted)
+	{
+	}
+
+	// Corps de requête pour POST /api/games/{id}/trade-offers/{code}/redeem-swap
+	// (étape 3, troc+smartphone, 18/09/2026) - voir GameService.recordCardSwap.
+	// buyerAccessToken : même principe que RedeemTradeOfferRequest ci-dessus.
+	// offeredCardTypeId/offeredCardLevel : la carte que CE joueur (celui qui
+	// scanne) donne en retour - déjà sélectionnée/retournée sur son propre
+	// téléphone avant de scanner (voir player-view.js), jamais choisie a
+	// posteriori côté serveur.
+	public record RedeemSwapOfferRequest(Integer buyerPlayerId, String buyerAccessToken, String offeredCardTypeId,
+			String offeredCardLevel)
 	{
 	}
 
