@@ -773,7 +773,44 @@ public class GameService
 				throw new IllegalArgumentException("Ce QR code a déjà été utilisé."); //$NON-NLS-1$
 			if (System.currentTimeMillis() > pExpiresAtEpochMs)
 				throw new IllegalArgumentException("Ce QR code a expiré, demandez-en un nouveau au vendeur."); //$NON-NLS-1$
-			if (!pCardLevel.equals(pOfferedCardLevel))
+			// BUG TROUVÉ ET CORRIGÉ (seconde relecture indépendante, 18/09/2026) :
+			// pCardLevel/pOfferedCardLevel sont de simples chaînes envoyées par
+			// CHAQUE client (voir Dtos.RedeemSwapOfferRequest.offeredCardLevel,
+			// jamais vérifié côté serveur jusqu'ici) - un client modifié (ou un
+			// simple appel direct à cette route, hors de player-view.js) pouvait
+			// donc prétendre à N'IMPORTE QUEL niveau pour sa propre carte, y
+			// compris un niveau différent du VRAI niveau catalogue de
+			// pOfferedCardTypeId, et ainsi faire passer un échange faible contre
+			// forte comme "même valeur" - cassant justement la règle SAME VALUE
+			// que ce contrôle est censé garantir. La réciprocité elle-même reste
+			// saine (basée sur l'inventaire réel, jamais sur ces chaînes), mais
+			// pas cette vérification-ci. Correction : dérive le niveau RÉEL de
+			// chaque carte depuis la pioche partagée de la partie (même
+			// mécanisme que findLevelOfCard, déjà utilisé pour la mort/les
+			// carrés/le classement ci-dessous - jamais les niveaux déclarés par
+			// le client) et compare CES niveaux-là, pas ceux reçus en paramètre.
+			java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel = new java.util.LinkedHashMap<>();
+			final String smartphonePileJson = game.getSmartphoneCardPileJson();
+			if (smartphonePileJson != null)
+			{
+				try
+				{
+					pilesByLevel = new com.fasterxml.jackson.databind.ObjectMapper().readValue(smartphonePileJson,
+							new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.Map<String, Integer>>>()
+							{
+							});
+				}
+				catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+				{
+					// Donnée corrompue (ne devrait jamais arriver) : pilesByLevel reste
+					// vide, findLevelOfCard renverra null pour les deux cartes ci-dessous,
+					// et l'échange sera refusé faute de pouvoir prouver la même valeur -
+					// refus prudent plutôt qu'un repli sur les chaînes non fiables du client.
+				}
+			}
+			final String actualCardLevel = findLevelOfCard(pilesByLevel, pCardTypeId);
+			final String actualOfferedCardLevel = findLevelOfCard(pilesByLevel, pOfferedCardTypeId);
+			if ((actualCardLevel == null) || !actualCardLevel.equals(actualOfferedCardLevel))
 				throw new IllegalArgumentException("Échange refusé : les deux cartes n'ont pas la même valeur."); //$NON-NLS-1$
 			final java.util.Map<String, Integer> sellerInventory = computePlayerCardInventory(em, pGameId, pSellerPlayerId);
 			final java.util.Map<String, Integer> buyerInventory = computePlayerCardInventory(em, pGameId, pBuyerPlayerId);
@@ -803,8 +840,12 @@ public class GameService
 			if (buyerInventory.getOrDefault(pCardTypeId, 0) <= 0)
 				throw new IllegalArgumentException("Échange refusé : l'acheteur ne possède pas déjà ce modèle."); //$NON-NLS-1$
 			em.getTransaction().begin();
-			final Transaction transaction = Transaction.forCardSwap(game, seller, buyer, pCardTypeId, pCardLevel,
-					pOfferedCardTypeId, pOfferedCardLevel, pNonce);
+			// actualCardLevel/actualOfferedCardLevel (dérivés catalogue ci-dessus),
+			// jamais pCardLevel/pOfferedCardLevel (chaînes du client, potentiellement
+			// mensongères) : la Transaction persistée doit refléter la VRAIE valeur
+			// des cartes échangées, pas ce que le client a prétendu.
+			final Transaction transaction = Transaction.forCardSwap(game, seller, buyer, pCardTypeId, actualCardLevel,
+					pOfferedCardTypeId, actualOfferedCardLevel, pNonce);
 			em.persist(transaction);
 			em.getTransaction().commit();
 			return transaction;
