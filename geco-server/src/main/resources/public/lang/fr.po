@@ -2052,3 +2052,103 @@ msgstr "Échange en cours..."
 # ============ Résumé des échanges, troc + smartphone (18/09/2026) ============
 msgid "game.transactions_summary_troc"
 msgstr "{count} échange(s) au total."
+
+# ============ Vue "Documentation" intégrée (index.html), rendue multilingue le 18/09/2026 ============
+msgid "docs.title"
+msgstr "Documentation"
+
+msgid "docs.concept_title"
+msgstr "Le concept en une phrase"
+
+msgid "docs.concept_body"
+msgstr "Ğeconomicus est un jeu de société pédagogique qui fait vivre à ses joueurs, en quelques dizaines de minutes, l'équivalent d'une vie économique entière (environ 80 ans), une fois avec un système de <strong>monnaie dette</strong> (comme la monnaie qui domine aujourd'hui la plupart des économies), une fois avec un système de <strong>monnaie libre</strong> (fondé sur la Théorie Relative de la Monnaie), afin de pouvoir comparer concrètement les effets de chacun sur les échanges et les inégalités entre joueurs."
+
+msgid "docs.debt_title"
+msgstr "🏦 Monnaie dette"
+
+msgid "docs.debt_body"
+msgstr "C'est <strong>la banque</strong> qui crée la monnaie, en l'octroyant sous forme de <strong>crédits</strong> que les emprunteurs doivent ensuite rembourser <strong>avec intérêts</strong>. C'est le fonctionnement dominant des systèmes monétaires actuels dans la plupart des économies contemporaines."
+
+msgid "docs.libre_title"
+msgstr "🌱 Monnaie libre"
+
+msgid "docs.libre_body"
+msgstr "La monnaie est créée symétriquement par chaque participant selon les règles de la <strong>Théorie Relative de la Monnaie (TRM)</strong> de Stéphane Laborde : chaque joueur reçoit un <strong>Dividende Universel</strong> régulier, sans dette ni intérêt à rembourser. C'est le principe derrière la monnaie <strong>June (Ğ1)</strong>."
+
+msgid "docs.flow_title"
+msgstr "Déroulement d'une partie"
+
+msgid "docs.flow_item1"
+msgstr "Des <strong>cartes valeurs</strong> représentent des biens/services, que les joueurs échangent entre eux contre des <strong>jetons</strong> représentant l'unité monétaire de la partie."
+
+msgid "docs.flow_item2"
+msgstr "La partie se déroule en <strong>tours</strong> de quelques minutes chacun. Un tour représente une tranche de la vie économique d'un joueur."
+
+msgid "docs.flow_item3"
+msgstr "À chaque tour, un ou plusieurs joueurs <strong>meurent</strong> aléatoirement, puis <strong>renaissent</strong> au tour suivant en repartant à zéro."
+
+msgid "docs.flow_item4"
+msgstr "Tous les échanges et événements sont enregistrés en temps réel par l'animateur, pour pouvoir ensuite comparer objectivement ce qui s'est passé."
+
+msgid "docs.flow_item5"
+msgstr "En fin de partie, on compare la partie \"monnaie dette\" et la partie \"monnaie libre\" — idéalement jouées avec les mêmes joueurs — via courbes et histogrammes de répartition des richesses."
+
+msgid "docs.full_page_title"
+msgstr "Page complète (consultable hors connexion)"
+
+msgid "docs.full_rules_link"
+msgstr "📄 Ouvrir la page complète \"Règles du jeu\" (nouvel onglet)"
+
+msgid "docs.stats_doc_link"
+msgstr "📄 Comprendre les statistiques de fin de partie (seuil de pauvreté, indice de Gini...)"
+
+msgid "docs.further_title"
+msgstr "Pour aller plus loin"
+
+msgid "docs.further_badge"
+msgstr "connexion internet requise"
+
+msgid "docs.further_link_rules"
+msgstr "📖 Règles officielles complètes du jeu Ğeconomicus"
+
+msgid "docs.further_link_trm"
+msgstr "📖 Théorie Relative de la Monnaie (TRM) — Stéphane Laborde"
+
+msgid "docs.further_link_modules"
+msgstr "📖 Modules d'approfondissement de la TRM (Galilée et autres)"
+
+msgid "docs.further_link_original"
+msgstr "💻 Projet original de l'outil d'animation (jytou)"
+
+msgid "docs.further_link_eurostat"
+msgstr "📖 Eurostat — base de données revenus et conditions de vie"
+
+msgid "docs.further_link_inequality"
+msgstr "📖 La pauvreté en Europe — Observatoire des inégalités"
+
+msgid "docs.further_link_gini_wiki"
+msgstr "📖 Coefficient de Gini — Wikipédia"
+
+msgid "docs.further_link_gini_def"
+msgstr "📖 Indice de Gini — définition INSEE"
+
+msgid "docs.further_link_gini_data"
+msgstr "📖 Indice de Gini — données et statistiques INSEE"
+
+msgid "docs.offline_title"
+msgstr "Archive locale (consultable hors connexion)"
+
+msgid "docs.offline_checking"
+msgstr "Vérification de la présence du PDF local..."
+
+msgid "docs.offline_drees_link"
+msgstr "📄 DREES (2025) — Personnes pauvres et modestes en Europe : qui sont-elles ? (source des seuils de pauvreté/condition modeste utilisés dans l'application)"
+
+msgid "docs.offline_pdf_open"
+msgstr "📄 Ouvrir le PDF de la TRM (archive locale)"
+
+msgid "docs.offline_pdf_missing_with_readme"
+msgstr "PDF pas encore ajouté localement — voir <code>public/docs-offline/README.md</code> pour l'installer, ou utilisez le lien en ligne ci-dessus."
+
+msgid "docs.offline_pdf_missing_simple"
+msgstr "PDF pas encore ajouté localement."

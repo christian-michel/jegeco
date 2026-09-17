@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>End-of-game statistics — Ğeconomicus Helper</title>
+<style>
+	:root { --accent: #2563eb; --text: #111827; --text-dim: #6b7280; --border: #e5e7eb; --bg: #f4f6fb; }
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+		background: var(--bg); color: var(--text); line-height: 1.65;
+	}
+	.doc-wrap { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+	.doc-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 2rem; color: var(--text-dim); font-size: 0.85rem; }
+	.doc-logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff;
+		display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+	h1 { font-size: 1.6rem; margin: 0 0 1.25rem; }
+	h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+	h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+	p, li { font-size: 0.95rem; }
+	a { color: var(--accent); }
+	code { background: #eef1f7; padding: 0.15rem 0.4rem; border-radius: 5px; font-size: 0.85em; }
+	ul, ol { padding-left: 1.3rem; }
+</style>
+</head>
+<body>
+	<div class="doc-wrap">
+		<div class="doc-header"><span class="doc-logo">Ğ</span> Ğeconomicus Helper — Documentation</div>
+		<h1>Understanding end-of-game statistics</h1>
+<p>This page explains the indicators shown on the end-of-game report (mean,
+median, standard deviation, Gini index, poverty and modest-living
+thresholds), with their official definitions and sources to learn more.</p>
+<h2>Poverty threshold and modest-living threshold</h2>
+<p>Ğeconomicus uses the <strong>official Eurostat and INSEE definitions</strong>, used
+in every poverty comparison across Europe:</p>
+<ul>
+<li><strong>Poverty threshold</strong> = 60% of the <strong>median</strong> standard of living (not
+  the mean). A player is considered "poor" if their end-of-game wealth falls
+  below this threshold.</li>
+<li><strong>Modest-living threshold</strong> = 75% of the median standard of living.
+  Between the two thresholds (60% and 75% of the median), people are referred
+  to as "modest" rather than "poor": their living conditions are close to
+  those of poor people, without being counted in the poverty rate in the
+  strict sense.</li>
+</ul>
+<p>Why the <strong>median</strong> rather than the mean? The median is the value that
+splits the population into two equal halves (as many players above as
+below). It is less sensitive than a mean to extreme values: a single
+extremely wealthy player would sharply raise a mean, without reflecting the
+situation of the "typical" player — the median, by contrast, does not
+move.</p>
+<p><strong>To go further:</strong>
+- <a href="https://ec.europa.eu/eurostat/en/web/income-and-living-conditions/database">Eurostat database on income and living
+  conditions</a>
+- <a href="https://www.inegalites.fr/La-pauvrete-en-Europe">Poverty in Europe — Observatoire des inégalités (French)</a>
+- DREES study, <em>Personnes pauvres et modestes en Europe : qui sont-elles ?</em>,
+  Études et Résultats n°1349, September 2025 (Théodore Bérut) — the source
+  used to refine these definitions in the application. Available from DREES
+  (drees.solidarites-sante.gouv.fr), French only.</p>
+<h2>Gini index</h2>
+<p>The Gini index measures <strong>wealth inequality</strong> within a group, on a scale
+from 0 to 1 (shown here multiplied by 100, so from 0 to 100):</p>
+<ul>
+<li><strong>0</strong> = perfect equality (every player has exactly the same wealth).</li>
+<li><strong>100</strong> (close to 1) = extreme inequality (a single player holds all the
+  wealth, everyone else has nothing).</li>
+</ul>
+<p>Concretely, the index compares the actual distribution of wealth among
+players to a perfectly equal distribution: the larger the gap between the
+two, the higher the index. It is the most widely used indicator in the world
+for comparing inequality between countries, regions, or — here — between two
+monetary systems within the same Ğeconomicus game.</p>
+<p><strong>To go further:</strong>
+- <a href="https://en.wikipedia.org/wiki/Gini_coefficient">Gini coefficient — Wikipedia</a>
+- <a href="https://www.insee.fr/fr/metadonnees/definition/c1551">Definition of the Gini index — INSEE (French)</a>
+- <a href="https://www.insee.fr/fr/statistiques/2491918">Gini index, data and statistics — INSEE (French)</a></p>
+	</div>
+</body>
+</html>

@@ -2048,3 +2048,103 @@ msgstr "Swapping..."
 # ============ Trade summary, barter + smartphone (18/09/2026) ============
 msgid "game.transactions_summary_troc"
 msgstr "{count} trade(s) in total."
+
+# ============ Built-in "Documentation" view (index.html), made multilingual on 09/18/2026 ============
+msgid "docs.title"
+msgstr "Documentation"
+
+msgid "docs.concept_title"
+msgstr "The concept in one sentence"
+
+msgid "docs.concept_body"
+msgstr "Ğeconomicus is an educational board game that has its players live, in a few dozen minutes, the equivalent of a whole economic life (about 80 years) — once with a <strong>debt money</strong> system (like the money that dominates most economies today), once with a <strong>free money</strong> system (based on the Relative Theory of Money), so they can concretely compare the effects of each on exchanges and inequality between players."
+
+msgid "docs.debt_title"
+msgstr "🏦 Debt money"
+
+msgid "docs.debt_body"
+msgstr "It is <strong>the bank</strong> that creates money, granting it in the form of <strong>loans</strong> that borrowers must then repay <strong>with interest</strong>. This is how most current monetary systems work in most contemporary economies."
+
+msgid "docs.libre_title"
+msgstr "🌱 Free money"
+
+msgid "docs.libre_body"
+msgstr "Money is created symmetrically by each participant according to the rules of the <strong>Relative Theory of Money (RTM)</strong> by Stéphane Laborde: each player receives a regular <strong>Universal Dividend</strong>, with no debt or interest to repay. This is the principle behind the <strong>June (Ğ1)</strong> currency."
+
+msgid "docs.flow_title"
+msgstr "How a game unfolds"
+
+msgid "docs.flow_item1"
+msgstr "<strong>Value cards</strong> represent goods/services, which players exchange with each other for <strong>tokens</strong> representing the game's monetary unit."
+
+msgid "docs.flow_item2"
+msgstr "The game unfolds in <strong>turns</strong> of a few minutes each. A turn represents a slice of a player's economic life."
+
+msgid "docs.flow_item3"
+msgstr "Each turn, one or more players randomly <strong>die</strong>, then <strong>are reborn</strong> on the next turn, starting back from zero."
+
+msgid "docs.flow_item4"
+msgstr "All exchanges and events are recorded in real time by the facilitator, so what happened can later be compared objectively."
+
+msgid "docs.flow_item5"
+msgstr "At the end of the game, the \"debt money\" game and the \"free money\" game are compared — ideally played with the same players — using curves and histograms of wealth distribution."
+
+msgid "docs.full_page_title"
+msgstr "Full page (available offline)"
+
+msgid "docs.full_rules_link"
+msgstr "📄 Open the full \"Game rules\" page (new tab)"
+
+msgid "docs.stats_doc_link"
+msgstr "📄 Understand end-of-game statistics (poverty threshold, Gini index...)"
+
+msgid "docs.further_title"
+msgstr "To go further"
+
+msgid "docs.further_badge"
+msgstr "internet connection required"
+
+msgid "docs.further_link_rules"
+msgstr "📖 Complete official rules of the Ğeconomicus game"
+
+msgid "docs.further_link_trm"
+msgstr "📖 Relative Theory of Money (RTM) — Stéphane Laborde"
+
+msgid "docs.further_link_modules"
+msgstr "📖 RTM deep-dive modules (Galileo and others)"
+
+msgid "docs.further_link_original"
+msgstr "💻 Original facilitation tool project (jytou)"
+
+msgid "docs.further_link_eurostat"
+msgstr "📖 Eurostat — income and living conditions database"
+
+msgid "docs.further_link_inequality"
+msgstr "📖 Poverty in Europe — Observatoire des inégalités"
+
+msgid "docs.further_link_gini_wiki"
+msgstr "📖 Gini coefficient — Wikipedia"
+
+msgid "docs.further_link_gini_def"
+msgstr "📖 Gini index — INSEE definition"
+
+msgid "docs.further_link_gini_data"
+msgstr "📖 Gini index — INSEE data and statistics"
+
+msgid "docs.offline_title"
+msgstr "Local archive (available offline)"
+
+msgid "docs.offline_checking"
+msgstr "Checking for the local PDF..."
+
+msgid "docs.offline_drees_link"
+msgstr "📄 DREES (2025) — Poor and modest-income people in Europe: who are they? (source of the poverty/modest-living thresholds used in the application)"
+
+msgid "docs.offline_pdf_open"
+msgstr "📄 Open the RTM PDF (local archive)"
+
+msgid "docs.offline_pdf_missing_with_readme"
+msgstr "PDF not added locally yet — see <code>public/docs-offline/README.md</code> to install it, or use the online link above."
+
+msgid "docs.offline_pdf_missing_simple"
+msgstr "PDF not added locally yet."

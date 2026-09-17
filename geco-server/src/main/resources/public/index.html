@@ -686,7 +686,7 @@
 			<!-- Vue Documentation : référence pour l'animateur, à tout moment de la partie -->
 			<section id="view-docs" class="view hidden">
 				<div class="view-header">
-					<h2>Documentation</h2>
+					<h2 data-i18n="docs.title">Documentation</h2>
 				</div>
 
 				<!-- Remonté par un utilisateur : chaque système d'échange fournit son
@@ -699,8 +699,8 @@
 				</div>
 
 				<div class="panel-card docs-section">
-					<h3>Le concept en une phrase</h3>
-					<p>Ğeconomicus est un jeu de société pédagogique qui fait vivre à ses joueurs,
+					<h3 data-i18n="docs.concept_title">Le concept en une phrase</h3>
+					<p data-i18n-html="docs.concept_body">Ğeconomicus est un jeu de société pédagogique qui fait vivre à ses joueurs,
 					en quelques dizaines de minutes, l'équivalent d'une vie économique entière
 					(environ 80 ans), une fois avec un système de <strong>monnaie dette</strong>
 					(comme la monnaie qui domine aujourd'hui la plupart des économies), une fois
@@ -711,16 +711,16 @@
 
 				<div class="docs-grid">
 					<div class="panel-card docs-section money-debt-color-border">
-						<h3>🏦 Monnaie dette</h3>
-						<p>C'est <strong>la banque</strong> qui crée la monnaie, en l'octroyant sous
+						<h3 data-i18n="docs.debt_title">🏦 Monnaie dette</h3>
+						<p data-i18n-html="docs.debt_body">C'est <strong>la banque</strong> qui crée la monnaie, en l'octroyant sous
 						forme de <strong>crédits</strong> que les emprunteurs doivent ensuite
 						rembourser <strong>avec intérêts</strong>. C'est le fonctionnement dominant
 						des systèmes monétaires actuels dans la plupart des économies
 						contemporaines.</p>
 					</div>
 					<div class="panel-card docs-section money-libre-color-border">
-						<h3>🌱 Monnaie libre</h3>
-						<p>La monnaie est créée symétriquement par chaque participant selon les
+						<h3 data-i18n="docs.libre_title">🌱 Monnaie libre</h3>
+						<p data-i18n-html="docs.libre_body">La monnaie est créée symétriquement par chaque participant selon les
 						règles de la <strong>Théorie Relative de la Monnaie (TRM)</strong> de
 						Stéphane Laborde : chaque joueur reçoit un <strong>Dividende
 						Universel</strong> régulier, sans dette ni intérêt à rembourser. C'est le
@@ -729,53 +729,53 @@
 				</div>
 
 				<div class="panel-card docs-section">
-					<h3>Déroulement d'une partie</h3>
+					<h3 data-i18n="docs.flow_title">Déroulement d'une partie</h3>
 					<ol class="docs-list">
-						<li>Des <strong>cartes valeurs</strong> représentent des biens/services, que
+						<li data-i18n-html="docs.flow_item1">Des <strong>cartes valeurs</strong> représentent des biens/services, que
 						les joueurs échangent entre eux contre des <strong>jetons</strong>
 						représentant l'unité monétaire de la partie.</li>
-						<li>La partie se déroule en <strong>tours</strong> de quelques minutes
+						<li data-i18n-html="docs.flow_item2">La partie se déroule en <strong>tours</strong> de quelques minutes
 						chacun. Un tour représente une tranche de la vie économique d'un joueur.</li>
-						<li>À chaque tour, un ou plusieurs joueurs <strong>meurent</strong>
+						<li data-i18n-html="docs.flow_item3">À chaque tour, un ou plusieurs joueurs <strong>meurent</strong>
 						aléatoirement, puis <strong>renaissent</strong> au tour suivant en repartant
 						à zéro.</li>
-						<li>Tous les échanges et événements sont enregistrés en temps réel par
+						<li data-i18n-html="docs.flow_item4">Tous les échanges et événements sont enregistrés en temps réel par
 						l'animateur, pour pouvoir ensuite comparer objectivement ce qui s'est
 						passé.</li>
-						<li>En fin de partie, on compare la partie "monnaie dette" et la partie
+						<li data-i18n-html="docs.flow_item5">En fin de partie, on compare la partie "monnaie dette" et la partie
 						"monnaie libre" — idéalement jouées avec les mêmes joueurs — via courbes et
 						histogrammes de répartition des richesses.</li>
 					</ol>
 				</div>
 
 				<div class="panel-card docs-section">
-					<h3>Page complète (consultable hors connexion)</h3>
+					<h3 data-i18n="docs.full_page_title">Page complète (consultable hors connexion)</h3>
 					<ul class="docs-links">
-						<li><a href="#" id="fullRulesLink" target="_blank" rel="noopener">📄 Ouvrir la page complète "Règles du jeu" (nouvel onglet)</a></li>
-						<li><a href="#" id="statsDocLink" target="_blank" rel="noopener">📄 Comprendre les statistiques de fin de partie (seuil de pauvreté, indice de Gini...)</a></li>
+						<li><a href="#" id="fullRulesLink" target="_blank" rel="noopener" data-i18n="docs.full_rules_link">📄 Ouvrir la page complète "Règles du jeu" (nouvel onglet)</a></li>
+						<li><a href="#" id="statsDocLink" target="_blank" rel="noopener" data-i18n="docs.stats_doc_link">📄 Comprendre les statistiques de fin de partie (seuil de pauvreté, indice de Gini...)</a></li>
 					</ul>
 				</div>
 
 				<div class="panel-card docs-section">
-					<h3>Pour aller plus loin <span class="docs-online-badge">connexion internet requise</span></h3>
+					<h3><span data-i18n="docs.further_title">Pour aller plus loin</span> <span class="docs-online-badge" data-i18n="docs.further_badge">connexion internet requise</span></h3>
 					<ul class="docs-links">
-						<li><a href="https://geconomicus.glibre.org/rules.html" target="_blank" rel="noopener">📖 Règles officielles complètes du jeu Ğeconomicus</a></li>
-						<li><a href="https://trm.creationmonetaire.info/" target="_blank" rel="noopener">📖 Théorie Relative de la Monnaie (TRM) — Stéphane Laborde</a></li>
-						<li><a href="https://rml.creationmonetaire.info/modules/" target="_blank" rel="noopener">📖 Modules d'approfondissement de la TRM (Galilée et autres)</a></li>
-						<li><a href="https://gitlab.com/jytou/geconomicus_helper" target="_blank" rel="noopener">💻 Projet original de l'outil d'animation (jytou)</a></li>
-						<li><a href="https://ec.europa.eu/eurostat/fr/web/income-and-living-conditions/database" target="_blank" rel="noopener">📖 Eurostat — base de données revenus et conditions de vie</a></li>
-						<li><a href="https://www.inegalites.fr/La-pauvrete-en-Europe" target="_blank" rel="noopener">📖 La pauvreté en Europe — Observatoire des inégalités</a></li>
-						<li><a href="https://fr.wikipedia.org/wiki/Coefficient_de_Gini" target="_blank" rel="noopener">📖 Coefficient de Gini — Wikipédia</a></li>
-						<li><a href="https://www.insee.fr/fr/metadonnees/definition/c1551" target="_blank" rel="noopener">📖 Indice de Gini — définition INSEE</a></li>
-						<li><a href="https://www.insee.fr/fr/statistiques/2491918" target="_blank" rel="noopener">📖 Indice de Gini — données et statistiques INSEE</a></li>
+						<li><a href="https://geconomicus.glibre.org/rules.html" target="_blank" rel="noopener" data-i18n="docs.further_link_rules">📖 Règles officielles complètes du jeu Ğeconomicus</a></li>
+						<li><a href="https://trm.creationmonetaire.info/" target="_blank" rel="noopener" data-i18n="docs.further_link_trm">📖 Théorie Relative de la Monnaie (TRM) — Stéphane Laborde</a></li>
+						<li><a href="https://rml.creationmonetaire.info/modules/" target="_blank" rel="noopener" data-i18n="docs.further_link_modules">📖 Modules d'approfondissement de la TRM (Galilée et autres)</a></li>
+						<li><a href="https://gitlab.com/jytou/geconomicus_helper" target="_blank" rel="noopener" data-i18n="docs.further_link_original">💻 Projet original de l'outil d'animation (jytou)</a></li>
+						<li><a href="https://ec.europa.eu/eurostat/fr/web/income-and-living-conditions/database" target="_blank" rel="noopener" data-i18n="docs.further_link_eurostat">📖 Eurostat — base de données revenus et conditions de vie</a></li>
+						<li><a href="https://www.inegalites.fr/La-pauvrete-en-Europe" target="_blank" rel="noopener" data-i18n="docs.further_link_inequality">📖 La pauvreté en Europe — Observatoire des inégalités</a></li>
+						<li><a href="https://fr.wikipedia.org/wiki/Coefficient_de_Gini" target="_blank" rel="noopener" data-i18n="docs.further_link_gini_wiki">📖 Coefficient de Gini — Wikipédia</a></li>
+						<li><a href="https://www.insee.fr/fr/metadonnees/definition/c1551" target="_blank" rel="noopener" data-i18n="docs.further_link_gini_def">📖 Indice de Gini — définition INSEE</a></li>
+						<li><a href="https://www.insee.fr/fr/statistiques/2491918" target="_blank" rel="noopener" data-i18n="docs.further_link_gini_data">📖 Indice de Gini — données et statistiques INSEE</a></li>
 					</ul>
 				</div>
 
 				<div class="panel-card docs-section">
-					<h3>Archive locale (consultable hors connexion)</h3>
-					<p id="docsOfflineStatus">Vérification de la présence du PDF local...</p>
+					<h3 data-i18n="docs.offline_title">Archive locale (consultable hors connexion)</h3>
+					<p id="docsOfflineStatus" data-i18n="docs.offline_checking">Vérification de la présence du PDF local...</p>
 					<ul class="docs-links">
-						<li><a href="/docs-offline/DREES_2025_pauvres_et_modestes_en_Europe.pdf" target="_blank" rel="noopener">📄 DREES (2025) — Personnes pauvres et modestes en Europe : qui sont-elles ? (source des seuils de pauvreté/condition modeste utilisés dans l'application)</a></li>
+						<li><a href="/docs-offline/DREES_2025_pauvres_et_modestes_en_Europe.pdf" target="_blank" rel="noopener" data-i18n="docs.offline_drees_link">📄 DREES (2025) — Personnes pauvres et modestes en Europe : qui sont-elles ? (source des seuils de pauvreté/condition modeste utilisés dans l'application)</a></li>
 					</ul>
 				</div>
 			</section>

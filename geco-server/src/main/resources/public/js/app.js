@@ -2678,17 +2678,21 @@ function renderDocs() {
 	// Détecte si le PDF de la TRM a été déposé localement (voir
 	// public/docs-offline/README.md) pour proposer un lien fonctionnel même sans
 	// connexion internet, plutôt qu'un lien mort si le fichier n'est pas encore là.
+	// Remonté par l'utilisateur (18/09/2026) : "le jeu doit être 100%
+	// multilangue" - ces trois textes étaient en dur en français, jamais
+	// passés par t() (contrairement au reste de l'écran, converti en
+	// data-i18n le même jour) puisqu'ils écrasent entièrement le contenu du
+	// <p> dès que ce fetch répond, quel que soit son texte HTML initial.
 	const pdfPath = "/docs-offline/TheorieRelativedelaMonnaie.pdf";
 	fetch(pdfPath, { method: "HEAD" })
 		.then((res) => {
 			el("docsOfflineStatus").innerHTML = res.ok
-				? `<a href="${pdfPath}" target="_blank" class="btn btn-small">📄 Ouvrir le PDF de la TRM (archive locale)</a>`
-				: `<span style="color:var(--text-dim);font-size:0.85rem">PDF pas encore ajouté localement — voir
-					<code>public/docs-offline/README.md</code> pour l'installer, ou utilisez le lien en ligne ci-dessus.</span>`;
+				? `<a href="${pdfPath}" target="_blank" class="btn btn-small">${escapeHtml(t("docs.offline_pdf_open"))}</a>`
+				: `<span style="color:var(--text-dim);font-size:0.85rem">${t("docs.offline_pdf_missing_with_readme")}</span>`;
 		})
 		.catch(() => {
 			el("docsOfflineStatus").innerHTML =
-				'<span style="color:var(--text-dim);font-size:0.85rem">PDF pas encore ajouté localement.</span>';
+				`<span style="color:var(--text-dim);font-size:0.85rem">${escapeHtml(t("docs.offline_pdf_missing_simple"))}</span>`;
 		});
 }
 

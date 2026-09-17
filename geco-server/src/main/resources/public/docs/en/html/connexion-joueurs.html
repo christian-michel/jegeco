@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connecting players — Ğeconomicus Helper</title>
+<style>
+	:root { --accent: #2563eb; --text: #111827; --text-dim: #6b7280; --border: #e5e7eb; --bg: #f4f6fb; }
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+		background: var(--bg); color: var(--text); line-height: 1.65;
+	}
+	.doc-wrap { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
+	.doc-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 2rem; color: var(--text-dim); font-size: 0.85rem; }
+	.doc-logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff;
+		display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+	h1 { font-size: 1.6rem; margin: 0 0 1.25rem; }
+	h2 { font-size: 1.15rem; margin: 2rem 0 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+	h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; }
+	p, li { font-size: 0.95rem; }
+	a { color: var(--accent); }
+	code { background: #eef1f7; padding: 0.15rem 0.4rem; border-radius: 5px; font-size: 0.85em; }
+	ul, ol { padding-left: 1.3rem; }
+</style>
+</head>
+<body>
+	<div class="doc-wrap">
+		<div class="doc-header"><span class="doc-logo">Ğ</span> Ğeconomicus Helper — Documentation</div>
+		<h1>Connecting players (smartphones)</h1>
+<p>This guide explains how to let players' smartphones join a game via the
+QR code shown on the "Connect players" screen.</p>
+<h2>The principle</h2>
+<p>Players' smartphones must be on the <strong>same local network</strong> as the
+computer running the software. Once connected to the same network, players
+simply scan the QR code shown on screen with their phone's native camera app
+(no app to install) to join the game.</p>
+<h2>Two ways to put the phones on the same network</h2>
+<h3>Recommended option: tethering from the computer</h3>
+<p>The computer creates its own Wi-Fi access point, which the phones connect
+to. This is the most reliable option: it does not depend on any existing
+network infrastructure at the venue.</p>
+<ul>
+<li><strong>Windows</strong>: Settings → Network &amp; Internet → Mobile hotspot.</li>
+<li><strong>macOS</strong>: System Settings → Sharing → Internet Sharing.</li>
+<li><strong>Linux</strong>: depends on the desktop environment; look for "Wi-Fi
+  Hotspot" or "Hotspot" in the network settings.</li>
+</ul>
+<p>Give it a network name and password, enable sharing, then have the phones
+join that network before scanning the QR code.</p>
+<h3>Alternative option: the venue's local Wi-Fi</h3>
+<p>If the venue already has a Wi-Fi network, phones can connect to it
+directly — provided that network does not have <strong>client isolation</strong> enabled
+(a security setting common on public/guest networks, which prevents
+connected devices from communicating with each other). If phones can't reach
+the application despite being connected to the same Wi-Fi, this is the most
+likely cause: use the tethering option instead.</p>
+<h2>Why not Bluetooth?</h2>
+<p>Bluetooth is designed for a connection between two devices, with tedious
+individual pairing for several players, and lower throughput than Wi-Fi. It
+is not suited to connecting several smartphones to the application at the
+same time.</p>
+<h2>Choosing the right network address</h2>
+<p>The "Connect players" screen may show several network addresses if the
+computer is connected to several networks at once (Wi-Fi and Ethernet, for
+example). The one marked <strong>"Likely"</strong> is generally the right one to use. If
+in doubt, try the first address offered.</p>
+	</div>
+</body>
+</html>

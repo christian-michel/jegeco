@@ -39,6 +39,15 @@ ce dépôt).
   `CLAUDE.md`, section dédiée) — serveur (gestionnaires d'exception
   globaux) et client (panneau de diagnostic 🐞 sur smartphone et
   animateur).
+- **Couverture multilingue à 100%** (vérifié le 18/09/2026, puis complété
+  le même jour) : toutes les chaînes d'interface (`data-i18n`/`t("...")`)
+  sont couvertes en français ET en anglais, y compris la vue
+  "Documentation" intégrée à l'app (`index.html`), jusque-là en français en
+  dur, désormais convertie en clés `data-i18n`/`data-i18n-html`, ainsi que
+  les trois pages de documentation autonomes qu'elle référence
+  (`docs/en/html/regles-du-jeu.html`, `statistiques.html`,
+  `connexion-joueurs.html`, avec leurs sources `docs/en/markdown/`
+  correspondantes) - n'existaient jusqu'ici qu'en français.
 
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la
@@ -180,18 +189,7 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    idée mentionnée par l'utilisateur pour exploiter les données réelles
    d'une partie jouée en mode smartphone avec le DU désormais calculé
    correctement ; pas encore commencé, dépend de la validation du point 1.
-7. **Documentation intégrée à l'app (vue "Documentation" d'`index.html`)
-   jamais traduite** (texte français en dur, sans `data-i18n`) — identifié
-   le 18/09/2026 en vérifiant la couverture multilingue complète après le
-   travail dette/troc+smartphone ; toutes les chaînes d'interface elles-
-   mêmes sont, elles, intégralement couvertes en français ET en anglais
-   (vérifié par un contrôle automatisé comparant chaque clé `data-i18n`/
-   `t("...")` utilisée dans le code aux fichiers `lang/fr.po`/`lang/en.po` -
-   aucune clé manquante des deux côtés). Ce bloc de documentation reste donc
-   le seul texte utilisateur non traduisible identifié à ce jour - à
-   traduire si confirmé prioritaire (un travail de traduction à part
-   entière, pas une simple vérification).
-8. **Mode "monnaie numérique"** (alternative sans dénominations physiques,
+7. **Mode "monnaie numérique"** (alternative sans dénominations physiques,
    un solde global par joueur) — évoqué comme variante future de la
    monnaie libre, voir la note d'architecture du 07/09/2026 dans
    `03-architecture-technique.md`. Reconsidéré depuis : la décision prise
@@ -200,7 +198,7 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    `03-architecture-technique.md`, entrée du 09/09/2026, pour le
    raisonnement complet) — ce point de la feuille de route est donc
    probablement caduc, à confirmer avant de le reprendre.
-9. Objectifs non encore abordés du cahier des charges d'origine à
+8. Objectifs non encore abordés du cahier des charges d'origine à
    revérifier : profils joueurs persistants au-delà de la reprise par nom,
    statistiques avancées spécifiques à l'étape 3 (voir
    `CAHIER_DES_CHARGES_ETAPE3.md` §5.2-5.4 pour le détail).
