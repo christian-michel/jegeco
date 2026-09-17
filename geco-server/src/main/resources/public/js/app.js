@@ -1714,11 +1714,43 @@ function classifyCannotPay(player, seizureResult, exemptOfStatus) {
 // commencé, ou "Ne peut pas payer" en plein milieu d'un tour (ces deux actions
 // n'ont de sens qu'à la fin d'un tour, dans l'assistant dédié).
 //
+// Étape 3, monnaie dette + smartphone (18/09/2026, remonté par l'utilisateur :
+// "oui vas-y corrige. Sachant que la validation reste entre les mains de
+// l'animateur du jeu") - préremplit les champs "inventaire du joueur" de la
+// boîte "Ne peut pas payer" depuis son VRAI solde/inventaire smartphone
+// (même source que computeEndGamePrefill, utilisée pour la mort/sortie de
+// fin de partie, voir plus haut) - jamais un envoi automatique : l'animateur
+// garde la main pour corriger/valider avant de confirmer, exactement comme
+// pour la mort/sortie. Retourne null pour un joueur non suivi par
+// smartphone (dette classique) : les champs restent alors à 0, comportement
+// historique inchangé.
+async function computeCannotPayPrefill(pPlayer) {
+	if (!pPlayer.hasStartingAllocation) return null;
+	const game = state.currentGame;
+	let weak = 0, medium = 0, strong = 0;
+	try {
+		const [catalog, inventory] = await Promise.all([
+			Api.getCatalog("cartes"),
+			Api.getCardInventoryByToken(state.currentGameId, pPlayer.accessToken),
+		]);
+		const levelById = new Map(catalog.map((c) => [c.id, c.niveau]));
+		for (const [cardId, qty] of Object.entries(inventory)) {
+			const level = levelById.get(cardId);
+			if (level === "faible") weak += qty;
+			else if (level === "moyenne") medium += qty;
+			else if ((level === "forte") || (level === "tresforte")) strong += qty; // même repli que computeEndGamePrefill
+		}
+	} catch (err) {
+		pushDebugLog("ERREUR", "computeCannotPayPrefill: échec du chargement de l'inventaire de cartes -", err);
+	}
+	return { money: Math.max(0, Math.round(pPlayer.jetonWeak * (game.weakCoinValue || 1))), weak, medium, strong };
+}
+
 // options :
 //   allowedTypes  - sous-ensemble de PLAYER_EVENT_TYPES à proposer (défaut : tous)
 //   defaultType   - code présélectionné dans la liste (défaut : le premier proposé)
 //   prefillPrincipal / prefillInterest - valeurs pré-remplies mais éditables
-function openPlayerEventDialog(player, options = {}) {
+async function openPlayerEventDialog(player, options = {}) {
 	const game = state.currentGame;
 	const t = window.GecoI18n.t;
 	const allowed = options.allowedTypes || PLAYER_EVENT_TYPES;
@@ -1728,6 +1760,15 @@ function openPlayerEventDialog(player, options = {}) {
 		`<option value="${et.code}" ${et.code === defaultType ? "selected" : ""}>${escapeHtml(t(et.i18nKey))}</option>`).join("");
 	const prefillPrincipal = options.prefillPrincipal ?? 0;
 	const prefillInterest = options.prefillInterest ?? 0;
+	// Calculé AVANT l'ouverture du dialogue (comme renderEndGameInventory) :
+	// évite de faire clignoter les champs à une valeur puis une autre - null
+	// si "C" ne fait pas partie des types proposés ou si le joueur n'est pas
+	// suivi par smartphone, auquel cas les champs restent à 0 comme avant.
+	const cannotPayPrefill = allowed.includes("C") ? await computeCannotPayPrefill(player) : null;
+	const pfMoney = cannotPayPrefill ? cannotPayPrefill.money : 0;
+	const pfWeak = cannotPayPrefill ? cannotPayPrefill.weak : 0;
+	const pfMedium = cannotPayPrefill ? cannotPayPrefill.medium : 0;
+	const pfStrong = cannotPayPrefill ? cannotPayPrefill.strong : 0;
 
 	openDialog(t("game.player_dialog_title", { name: escapeHtml(player.name) }), `
 		${playerTypes.length > 1 ? `<label>${t("game.field_event_type")}</label><select id="fEvtType">${typeOptions}</select>`
@@ -1743,13 +1784,13 @@ function openPlayerEventDialog(player, options = {}) {
 		<div id="fCannotPayFields" class="hidden">
 			<p class="cannot-pay-intro"><strong>${t("game.cannotpay_intro")}</strong></p>
 			<label>${t("game.field_player_money")}</label>
-			<input id="fPlayerMoney" type="number" value="0">
+			<input id="fPlayerMoney" type="number" value="${pfMoney}">
 			<label>${t("game.field_player_weak")}</label>
-			<input id="fPlayerWeakCards" type="number" value="0">
+			<input id="fPlayerWeakCards" type="number" value="${pfWeak}">
 			<label>${t("game.field_player_medium")}</label>
-			<input id="fPlayerMediumCards" type="number" value="0">
+			<input id="fPlayerMediumCards" type="number" value="${pfMedium}">
 			<label>${t("game.field_player_strong")}</label>
-			<input id="fPlayerStrongCards" type="number" value="0">
+			<input id="fPlayerStrongCards" type="number" value="${pfStrong}">
 			<label>${t("game.field_seizure_target")}</label>
 			<input id="fSeizureTarget" type="number" value="0">
 			<p class="cannot-pay-inventory-title">${t("game.cannotpay_inventory_title")}</p>
