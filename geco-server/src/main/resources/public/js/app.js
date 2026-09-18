@@ -539,20 +539,62 @@ function selectMoneyChoice(pPlugin) {
 	// Remonté par un utilisateur : la case "Pénalité d'un jeton" (règles
 	// officielles de la monnaie libre) n'a de sens qu'en monnaie libre - pas
 	// une propriété générique de "hasBank=false" (le troc n'en a pas besoin
-	// non plus).
+	// non plus). Toujours visible en libre, classique comme smartphone -
+	// inchangé par le correctif du 18/09/2026 ci-dessous.
 	el("fLibreOptions").classList.toggle("hidden", pPlugin.id !== "libre");
 
-	// Remonté par un utilisateur : le troc n'a ni facteur carte/monnaie ni
-	// valeur de pièce - aucune valeur n'est imposée dans ce système (voir
-	// plugins/troc/manifest.json, qui ne déclare d'ailleurs pas ces champs).
-	// Correctif (13/09/2026) : également masqué en monnaie libre + smartphone,
-	// où le "Facteur carte/monnaie" n'a plus de sens (voir
-	// updateNewGameAdvancedFields ci-dessous, qui le verrouille à 1).
+	const smartphoneMode = mAppSettings.gameMode === "smartphone";
 	const libreSmartphone = isLibreSmartphoneNewGame(pPlugin.id);
-	el("fMoneyValueRow").classList.toggle("hidden", (pPlugin.id === "troc") || libreSmartphone);
-	// Idem pour le panneau "Réglages avancés" : sans objet pour le troc (ni
-	// valeur de pièce, ni prix de carte en DU).
-	el("advancedSettingsSection").classList.toggle("hidden", pPlugin.id === "troc");
+	// Remonté par l'utilisateur (17/09/2026) : la monnaie dette suivie par
+	// smartphone a, elle aussi, un réglage avancé propre ("Facteur
+	// carte/monnaie", voir plus bas) - au même titre que la monnaie libre +
+	// smartphone ci-dessus.
+	const debtSmartphone = (pPlugin.id === "dette") && smartphoneMode;
+
+	// Remonté par l'utilisateur (PDF du 18/09/2026, "Ajustements... smartphone
+	// et classique") : le panneau "Réglages avancés" n'a de raison d'être
+	// qu'en mode smartphone (dette ou libre) - en classique, les champs qu'il
+	// pouvait contenir ("Facteur carte/monnaie", "Valeur d'une pièce faible")
+	// remontent tous les deux au premier niveau (#fMoneyValueRow), toujours
+	// visibles, et l'accordéon, alors vide, est masqué dans son ensemble. Le
+	// troc n'a jamais eu ces champs, dans aucun mode (voir
+	// plugins/troc/manifest.json).
+	const showAdvancedSection = (pPlugin.id !== "troc") && smartphoneMode;
+	el("advancedSettingsSection").classList.toggle("hidden", !showAdvancedSection);
+	// La ligne du premier niveau devient vide dès que les deux champs
+	// rejoignent "Réglages avancés" (tout mode smartphone, dette ou libre) ou
+	// est sans objet (troc) - seule la monnaie dette/libre CLASSIQUE l'affiche
+	// encore.
+	el("fMoneyValueRow").classList.toggle("hidden", (pPlugin.id === "troc") || smartphoneMode);
+
+	// Déplace physiquement les deux champs entre le premier niveau
+	// (#fMoneyValueRow) et le panneau avancé (#advancedSettingsContent) selon
+	// la combinaison plugin/mode - chacun n'existe qu'une fois dans le DOM (un
+	// seul id, pas de duplication de balisage), on le déplace donc plutôt que
+	// de le recréer. Idempotent : recalculé à chaque sélection de plugin, y
+	// compris en resélectionnant le même plugin ou en revenant en arrière.
+	const topRow = el("fMoneyValueRow");
+	const advancedFieldRow = el("advancedSettingsContent").querySelector(".field-row");
+	const factorWrap = el("fMoneyCardsFactorWrap");
+	const coinWrap = el("fWeakCoinValueWrap");
+	const weakCardDuWrap = el("fWeakCardValueInDUWrap");
+	// Ordre important : coinWrap est déplacé EN PREMIER, en le positionnant
+	// relativement à weakCardDuWrap qui, lui, ne bouge jamais (toujours enfant
+	// de #advancedSettingsContent) - un repère stable. factorWrap est ensuite
+	// positionné relativement à coinWrap, qui n'est un repère fiable qu'une
+	// fois déplacé à son emplacement final par l'étape précédente
+	// (insertBefore exige que le nœud de référence soit déjà enfant du
+	// conteneur cible, sans quoi il lève une NotFoundError).
+	if (smartphoneMode) {
+		advancedFieldRow.insertBefore(coinWrap, weakCardDuWrap);
+	} else {
+		topRow.appendChild(coinWrap);
+	}
+	if (debtSmartphone) {
+		advancedFieldRow.insertBefore(factorWrap, coinWrap);
+	} else {
+		topRow.insertBefore(factorWrap, topRow.firstChild);
+	}
 
 	updateNewGameAdvancedFields(libreSmartphone);
 

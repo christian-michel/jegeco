@@ -155,14 +155,23 @@
 
 						<!-- "Réglages avancés" : accordéon animé (remonté par l'utilisateur,
 						     13/09/2026 - "les options se dérouleraient dans un effet animé
-						     façon accordéon"). Regroupe les deux réglages techniques que la
+						     façon accordéon"). Regroupe les réglages techniques que la
 						     plupart des animateurs laissent à leur valeur par défaut : "1
 						     jeton = combien d'unités monétaires" (renommé depuis "Valeur d'une
-						     pièce faible" pour lever l'ambiguïté jeton/unité monétaire) et,
-						     uniquement en monnaie libre + smartphone, "Valeur d'une carte
-						     faible en DU" (remplace alors le "Facteur carte/monnaie" masqué
-						     ci-dessus - voir Game.weakCardValueInDU et
-						     updateNewGameAdvancedFields() dans app.js pour la bascule). -->
+						     pièce faible" pour lever l'ambiguïté jeton/unité monétaire),
+						     "Facteur carte/monnaie" (uniquement en monnaie dette + smartphone,
+						     déplacé ici depuis le premier niveau - voir selectMoneyChoice()
+						     dans app.js) et, uniquement en monnaie libre + smartphone, "Valeur
+						     d'une carte faible en DU" (remplace alors le "Facteur
+						     carte/monnaie", cette fois masqué - voir Game.weakCardValueInDU et
+						     updateNewGameAdvancedFields() dans app.js pour la bascule).
+						     Correctif (18/09/2026, PDF "Ajustements... smartphone et
+						     classique") : ce panneau n'apparaît plus qu'en mode smartphone
+						     (dette ou libre) - en classique, ces champs remontent au premier
+						     niveau (#fMoneyValueRow) et l'accordéon, alors vide, est masqué
+						     dans son ensemble (voir showAdvancedSection dans
+						     selectMoneyChoice()). Jamais affiché pour le troc, dans aucun
+						     mode. -->
 						<div class="advanced-settings" id="advancedSettingsSection">
 							<button type="button" id="btnToggleAdvanced" class="advanced-settings-toggle" aria-expanded="false">
 								<span data-i18n="newgame.advanced_settings_label">Réglages avancés</span>
@@ -170,9 +179,9 @@
 							</button>
 							<div id="advancedSettingsPanel" class="advanced-settings-panel">
 								<div class="advanced-settings-panel-inner">
-									<div class="advanced-settings-content">
+									<div class="advanced-settings-content" id="advancedSettingsContent">
 										<div class="field-row">
-											<div>
+											<div id="fWeakCoinValueWrap">
 												<label id="fWeakCoinValueLabel" class="field-label" data-i18n="newgame.weak_coin_label"
 													data-i18n-title="newgame.weak_coin_title"
 													title="Valeur d'une seule pièce/jeton faible">Valeur d'une pièce faible</label>

@@ -36,12 +36,17 @@ public class AppSettings
 	// Étape 3 : bascule "classique" (cartes/jetons physiques, comportement
 	// historique inchangé) / "smartphone" (chaque joueur avec son téléphone) -
 	// choix exclusif par bouton radio (écran Paramètres), pas une case à
-	// cocher indépendante. "classique" par défaut : aucune installation
-	// existante n'est affectée tant que l'animateur ne bascule pas
-	// explicitement. Voir GecoServer pour la validation des valeurs acceptées.
+	// cocher indépendante. Voir GecoServer pour la validation des valeurs
+	// acceptées. "smartphone" par défaut depuis le 18/09/2026 (remonté par
+	// l'utilisateur, PDF "Ajustements... smartphone et classique" : "passer la
+	// case à cocher sur 'Smartphone' par défaut au lieu de 'Classique' par
+	// défaut") - ne change rien pour les installations existantes : ce champ
+	// n'est utilisé que tant qu'aucune valeur n'a encore été enregistrée dans
+	// le fichier de réglages (voir load() ci-dessous), jamais pour écraser un
+	// choix déjà fait par l'animateur.
 	public static final String GAME_MODE_CLASSIC = "classique"; //$NON-NLS-1$
 	public static final String GAME_MODE_SMARTPHONE = "smartphone"; //$NON-NLS-1$
-	private String mGameMode = GAME_MODE_CLASSIC;
+	private String mGameMode = GAME_MODE_SMARTPHONE;
 
 	public AppSettings(final Path pFile)
 	{
