@@ -398,7 +398,17 @@ public class Dtos
 	}
 
 	// Réponse de GET /api/games/{id}/leaderboard - voir GameService.computeLeaderboard.
-	public record LeaderboardEntryDto(Integer playerId, String playerName, int value, int rank)
+	// value : double depuis le 19/09/2026 (remonté par l'utilisateur, PDF
+	// "Retours - 20260919" : "mettre l'affichage du classement en unités
+	// monétaires (il est actuellement en jetons)") - en monnaie libre/dette,
+	// ce classement affichait auparavant le nombre BRUT de jetons
+	// (GameService.computeTradeBalance, une valeur en jetons faibles
+	// ÉQUIVALENTS, jamais convertie par "Valeur d'une pièce faible"), alors
+	// que tout le reste de l'écran joueur (solde, dernière activité...)
+	// affiche systématiquement des UNITÉS MONÉTAIRES (voir jetonsToMoney
+	// côté client). int -> double : cette conversion peut être fractionnaire
+	// dès que weakCoinValue != 1 (ex. 7 jetons à weakCoinValue=0.4 = 2.8).
+	public record LeaderboardEntryDto(Integer playerId, String playerName, double value, int rank)
 	{
 	}
 

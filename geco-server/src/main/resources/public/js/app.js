@@ -501,8 +501,26 @@ function isLibreSmartphoneNewGame(pPluginId) {
 // reste cohérent - il n'y a plus de raison de laisser ce choix à l'animateur
 // dans ce mode précis).
 function updateNewGameAdvancedFields(pLibreSmartphone) {
-	el("fWeakCoinValueLabel").textContent = window.GecoI18n.t(
-		pLibreSmartphone ? "newgame.weak_coin_label_smartphone" : "newgame.weak_coin_label");
+	// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, PDF "Retours -
+	// 20260919" : "Attention aux erreurs de label par moment" - capture
+	// d'écran montrant littéralement la clé brute
+	// "newgame.weak_coin_label_smartphone" affichée au lieu du texte traduit).
+	// Cause : ce libellé est réécrit ICI en JS (textContent = t(clé)),
+	// APPELÉ dès que renderMoneyTypeChoices() reçoit la liste des plugins -
+	// une requête réseau indépendante de celle qui charge les traductions
+	// (i18n.js, loadLang()). Si cette dernière n'a pas encore fini (page tout
+	// juste ouverte), t() retombe sur la clé BRUTE (voir i18n.js, t() :
+	// "currentTranslations[key] || key") - et comme cet élément n'était mis à
+	// jour QUE cette fois-ci, rien ne le corrigeait plus jamais ensuite,
+	// même une fois les traductions chargées. Corrigé en tenant aussi à jour
+	// l'attribut data-i18n (déjà présent dans index.html pour le cas par
+	// défaut) : la prochaine applyTranslations() de i18n.js - déclenchée dès
+	// que le fichier .po termine de charger, ou à chaque changement de langue
+	// - retrouve alors la BONNE clé et corrige le libellé toute seule, quel
+	// que soit l'ordre d'arrivée des deux requêtes réseau.
+	const weakCoinLabelKey = pLibreSmartphone ? "newgame.weak_coin_label_smartphone" : "newgame.weak_coin_label";
+	el("fWeakCoinValueLabel").setAttribute("data-i18n", weakCoinLabelKey);
+	el("fWeakCoinValueLabel").textContent = window.GecoI18n.t(weakCoinLabelKey);
 	el("fWeakCardValueInDUWrap").classList.toggle("hidden", !pLibreSmartphone);
 
 	const strictTrmLabel = el("fStrictTrm").parentElement;
@@ -5667,6 +5685,31 @@ function safeInit(label, fn) {
 safeInit("renderIcons", renderIcons);
 safeInit("bindActions", bindActions);
 safeInit("initChartZoomButtons", initChartZoomButtons);
-safeInit("refreshAppSettings", refreshAppSettings);
 safeInit("connectWs", connectWs);
-safeInit("renderGamesList", renderGamesList);
+// BUG TROUVÉ ET CORRIGÉ (19/09/2026, remonté par l'utilisateur, PDF "Retours -
+// 20260919" : "Attention aux erreurs de label par moment" sur l'écran
+// "Nouvelle partie") : refreshAppSettings() (qui peuple mAppSettings.gameMode,
+// lu par selectMoneyChoice/isLibreSmartphoneNewGame/debtSmartphone pour
+// décider quels champs afficher où) est asynchrone - jusqu'ici lancée en
+// "fire-and-forget" via safeInit (qui n'attend jamais une promesse) juste
+// AVANT renderGamesList(), qui déclenche lui-même une requête réseau
+// INDÉPENDANTE (Api.listPlugins(), voir renderMoneyTypeChoices) puis
+// sélectionne aussitôt le premier système de monnaie. Vraie course entre les
+// deux requêtes : si Api.listPlugins() répondait en premier (fréquent - une
+// route locale déjà rapide), l'écran "Nouvelle partie" se construisait
+// entièrement avec mAppSettings.gameMode encore à sa valeur PLACEHOLDER
+// (undefined, jamais égal à "smartphone") - donc TOUJOURS avec la
+// disposition CLASSIQUE des champs et les libellés classiques, quel que soit
+// le réglage réel, jusqu'à ce que l'animateur clique une première fois sur
+// un système de monnaie (qui relance selectMoneyChoice, cette fois avec les
+// bons réglages enfin chargés) - une désynchronisation invisible tant que
+// "classique" était le réglage par défaut de toute façon, mais qui affichait
+// à tort l'écran classique dès la toute première ouverture de l'application
+// une fois "smartphone" devenu le réglage par défaut (voir AppSettings.java).
+// Corrigé en attendant explicitement la fin de refreshAppSettings() avant de
+// lancer renderGamesList() - mAppSettings est alors garanti à jour avant la
+// première sélection automatique de plugin.
+(async () => {
+	await refreshAppSettings();
+	safeInit("renderGamesList", renderGamesList);
+})();

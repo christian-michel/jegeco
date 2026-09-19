@@ -388,6 +388,30 @@ async function refreshPlayer() {
 			detailsHtml += `<p>${t("playerView.current_credit", { debt: state.player.curDebt, interest: state.player.curInterest })}</p>`;
 		details.innerHTML = detailsHtml;
 		await Promise.all([renderDashboard(), renderProfile()]);
+		// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, PDF "Retours -
+		// 20260919" : "le joueur qui a vendu a conservé la carte après la
+		// transaction" + "le joueur a accumulé 5 cartes identiques sans que
+		// cela ne déclenche de carré"). Investigation : côté serveur,
+		// l'inventaire est entièrement DÉRIVÉ de l'historique Transaction/
+		// CardSquareEvent à chaque lecture (voir computePlayerCardInventory) -
+		// aucune duplication n'y est possible par construction. La VRAIE cause
+        // est un écran "Mes cartes" (et "Classement") laissé ouvert qui ne se
+		// rafraîchissait QUE sur un message WebSocket ciblé (vente confirmée
+		// avec la modal encore ouverte, voir handleOwnSaleCompleted ; carré
+		// encaissé, voir enqueueSquareAnimation) - jamais par le
+		// rafraîchissement périodique déjà en place ici pour le tableau de
+		// bord/le profil (5 secondes). Un vendeur qui referme sa modal avant
+		// que l'acheteur ne scanne (cas courant : il pose son téléphone en
+		// attendant), ou un message WebSocket manqué lors d'un accroc réseau
+		// (déjà documenté ailleurs comme un risque connu de ce mode multi-
+		// téléphones), laissait alors ces deux écrans figés sur un instantané
+		// périmé - jamais corrigé tant que le joueur ne quittait/revenait pas
+		// manuellement dessus. Corrigé en les alignant sur le même
+		// rafraîchissement périodique que le reste de l'écran joueur, mais
+		// UNIQUEMENT s'ils sont l'écran actuellement affiché (jamais de
+		// requête réseau superflue en arrière-plan sur un écran invisible).
+		if (!el("myCardsScreen").classList.contains("hidden")) renderMyCards();
+		if (!el("leaderboardScreen").classList.contains("hidden")) renderLeaderboard();
 	} catch (err) {
 		// Tolère quelques échecs consécutifs (voir le commentaire ci-dessus) -
 		// seuil choisi pour couvrir un accroc wifi typique de quelques

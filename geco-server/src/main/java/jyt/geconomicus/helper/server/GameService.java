@@ -432,6 +432,36 @@ public class GameService
 						mediumCount += e.getValue();
 					else if ("forte".equals(level) || "tresforte".equals(level)) //$NON-NLS-1$ //$NON-NLS-2$
 						strongCount += e.getValue(); // tresforte repliée ici, voir le commentaire ci-dessus
+					// BUG CRITIQUE TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, PDF
+					// "Retours - 20260919" : "à partir du 5ème tour, nous avons eu des
+					// problèmes avec la pioche : elle semblait manquer de cartes
+					// faibles"). Cause racine (plus profonde que le correctif proposé
+					// par l'utilisateur, une règle de recyclage sous 10 cartes - déjà
+					// satisfaite par checkAndCashInSquares, voir son commentaire de
+					// tête : les 4 cartes d'un carré retournent TOUJOURS
+					// immédiatement dans leur pioche avant tirage des 4 cartes de
+					// remplacement) : les cartes détenues par un joueur AU MOMENT DE
+					// SA MORT n'étaient encaissées NULLE PART - ni rendues à la pioche
+					// partagée, ni conservées par le joueur (cardInventoryResetAt les
+					// efface purement et simplement de son inventoire, voir
+					// computePlayerCardInventory) - alors que dealFreshHandForPlayer,
+					// juste en dessous, RETIRE 4 nouvelles cartes faibles de cette même
+					// pioche pour sa renaissance. Chaque mort était donc une fuite NETTE
+					// d'au moins 4 cartes hors circulation (davantage si le mort avait
+					// accumulé plus que sa main de départ) - un puits sans fond qui
+					// épuise mécaniquement la pioche au fil des tours, d'autant plus
+					// vite qu'il y a de morts (cohérent avec "à partir du 5ème tour").
+					// Corrigé en rendant ICI les cartes du joueur à LEUR pioche de
+					// niveau, échange contre échange, exactement comme le fait déjà un
+					// carré pour les 4 cartes qu'il défausse - aucune carte ne
+					// disparaît plus jamais du jeu, une mort/renaissance ne fait que
+					// les remettre en circulation avant d'en repiocher.
+					if (level != null)
+					{
+						final java.util.Map<String, Integer> homePile = pilesByLevel.get(level);
+						if (homePile != null)
+							homePile.merge(e.getKey(), e.getValue(), Integer::sum);
+					}
 				}
 				weakCardsForEvent = weakCount;
 				mediumCardsForEvent = mediumCount;
@@ -1272,7 +1302,7 @@ public class GameService
 		{
 			if (!p.isActive())
 				continue;
-			final int value;
+			final double value;
 			if ((game.getMoneySystem() == Game.MONEY_TROC) && (p.getStartingCardsJson() != null) && (pilesByLevel != null))
 			{
 				int v = 0;
@@ -1290,11 +1320,34 @@ public class GameService
 			}
 			else if (game.getMoneySystem() == Game.MONEY_TROC)
 				value = p.getWeakGoods() + (4 * p.getMediumGoods()) + (16 * p.getStrongGoods());
+			else if (p.getStartingCardsJson() != null)
+			{
+				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, PDF "Retours -
+				// 20260919" : classement affiché en JETONS au lieu d'UNITÉS
+				// MONÉTAIRES, sur l'écran d'accueil du joueur, en monnaie libre +
+				// smartphone) : computeTradeBalance() renvoie le nombre de jetons
+				// FAIBLES ÉQUIVALENTS (weak + 2*medium + 4*strong), jamais converti
+				// par "Valeur d'une pièce faible" (game.weakCoinValue) - alors que
+				// tout le reste de l'écran joueur (solde "Solde (échanges)",
+				// "Dernière activité"...) affiche systématiquement la vraie valeur
+				// monétaire (voir jetonsToMoney côté client). Reproduit ici la même
+				// conversion, arrondie à 2 décimales pour éviter le bruit des
+				// flottants (ex. 0.1 + 0.2 != 0.3) - cohérent avec jetonsToMoney.
+				// Restreint aux joueurs RÉELLEMENT suivis par smartphone
+				// (startingCardsJson non nul) - jamais à la monnaie dette/libre
+				// CLASSIQUE (voir CLAUDE.md : "jamais l'une n'affecte l'autre, sauf
+				// demande explicite" - seul le mode smartphone était concerné par ce
+				// retour utilisateur, la classique garde son calcul historique
+				// inchangé ci-dessous, même si elle n'utilise de toute façon jamais
+				// concrètement cet écran joueur).
+				final double weakCoinValue = (game.getWeakCoinValue() == 0) ? 1 : game.getWeakCoinValue();
+				value = Math.round(computeTradeBalance(pGameId, p.getId()) * weakCoinValue * 100) / 100.0;
+			}
 			else
 				value = computeTradeBalance(pGameId, p.getId());
 			entries.add(new Dtos.LeaderboardEntryDto(p.getId(), p.getName(), value, 0));
 		}
-		entries.sort((a, b) -> Integer.compare(b.value(), a.value()));
+		entries.sort((a, b) -> Double.compare(b.value(), a.value()));
 		final List<Dtos.LeaderboardEntryDto> ranked = new java.util.ArrayList<>();
 		for (int i = 0; i < entries.size(); i++)
 		{
