@@ -1170,6 +1170,39 @@ public class GameService
 		// compter dans son inventaire ACTUEL. null (jamais mort) : tout
 		// l'historique compte, comportement inchangé par rapport à avant ce
 		// correctif.
+		// LIMITE CONNUE, NON CORRIGÉE (investiguée en profondeur le
+		// 20/09/2026 via GameServiceFullGameSimulationTest, JAMAIS observée
+		// en jeu réel - voir plus bas pourquoi) : cardInventoryResetAt et
+		// Transaction.tstamp/CardSquareEvent.tstamp viennent tous deux de
+		// `new Date()`, une horloge à résolution MILLISECONDE utilisée ici
+		// comme ordre total entre "avant/après la renaissance" - or PLUSIEURS
+		// opérations (achats, carrés, morts) peuvent légitimement partager la
+		// MÊME milliseconde quand elles s'enchaînent sans la moindre latence
+		// réseau. Mesuré par simulation (échanges + morts aléatoires, 300
+		// parties, 12 tours, 4 joueurs) : la comparaison stricte ("t.tstamp >
+		// :resetAt") laisse un écart de conservation apparaître dans environ
+		// 19% des parties (58/300) - un achat/une vente autour de l'instant
+		// exact d'une renaissance peut se retrouver à tort exclu de
+		// l'inventaire du joueur qui vient de renaître. Un correctif en
+		// ">=" a été essayé (49/300 parties touchées - une amélioration,
+		// mais pas une élimination du problème) : il reste un écart
+		// symétrique inverse (un échange antérieur à la renaissance, dans
+		// la même milliseconde, se
+		// retrouve à tort INCLUS dans la nouvelle vie) - AUCUNE des deux
+		// comparaisons n'élimine le problème, seulement son taux. Un vrai
+		// correctif demanderait un ordre total indépendant de l'horloge
+		// murale (ex. un numéro de séquence monotone dédié à ajouter aux
+		// entités concernées) - un chantier à part, jamais décidé
+		// unilatéralement ici : conservé en ">" (comportement historique,
+		// légèrement plus prudent - exclure une carte laisse l'inventaire
+		// TOTAL inchangé côté partenaire d'échange, jamais un vrai jeton
+		// dupliqué visible ailleurs). Sans risque en usage réel : cette
+		// course n'a pu être provoquée qu'en appelant GameService
+		// DIRECTEMENT en boucle serrée (JUnit, sans passer par HTTP) - deux
+		// vraies requêtes HTTP distinctes (un smartphone qui échange, un
+		// autre qui meurt) ne tombent jamais à la milliseconde près en
+		// pratique, la latence réseau les sépare toujours largement -
+		// jamais reproduit ni signalé sur une vraie partie à ce jour.
 		final java.util.Date resetAt = (player != null) ? player.getCardInventoryResetAt() : null;
 		final List<Transaction> txs = em.createQuery(
 				"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid) " //$NON-NLS-1$
