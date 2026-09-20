@@ -5418,7 +5418,7 @@ function bindActions() {
 			// (GameService.createGame ne l'applique que si > 0, gardant alors la
 			// valeur par défaut du moteur).
 			weakCardValueInDU: isLibreSmartphoneNewGame(state.newGame.pluginId)
-				? parseFloat(el("fWeakCardValueInDU").value || "0.5") : 0,
+				? parseFloat(el("fWeakCardValueInDU").value || "0.4") : 0,
 			tokenPenalty: el("fTokenPenalty").checked,
 			turnDurationSeconds: state.newGame.turnDuration * 60,
 			// Troc uniquement (voir plugins/troc/manifest.json) : 0 signifie "garder
