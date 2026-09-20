@@ -395,9 +395,29 @@ public class GameService
 			// à la main comme en mode classique (qui n'a de toute façon aucune
 			// notion de carte suivie par smartphone - player.getStartingCardsJson()
 			// y reste toujours null, condition inchangée ci-dessous).
-			final boolean isSmartphoneCardTrackedDeath = (type == EventType.DEATH)
+			// BUG ANALOGUE TROUVÉ (seconde relecture indépendante menée à la
+			// demande de l'utilisateur, 20/09/2026, dans la continuité de l'audit
+			// de la fuite de cartes à la mort ci-dessus) : EventType.QUIT (un
+			// joueur qui abandonne définitivement en cours de partie, déclenché
+			// par openPlayerQuitDialog() côté app.js) ne rendait JAMAIS les
+			// cartes en main du joueur à la pioche commune - contrairement à
+			// DEATH, ce chemin ne passait pas du tout par ce bloc. Un abandon
+			// smartphone-suivi retirait donc silencieusement ses cartes de la
+			// circulation, exactement le même symptôme pratique que la fuite à
+			// la mort corrigée ci-dessus (moins de cartes disponibles pour les
+			// joueurs restants), même si ce n'est pas une "fuite" au sens strict
+			// du total compté par les tests de conservation (les cartes restent
+			// dans startingCardsJson du joueur, qui lui n'est simplement plus
+			// jamais consulté puisque active=false - voir Event.java, le
+			// player.setActive(false) appliqué uniquement pour QUIT juste après
+			// le switch principal). Corrigé en partageant EXACTEMENT le même
+			// mécanisme de restitution à la pioche que DEATH, avec UNE
+			// différence volontaire : QUIT ne redistribue PAS de main fraîche
+			// ensuite (pas de renaissance après un abandon définitif) - la main
+			// du joueur est simplement vidée.
+			final boolean isSmartphoneCardTrackedLifeEnd = ((type == EventType.DEATH) || (type == EventType.QUIT))
 					&& (player != null) && (player.getStartingCardsJson() != null);
-			if (isSmartphoneCardTrackedDeath)
+			if (isSmartphoneCardTrackedLifeEnd)
 			{
 				final java.util.Map<String, Integer> inventoryAtDeath = computePlayerCardInventory(em, pGameId,
 						pPlayerId);
@@ -467,15 +487,32 @@ public class GameService
 				mediumCardsForEvent = mediumCount;
 				strongCardsForEvent = strongCount;
 
-				// Renaissance : nouvelle dotation de 4 cartes faibles, comme au
-				// tout début du jeu - "il renaît avec une nouvelle pioche de 4
-				// cartes, comme au tout début du jeu". Tout Transaction/
-				// CardSquareEvent ANTÉRIEUR à CET INSTANT ne comptera plus
-				// jamais (voir Player.cardInventoryResetAt, filtré par
-				// computePlayerCardInventory).
-				final java.util.Map<String, Integer> freshHand = dealFreshHandForPlayer(pilesByLevel);
 				final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-				writeJsonQuietly(mapper, freshHand, player::setStartingCardsJson);
+				if (type == EventType.DEATH)
+				{
+					// Renaissance : nouvelle dotation de 4 cartes faibles, comme au
+					// tout début du jeu - "il renaît avec une nouvelle pioche de 4
+					// cartes, comme au tout début du jeu". Tout Transaction/
+					// CardSquareEvent ANTÉRIEUR à CET INSTANT ne comptera plus
+					// jamais (voir Player.cardInventoryResetAt, filtré par
+					// computePlayerCardInventory).
+					final java.util.Map<String, Integer> freshHand = dealFreshHandForPlayer(pilesByLevel);
+					writeJsonQuietly(mapper, freshHand, player::setStartingCardsJson);
+				}
+				else
+				{
+					// QUIT : abandon définitif, pas de renaissance - la main du
+					// joueur est vidée (ses cartes viennent d'être rendues à la
+					// pioche ci-dessus) plutôt que remplacée par une nouvelle
+					// dotation. Le joueur ne rejouera plus (active=false, voir
+					// Event.java) donc son inventaire n'a plus besoin d'être
+					// suivi, mais on vide startingCardsJson par cohérence : toute
+					// lecture ultérieure de son inventaire (peu probable mais pas
+					// impossible, ex. écrans de bilan/historique) doit refléter
+					// qu'il ne détient plus rien plutôt que sa dernière main
+					// d'avant abandon.
+					writeJsonQuietly(mapper, new java.util.LinkedHashMap<String, Integer>(), player::setStartingCardsJson);
+				}
 				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
 				player.setCardInventoryResetAt(new java.util.Date());
 			}
@@ -1181,11 +1218,15 @@ public class GameService
 		// réseau. Mesuré par simulation (échanges + morts aléatoires, 300
 		// parties, 12 tours, 4 joueurs) : la comparaison stricte ("t.tstamp >
 		// :resetAt") laisse un écart de conservation apparaître dans environ
-		// 19% des parties (58/300) - un achat/une vente autour de l'instant
-		// exact d'une renaissance peut se retrouver à tort exclu de
-		// l'inventaire du joueur qui vient de renaître. Un correctif en
-		// ">=" a été essayé (49/300 parties touchées - une amélioration,
-		// mais pas une élimination du problème) : il reste un écart
+		// 2 à 3% des parties (5 à 10/300 selon le tirage - un premier relevé
+		// isolé avait donné ~19%/58 parties, mais une seconde relecture
+		// indépendante puis une troisième, chacune ayant reproduit la mesure
+		// plusieurs fois, ont convergé sur ce taux nettement plus bas ; le
+		// chiffre ci-dessus est donc celui à retenir) - un achat/une vente
+		// autour de l'instant exact d'une renaissance peut se retrouver à
+		// tort exclu de l'inventaire du joueur qui vient de renaître. Un
+		// correctif en ">=" a été essayé : taux similaire, du même ordre de
+		// grandeur, pas une amélioration nette - il reste un écart
 		// symétrique inverse (un échange antérieur à la renaissance, dans
 		// la même milliseconde, se
 		// retrouve à tort INCLUS dans la nouvelle vie) - AUCUNE des deux
@@ -1196,13 +1237,20 @@ public class GameService
 		// unilatéralement ici : conservé en ">" (comportement historique,
 		// légèrement plus prudent - exclure une carte laisse l'inventaire
 		// TOTAL inchangé côté partenaire d'échange, jamais un vrai jeton
-		// dupliqué visible ailleurs). Sans risque en usage réel : cette
-		// course n'a pu être provoquée qu'en appelant GameService
-		// DIRECTEMENT en boucle serrée (JUnit, sans passer par HTTP) - deux
-		// vraies requêtes HTTP distinctes (un smartphone qui échange, un
-		// autre qui meurt) ne tombent jamais à la milliseconde près en
-		// pratique, la latence réseau les sépare toujours largement -
-		// jamais reproduit ni signalé sur une vraie partie à ce jour.
+		// dupliqué visible ailleurs). Risque très faible mais PAS prouvé
+		// impossible en usage réel : cette course a été provoquée en
+		// appelant GameService DIRECTEMENT en boucle serrée (JUnit, sans
+		// passer par HTTP), où elle est nettement plus facile à déclencher
+		// que via deux vraies requêtes HTTP distinctes (un smartphone qui
+		// échange, un autre qui meurt) - la latence réseau rend la
+		// coïncidence à la milliseconde près très improbable en pratique,
+		// et elle n'a jamais été reproduite ni signalée sur une vraie
+		// partie à ce jour, MAIS GecoServer.java ne pose aucun verrou/
+		// synchronisation autour de ces routes (pool Jetty multi-thread par
+		// défaut de Javalin) : rien n'exclut structurellement deux requêtes
+		// HTTP concurrentes de tomber dans la même milliseconde sur une
+		// machine chargée. À garder en tête plutôt qu'à considérer comme
+		// définitivement écarté.
 		final java.util.Date resetAt = (player != null) ? player.getCardInventoryResetAt() : null;
 		final List<Transaction> txs = em.createQuery(
 				"SELECT t FROM Transaction t WHERE t.game.id = :gameId AND (t.seller.id = :pid OR t.buyer.id = :pid) " //$NON-NLS-1$

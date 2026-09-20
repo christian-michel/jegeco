@@ -50,6 +50,11 @@ import jyt.geconomicus.helper.Player;
  * séparé qui pourrait diverger) - ce test confirme empiriquement que ce
  * mécanisme ne peut pas créer de carte fantôme, y compris sous forte charge
  * d'échanges aléatoires (voir testManyRandomTradesNeverDuplicateOrLoseCards).
+ * <p>
+ * Complété le 20/09/2026 (seconde relecture indépendante) : le même problème
+ * existait pour un abandon définitif en cours de partie (EventType.QUIT),
+ * qui ne rendait pas non plus les cartes du joueur à la pioche - voir
+ * testQuitReturnsHeldCardsToPileWithoutDealingFreshHand.
  */
 class GameServicePileConservationTest
 {
@@ -299,6 +304,58 @@ class GameServicePileConservationTest
 					assertFalse(count < 0, "aucun joueur ne devrait jamais avoir un compte de cartes négatif"); //$NON-NLS-1$
 		}
 		assertTrue(successfulTrades > 20, "au moins quelques dizaines d'échanges auraient dû réussir sur 300 tirages"); //$NON-NLS-1$
+	}
+
+	/**
+	 * Vérifie le correctif du 20/09/2026 (trouvé en seconde relecture
+	 * indépendante, dans la continuité de l'audit de la fuite de cartes à la
+	 * mort ci-dessus) : un abandon définitif (EventType.QUIT, déclenché par
+	 * openPlayerQuitDialog() côté app.js) doit, comme une mort, rendre à la
+	 * pioche commune toutes les cartes que le joueur détenait - sans quoi
+	 * elles restent gelées dans son inventoire (jamais consulté puisqu'il
+	 * devient inactif), retirées de la circulation exactement comme l'était
+	 * la fuite à la mort. Contrairement à une mort, PAS de renaissance : le
+	 * joueur ne doit recevoir aucune nouvelle main après son abandon (voir
+	 * Event.java, player.setActive(false) appliqué uniquement pour QUIT).
+	 */
+	@Test
+	void testQuitReturnsHeldCardsToPileWithoutDealingFreshHand() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 12, "AnimTest4", null, "test abandon", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-09-20", "Ceres", 1, 180, 1.0, false, 0, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$
+		final int gameId = game.getId();
+
+		final int nbPlayers = 4;
+		final List<Integer> playerIds = new ArrayList<>();
+		for (int i = 0; i < nbPlayers; i++)
+			playerIds.add(sService.addPlayer(gameId, "Joueur" + i).getId()); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(8));
+
+		final int totalAtStart = totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds);
+		assertTrue(totalAtStart > 0, "la mise en place doit avoir distribué des cartes"); //$NON-NLS-1$
+
+		final int quitterId = playerIds.get(0);
+		final int handSizeBeforeQuit = sService.computePlayerCardInventory(gameId, quitterId).values().stream()
+				.mapToInt(Integer::intValue).sum();
+		assertEquals(4, handSizeBeforeQuit, "le joueur doit détenir sa main de départ avant d'abandonner"); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "Q", quitterId, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		final int totalAfterQuit = totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds);
+		assertEquals(totalAtStart, totalAfterQuit,
+				"l'abandon ne doit ni créer ni détruire de cartes : celles du joueur doivent revenir à la pioche"); //$NON-NLS-1$
+
+		final int handSizeAfterQuit = sService.computePlayerCardInventory(gameId, quitterId).values().stream()
+				.mapToInt(Integer::intValue).sum();
+		assertEquals(0, handSizeAfterQuit,
+				"un joueur qui abandonne ne doit conserver AUCUNE carte (rendues à la pioche, pas de renaissance)"); //$NON-NLS-1$
+
+		for (final int playerId : playerIds)
+			for (final int count : sService.computePlayerCardInventory(gameId, playerId).values())
+				assertFalse(count < 0, "aucun joueur ne devrait jamais avoir un compte de cartes négatif"); //$NON-NLS-1$
 	}
 
 	/**
