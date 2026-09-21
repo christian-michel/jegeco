@@ -750,15 +750,10 @@ public class GecoServer
 
 		// --- Parties ---
 		// Multi-session serveur, Phase 2 : la liste et la création de parties
-		// exigent désormais un animateur connecté, n'importe quel rôle -
-		// l'écran "Nouvelle partie"/"Parties récentes" de l'animateur n'est de
-		// toute façon plus atteignable côté front sans être déjà connecté
-		// (voir ensureAuthenticated() dans app.js). Étape suivante déjà
-		// planifiée (Phase 3) : filtrer la LISTE pour ne montrer que les
-		// parties de l'animateur connecté - pour l'instant, un animateur
-		// connecté voit encore TOUTES les parties, exactement comme avant
-		// l'introduction des comptes, seule la présence d'une connexion est
-		// désormais vérifiée.
+		// exigent un animateur connecté, n'importe quel rôle - l'écran
+		// "Nouvelle partie"/"Parties récentes" de l'animateur n'est de toute
+		// façon plus atteignable côté front sans être déjà connecté (voir
+		// ensureAuthenticated() dans app.js).
 		pApp.before("/api/games", ctx -> requireAnimator(ctx)); //$NON-NLS-1$
 		pApp.before("/api/games/compare", ctx -> requireAnimator(ctx)); //$NON-NLS-1$
 
@@ -767,42 +762,14 @@ public class GecoServer
 		// Une partie créée pendant que la protection est active reçoit un PIN
 		// (voir Game.pin) qui doit alors être fourni (en-tête X-Game-Pin) pour
 		// toute action d'administration sur CETTE partie précise. Exemptions
-		// volontaires : "/join" (auto-inscription d'un nouveau joueur, qui n'a par
-		// définition pas encore de jeton - voir Player.accessToken), "/unlock" (la
-		// route qui sert justement à vérifier le PIN, elle ne peut pas exiger ce
-		// qu'elle valide elle-même), et "/players/by-token/" (un joueur consultant
-		// ses propres informations avec SON jeton individuel n'a pas besoin du PIN
-		// de l'animateur - accès volontairement plus restreint, voir cette route
-		// plus bas, qui ne retourne que les données du joueur concerné).
+		// volontaires : voir isPlayerFacingGameRoute() plus bas dans ce fichier
+		// (extrait le 21/09/2026, Phase 3, pour être partagé avec
+		// checkGameOwnership ci-dessous - même liste de routes, même
+		// raisonnement : un JOUEUR sur son propre smartphone n'a ni PIN
+		// d'animateur ni session animateur, les deux mécanismes doivent donc
+		// exempter exactement les mêmes routes).
 		final java.util.function.Consumer<io.javalin.http.Context> checkGamePin = ctx -> {
-			if (ctx.path().endsWith("/join") || ctx.path().endsWith("/unlock") //$NON-NLS-1$ //$NON-NLS-2$
-					|| ctx.path().contains("/players/by-token/") //$NON-NLS-1$
-					// POST /transactions : authentifiée par le jeton individuel de
-					// l'acheteur (voir la route elle-même), pas par le PIN de
-					// l'animateur - un joueur sur son propre smartphone ne le
-					// connaît pas. GET /transactions (lecture d'ensemble, écran
-					// animateur) reste, elle, protégée par le PIN normalement.
-					|| (ctx.path().endsWith("/transactions") && (ctx.method() == io.javalin.http.HandlerType.POST)) //$NON-NLS-1$
-					// Offres de vente à courte durée de vie (scan/saisie manuelle,
-					// voir TradeOfferService) : toutes les routes /trade-offers/*
-					// sont initiées par un JOUEUR (vendeur ou acheteur), jamais
-					// l'animateur - même raisonnement que /transactions ci-dessus.
-					|| ctx.path().contains("/trade-offers") //$NON-NLS-1$
-					// Infos publiques d'une partie (nom affiché sur l'écran
-					// d'inscription, voir PublicGameInfoDto) : un joueur qui n'a
-					// pas encore rejoint la partie ne connaît jamais le PIN.
-					|| ctx.path().endsWith("/public-info") //$NON-NLS-1$
-					// Inventaire de cartes et classement (voir "Mes cartes"/
-					// "Classement" côté espace joueur, mockup de référence du
-					// 28/08/2026) : consultés par un JOUEUR depuis son propre
-					// téléphone, jamais par l'animateur avec le PIN.
-					|| ctx.path().contains("/card-inventory") //$NON-NLS-1$
-					|| ctx.path().endsWith("/leaderboard") //$NON-NLS-1$
-					// Demande de crédit smartphone (monnaie dette) : la CRÉATION
-					// est initiée par un joueur (POST, exemptée) ; la LISTE, l'
-					// approbation et le refus restent réservés à l'animateur
-					// (PIN normal, voir les routes elles-mêmes plus bas).
-					|| (ctx.path().endsWith("/credit-requests") && (ctx.method() == io.javalin.http.HandlerType.POST))) //$NON-NLS-1$
+			if (isPlayerFacingGameRoute(ctx))
 				return;
 			final int id;
 			try
@@ -824,6 +791,50 @@ public class GecoServer
 		};
 		pApp.before("/api/games/{id}", ctx -> checkGamePin.accept(ctx)); //$NON-NLS-1$
 		pApp.before("/api/games/{id}/*", ctx -> checkGamePin.accept(ctx)); //$NON-NLS-1$
+
+		// Multi-session serveur, Phase 3 (21/09/2026) : isolement des parties
+		// par propriétaire - "chacun avec leur profil et leurs parties".
+		// Indépendant du PIN ci-dessus (les deux avaient déjà cohabité sans
+		// jamais dépendre l'un de l'autre) : un animateur connecté qui n'est
+		// NI le propriétaire NI un ADMIN se voit refuser l'accès (403), même
+		// s'il connaît/devine l'identifiant de la partie ET son PIN éventuel -
+		// la liste (GET /api/games ci-dessous) ne les lui montre de toute
+		// façon plus, mais ce garde-fou serveur reste nécessaire pour
+		// quiconque taperait directement une URL. ADMIN voit et administre
+		// TOUTES les parties du serveur, comme pour les réglages partagés
+		// (voir requireAdmin) - un choix par défaut raisonnable pour un rôle
+		// pensé comme superviseur du serveur, jamais explicitement demandé
+		// par l'utilisateur pour CE cas précis (les parties, par opposition
+		// aux réglages partagés) mais cohérent avec le reste du découpage des
+		// droits déjà validé le 21/09/2026 - à revoir si l'usage réel montre
+		// le contraire. game.getOwner() == null (partie orpheline - ne
+		// devrait plus arriver après la migration de la Phase 1, sauf une
+		// partie créée dans la fenêtre entre le déploiement de la Phase 1 et
+		// celui de la Phase 2) : reste accessible à n'importe quel animateur
+		// connecté plutôt que bloquée pour tout le monde - comportement
+		// défensif, pas un cas normal.
+		final java.util.function.Consumer<io.javalin.http.Context> checkGameOwnership = ctx -> {
+			if (isPlayerFacingGameRoute(ctx))
+				return;
+			final int id;
+			try
+			{
+				id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			}
+			catch (final NumberFormatException e)
+			{
+				return; // pas un identifiant de partie valide - laisse la route elle-même répondre (404/400)
+			}
+			final Game game = mGameService.getGame(id);
+			if ((game == null) || (game.getOwner() == null))
+				return; // laisse la route elle-même répondre 404, ou partie orpheline (voir commentaire ci-dessus)
+			final jyt.geconomicus.helper.Animator animator = requireAnimator(ctx);
+			if ((animator.getRole() != jyt.geconomicus.helper.Animator.Role.ADMIN)
+					&& !animator.getId().equals(game.getOwner().getId()))
+				throw new ForbiddenResponse("Cette partie appartient à un autre animateur."); //$NON-NLS-1$
+		};
+		pApp.before("/api/games/{id}", ctx -> checkGameOwnership.accept(ctx)); //$NON-NLS-1$
+		pApp.before("/api/games/{id}/*", ctx -> checkGameOwnership.accept(ctx)); //$NON-NLS-1$
 
 		// Vérifie un PIN soumis par l'animateur (écran de saisie, une seule fois
 		// par appareil/navigateur - voir Api.unlockGame côté front, qui mémorise
@@ -848,8 +859,17 @@ public class GecoServer
 
 		// Liste des parties : utilisé par la vue d'accueil du front (choix/création de partie),
 		// équivalent web de ChooseGamesDialog côté Swing.
+		// Multi-session serveur, Phase 3 (21/09/2026) : "chacun avec leur
+		// profil et leurs parties" - un ANIMATEUR ne voit plus que SES
+		// propres parties (voir GameService.listGamesByOwner), un ADMIN
+		// continue de tout voir (listGames(), comme avant l'introduction des
+		// comptes) - même raisonnement que pour les réglages partagés (voir
+		// requireAdmin).
 		pApp.get("/api/games", ctx -> { //$NON-NLS-1$
-			final List<Game> games = mGameService.listGames();
+			final jyt.geconomicus.helper.Animator animator = requireAnimator(ctx);
+			final List<Game> games = (animator.getRole() == jyt.geconomicus.helper.Animator.Role.ADMIN)
+					? mGameService.listGames()
+					: mGameService.listGamesByOwner(animator.getId());
 			// On mappe vers des DTO plutôt que de sérialiser les entités JPA directement
 			// (voir Dtos.java pour le pourquoi : lazy-loading, cycles Game<->Player<->Event).
 			ctx.json(games.stream().map(GameSummaryDto::from).toList());
@@ -1919,6 +1939,40 @@ public class GecoServer
 	 * conséquence tant que seul un réseau local isolé y avait accès, mais un
 	 * vrai risque dès qu'un serveur devient joignable depuis internet.
 	 */
+	/**
+	 * Routes /api/games/{id}/... atteintes par un JOUEUR depuis son propre
+	 * smartphone (identifié par son propre jeton individuel, voir
+	 * Player.accessToken, ou pas encore identifié du tout pour "/join"/
+	 * "/public-info") - jamais par l'animateur. Un joueur n'a ni PIN de
+	 * partie ni session animateur : ces routes doivent donc échapper aux
+	 * DEUX mécanismes de protection réservés à l'animateur (checkGamePin ET
+	 * checkGameOwnership, Phase 3 du 21/09/2026) - extrait ici pour que les
+	 * deux partagent exactement la même liste plutôt que de risquer une
+	 * divergence si l'une des deux est modifiée sans l'autre.
+	 */
+	private boolean isPlayerFacingGameRoute(final Context pCtx)
+	{
+		return pCtx.path().endsWith("/join") || pCtx.path().endsWith("/unlock") //$NON-NLS-1$ //$NON-NLS-2$
+				|| pCtx.path().contains("/players/by-token/") //$NON-NLS-1$
+				// POST /transactions : authentifiée par le jeton individuel de
+				// l'acheteur (voir la route elle-même). GET /transactions
+				// (écran animateur) reste protégée normalement.
+				|| (pCtx.path().endsWith("/transactions") && (pCtx.method() == io.javalin.http.HandlerType.POST)) //$NON-NLS-1$
+				// Offres de vente à courte durée de vie (scan/saisie manuelle,
+				// voir TradeOfferService) : toutes initiées par un JOUEUR.
+				|| pCtx.path().contains("/trade-offers") //$NON-NLS-1$
+				// Infos publiques d'une partie, avant même d'avoir rejoint.
+				|| pCtx.path().endsWith("/public-info") //$NON-NLS-1$
+				// Inventaire de cartes et classement ("Mes cartes"/
+				// "Classement" côté espace joueur).
+				|| pCtx.path().contains("/card-inventory") //$NON-NLS-1$
+				|| pCtx.path().endsWith("/leaderboard") //$NON-NLS-1$
+				// Demande de crédit smartphone : la CRÉATION est initiée par
+				// un joueur (POST, exemptée) ; liste/approbation/refus
+				// restent réservés à l'animateur.
+				|| (pCtx.path().endsWith("/credit-requests") && (pCtx.method() == io.javalin.http.HandlerType.POST)); //$NON-NLS-1$
+	}
+
 	private void requireGamePin(final Context pCtx, final int pGameId)
 	{
 		if (!mAppSettings.isProtectionEnabled())

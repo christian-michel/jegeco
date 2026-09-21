@@ -194,6 +194,40 @@ class AnimatorServiceTest
 		assertEquals(animator.getId(), mGameService.getGame(game.getId()).getOwner().getId());
 	}
 
+	/**
+	 * Cœur de la Phase 3 (21/09/2026) : "chacun avec leur profil et leurs
+	 * parties" - GameService.listGamesByOwner ne doit JAMAIS retourner la
+	 * partie d'un autre animateur, ni une partie orpheline (sans
+	 * propriétaire) qui n'appartient par définition à personne.
+	 */
+	@Test
+	void testListGamesByOwnerOnlyReturnsThatAnimatorsOwnGames() throws Exception
+	{
+		final Animator alice = mAnimatorService.createAnimator("alice2", "Alice", "motdepasse1", Role.ANIMATEUR); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final Animator bob = mAnimatorService.createAnimator("bob2", "Bob", "motdepasse2", Role.ANIMATEUR); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+
+		final Game aliceGame = mGameService.createGame(Game.MONEY_LIBRE, 12, "AnimTest", null, "partie d'Alice", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-09-21", "Ceres", 1, 180, 1.0, false, 0, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$
+		mGameService.setGameOwner(aliceGame.getId(), alice.getId());
+		final Game bobGame = mGameService.createGame(Game.MONEY_DEBT, 12, "AnimTest", null, "partie de Bob", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-09-21", "Ceres", 1, 180, 1.0, false, 0, false, 0.5); //$NON-NLS-1$ //$NON-NLS-2$
+		mGameService.setGameOwner(bobGame.getId(), bob.getId());
+		final Game orphanGame = mGameService.createGame(Game.MONEY_TROC, 12, "AnimTest", null, "partie orpheline", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-09-21", "Ceres", 1, 180, 1.0, false, 4, false, 0.5); //$NON-NLS-1$ //$NON-NLS-2$
+
+		final List<Game> aliceGames = mGameService.listGamesByOwner(alice.getId());
+		assertEquals(1, aliceGames.size(), "Alice ne doit voir QUE sa propre partie"); //$NON-NLS-1$
+		assertEquals(aliceGame.getId(), aliceGames.get(0).getId());
+		assertFalse(aliceGames.stream().anyMatch(g -> g.getId().equals(bobGame.getId())),
+				"la partie de Bob ne doit jamais apparaître dans la liste d'Alice"); //$NON-NLS-1$
+		assertFalse(aliceGames.stream().anyMatch(g -> g.getId().equals(orphanGame.getId())),
+				"une partie orpheline n'appartient à personne, elle ne doit apparaître dans AUCUNE liste par propriétaire"); //$NON-NLS-1$
+
+		final List<Game> bobGames = mGameService.listGamesByOwner(bob.getId());
+		assertEquals(1, bobGames.size(), "Bob ne doit voir QUE sa propre partie"); //$NON-NLS-1$
+		assertEquals(bobGame.getId(), bobGames.get(0).getId());
+	}
+
 	@Test
 	void testPasswordHasherProducesDifferentHashesForSamePasswordAndVerifiesCorrectly()
 	{

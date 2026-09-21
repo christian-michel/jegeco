@@ -58,6 +58,32 @@ public class GameService
 		}
 	}
 
+	/**
+	 * Multi-session serveur, Phase 3 (21/09/2026) : parties appartenant à un
+	 * animateur donné ("chacun avec leur profil et leurs parties") - utilisée
+	 * par GET /api/games pour un animateur de rôle ANIMATEUR (voir GecoServer,
+	 * un ADMIN voit lui listGames() en entier). Ne retourne JAMAIS les
+	 * parties orphelines (Game.owner == null) : par définition, elles
+	 * n'appartiennent PAS à pAnimatorId - restent accessibles directement par
+	 * identifiant (voir checkGameOwnership côté GecoServer) mais n'apparaissent
+	 * dans la liste de personne tant qu'elles n'ont pas été explicitement
+	 * rattachées.
+	 */
+	public List<Game> listGamesByOwner(final int pAnimatorId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			return em.createQuery("SELECT g FROM Game g WHERE g.owner.id = :ownerId ORDER BY g.id", Game.class) //$NON-NLS-1$
+					.setParameter("ownerId", pAnimatorId) //$NON-NLS-1$
+					.getResultList();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
 	public Game getGame(final int pId)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
