@@ -228,6 +228,31 @@ class AnimatorServiceTest
 		assertEquals(bobGame.getId(), bobGames.get(0).getId());
 	}
 
+	/**
+	 * Phase 4 (21/09/2026) : préférences personnelles (langue, mode de jeu) -
+	 * chaque champ peut être modifié indépendamment (null = inchangé), sans
+	 * jamais toucher au mot de passe ni au rôle.
+	 */
+	@Test
+	void testUpdatePreferencesChangesOnlyTheGivenFields() throws Exception
+	{
+		final Animator animator = mAnimatorService.createAnimator("fatou", "Fatou", "motdepasse1", Role.ANIMATEUR); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		assertNull(mAnimatorService.getAnimator(animator.getId()).getPreferredLanguage(),
+				"aucune préférence de langue par défaut à la création"); //$NON-NLS-1$
+		assertNull(mAnimatorService.getAnimator(animator.getId()).getPreferredGameMode(),
+				"aucune préférence de mode de jeu par défaut à la création"); //$NON-NLS-1$
+
+		mAnimatorService.updatePreferences(animator.getId(), "en", null); //$NON-NLS-1$
+		assertEquals("en", mAnimatorService.getAnimator(animator.getId()).getPreferredLanguage()); //$NON-NLS-1$
+		assertNull(mAnimatorService.getAnimator(animator.getId()).getPreferredGameMode(),
+				"ne doit pas toucher au mode de jeu quand seule la langue est fournie"); //$NON-NLS-1$
+
+		mAnimatorService.updatePreferences(animator.getId(), null, "smartphone"); //$NON-NLS-1$
+		assertEquals("en", mAnimatorService.getAnimator(animator.getId()).getPreferredLanguage(), //$NON-NLS-1$
+				"ne doit pas toucher à la langue déjà réglée quand seul le mode de jeu est fourni"); //$NON-NLS-1$
+		assertEquals("smartphone", mAnimatorService.getAnimator(animator.getId()).getPreferredGameMode()); //$NON-NLS-1$
+	}
+
 	@Test
 	void testPasswordHasherProducesDifferentHashesForSamePasswordAndVerifiesCorrectly()
 	{

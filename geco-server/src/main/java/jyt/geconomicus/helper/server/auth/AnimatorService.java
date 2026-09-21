@@ -110,6 +110,38 @@ public class AnimatorService
 	}
 
 	/**
+	 * Met à jour les préférences PERSONNELLES d'un animateur (langue,
+	 * mode de jeu par défaut - voir Animator.preferredLanguage/
+	 * preferredGameMode, Phase 4 du 21/09/2026). Volontairement séparé de
+	 * resetPassword/createAnimator : n'importe quel animateur peut appeler
+	 * ceci sur SON PROPRE compte (voir PUT /api/animators/me/preferences côté
+	 * GecoServer, qui résout l'id depuis la session plutôt que depuis
+	 * l'URL - jamais besoin d'être ADMIN pour changer sa propre préférence).
+	 * pLanguage/pGameMode null : laisse le champ correspondant inchangé
+	 * (permet de n'en changer qu'un seul à la fois depuis le front).
+	 */
+	public void updatePreferences(final int pAnimatorId, final String pLanguage, final String pGameMode)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Animator animator = em.find(Animator.class, pAnimatorId);
+			if (animator == null)
+				throw new IllegalArgumentException("Animator not found: " + pAnimatorId); //$NON-NLS-1$
+			em.getTransaction().begin();
+			if (pLanguage != null)
+				animator.setPreferredLanguage(pLanguage);
+			if (pGameMode != null)
+				animator.setPreferredGameMode(pGameMode);
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
 	 * Réinitialise le mot de passe d'un compte existant (écran de gestion des
 	 * comptes, réservé au rôle ADMIN - voir GecoServer). L'ancien mot de passe
 	 * n'a pas besoin d'être connu : c'est un ADMIN authentifié qui agit ici,

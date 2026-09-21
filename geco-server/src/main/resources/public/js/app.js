@@ -238,6 +238,19 @@ async function ensureAuthenticated() {
 		el("appShell").classList.remove("hidden");
 		applyRoleVisibility(mCurrentAnimator.role);
 		el("currentAnimatorName").textContent = mCurrentAnimator.displayName || mCurrentAnimator.login;
+		// Multi-session serveur, Phase 4 (21/09/2026) : applique la langue
+		// PERSONNELLE de cet animateur si elle est connue, en priorité sur ce
+		// que ce navigateur affichait jusqu'ici (choix précédent dans CE
+		// navigateur, ou détection automatique) - un animateur qui se
+		// connecte depuis un autre poste retrouve ainsi sa langue habituelle.
+		// window.GecoI18n.setLang() écrit aussi dans localStorage (voir
+		// i18n.js) : peu importe l'ordre d'exécution entre cet appel et
+		// l'initialisation propre à i18n.js (DOMContentLoaded, indépendante -
+		// voir sa propre auto-détection), detectLang() y relira de toute
+		// façon TOUJOURS cette valeur en premier, le résultat final converge
+		// donc correctement quel que soit l'ordre réel.
+		if (mCurrentAnimator.preferredLanguage)
+			window.GecoI18n.setLang(mCurrentAnimator.preferredLanguage);
 		return true;
 	}
 	clearStoredSessionToken();
@@ -262,9 +275,55 @@ function showAuthScreen(pSetupNeeded) {
  * de sécurité, seulement une aide pour ne pas montrer des boutons qui
  * échoueraient de toute façon.
  */
-function applyRoleVisibility(pRole) {
-	el("settingsAnimatorsPanel").classList.toggle("hidden", pRole !== "ADMIN");
+/**
+ * Multi-session serveur, Phase 4 (21/09/2026) : applique la préférence de
+ * mode de jeu de l'animateur connecté (Animator.preferredGameMode) par-dessus
+ * le réglage par défaut du serveur qui vient d'être chargé dans
+ * mAppSettings.gameMode - à appeler après CHAQUE (re)chargement de
+ * mAppSettings depuis le serveur (voir initAppAfterAuth() et
+ * renderSettingsView(), qui écrase mAppSettings en entier à chaque affichage
+ * de l'écran Paramètres) pour ne jamais laisser le réglage serveur brut
+ * reprendre le dessus sur la préférence personnelle déjà connue.
+ */
+function applyEffectiveGameModeOverride() {
+	if (mCurrentAnimator && mCurrentAnimator.preferredGameMode) {
+		mAppSettings.gameMode = mCurrentAnimator.preferredGameMode;
+	}
 }
+
+function applyRoleVisibility(pRole) {
+	const isAdmin = pRole === "ADMIN";
+	el("settingsAnimatorsPanel").classList.toggle("hidden", !isAdmin);
+	// Multi-session serveur, Phase 4 (21/09/2026) : réglages PARTAGÉS PAR
+	// TOUT LE SERVEUR (catalogues, gestion des fichiers de langue, son,
+	// plugins, mises à jour, sauvegarde, protection par code) - masqués pour
+	// un ANIMATEUR simple, cohérent avec le fait que le serveur les lui
+	// refuse de toute façon (voir requireAdmin côté GecoServer). "Mode de
+	// jeu" et "Langue par défaut" restent volontairement TOUJOURS visibles
+	// (pas dans cette liste) : ils deviennent la préférence personnelle de
+	// l'animateur connecté s'il n'est pas ADMIN, voir renderSettingsView().
+	["settingsLanguageAdminPanel", "settingsSoundPanel", "settingsPluginsPanel", "settingsUpdatePanel",
+		"settingsBackupPanel", "settingsProtectionPanel"].forEach((id) => {
+		el(id).classList.toggle("hidden", !isAdmin);
+	});
+}
+
+// Multi-session serveur, Phase 4 (21/09/2026) : synchronise vers le compte
+// animateur connecté tout changement de langue, quelle que soit son origine
+// (sélecteur de drapeaux, "Langue par défaut" côté ANIMATEUR simple - voir
+// renderSettingsView) - réutilise le hook onChange déjà exposé par i18n.js
+// (voir applyTranslations()) plutôt que de dupliquer la détection du
+// changement à chaque point d'entrée. Enregistré une seule fois, au
+// chargement du script (indépendant de la connexion : sans effet tant que
+// mCurrentAnimator n'est pas encore connu).
+window.GecoI18n.onChange(() => {
+	const activeLang = window.GecoI18n.getActiveLang();
+	if (mCurrentAnimator && (mCurrentAnimator.preferredLanguage !== activeLang)) {
+		mCurrentAnimator.preferredLanguage = activeLang;
+		Api.updateMyPreferences({ preferredLanguage: activeLang, preferredGameMode: null })
+			.catch((err) => pushDebugLog("ERREUR", "Échec de la synchronisation de la préférence de langue :", err));
+	}
+});
 
 function bindAuthForms() {
 	el("authLoginForm").addEventListener("submit", async (e) => {
@@ -397,6 +456,7 @@ const Api = {
 	listAnimators: () => api("/api/animators"),
 	createAnimator: (body) => api("/api/animators", { method: "POST", body: JSON.stringify(body) }),
 	resetAnimatorPassword: (id, newPassword) => api(`/api/animators/${id}/password`, { method: "PUT", body: JSON.stringify({ newPassword }) }),
+	updateMyPreferences: (body) => api("/api/animators/me/preferences", { method: "PUT", body: JSON.stringify(body) }),
 	// Remonté par un utilisateur : écran Paramètres (langue par défaut, son,
 	// langues personnalisées) - voir AppSettings/LanguageService côté serveur.
 	getSettings: () => api("/api/settings"),
@@ -874,19 +934,39 @@ async function renderSettingsView() {
 	// existent", cohérente avec le sélecteur de drapeaux en haut à droite.
 	const settings = await Api.getSettings();
 	mAppSettings = settings; // reflète immédiatement les réglages actuels (son inclus)
+	applyEffectiveGameModeOverride();
 
 	// --- Mode de jeu (étape 3) ---
 	// Remonté par un utilisateur : bouton radio exclusif, pas une case à
 	// cocher indépendante - voir AppSettings.gameMode côté serveur. Le bloc
 	// des trois tableaux (Cartes/Visuels/Avatars) n'a de sens qu'en mode
 	// smartphone, il est donc masqué/affiché en fonction du choix courant.
+	// Multi-session serveur, Phase 4 (21/09/2026) : le mode de jeu EFFECTIF
+	// pour cet animateur (sa propre préférence si elle est définie, sinon le
+	// réglage par défaut du serveur) - voir mAppSettings.gameMode, déjà mis à
+	// jour en conséquence dans initAppAfterAuth() juste après
+	// refreshAppSettings(). Les radios "Mode de jeu" ci-dessous affichent et
+	// modifient TOUJOURS cette valeur effective, jamais directement le
+	// réglage serveur brut.
 	function applyGameModeVisibility(mode) {
-		el("settingsCatalogsPanel").classList.toggle("hidden", mode !== "smartphone");
-		if (mode === "smartphone") renderCatalogsPanel();
+		// Le tableau de gestion des catalogues reste réservé à ADMIN (réglage
+		// partagé par tout le serveur), quel que soit le mode de jeu -
+		// applyRoleVisibility() l'a déjà masqué pour un ANIMATEUR simple, on
+		// ne le ré-affiche donc jamais ici pour ce rôle.
+		const isAdmin = mCurrentAnimator && (mCurrentAnimator.role === "ADMIN");
+		el("settingsCatalogsPanel").classList.toggle("hidden", (mode !== "smartphone") || !isAdmin);
+		if ((mode === "smartphone") && isAdmin) renderCatalogsPanel();
 	}
-	el("settingsGameModeClassic").checked = settings.gameMode !== "smartphone";
-	el("settingsGameModeSmartphone").checked = settings.gameMode === "smartphone";
-	applyGameModeVisibility(settings.gameMode);
+	el("settingsGameModeClassic").checked = mAppSettings.gameMode !== "smartphone";
+	el("settingsGameModeSmartphone").checked = mAppSettings.gameMode === "smartphone";
+	applyGameModeVisibility(mAppSettings.gameMode);
+	// Multi-session serveur, Phase 4 (21/09/2026) : le texte d'intro précise
+	// explicitement "votre préférence personnelle" pour un ANIMATEUR simple -
+	// sans ça, rien ne distingue visuellement ce contrôle de celui d'un ADMIN
+	// (même titre, même emplacement), qui modifie lui le réglage partagé par
+	// tout le serveur.
+	el("settingsGameModeIntro").textContent = t(mCurrentAnimator.role === "ADMIN"
+		? "settings.game_mode_intro" : "settings.game_mode_intro_personal");
 
 	// Multi-session serveur, Phase 2 (21/09/2026) : comptes animateurs -
 	// visibilité déjà posée par applyRoleVisibility() à la connexion, on ne
@@ -899,11 +979,21 @@ async function renderSettingsView() {
 		radio.onchange = async () => {
 			const mode = document.querySelector("input[name=settingsGameMode]:checked").value;
 			mAppSettings.gameMode = mode;
-			await Api.updateSettings({
-				defaultLanguage: mAppSettings.defaultLanguage, soundMuted: mAppSettings.soundMuted,
-				soundVolume: mAppSettings.soundVolume, updateCheckUrl: mAppSettings.updateCheckUrl,
-				protectionEnabled: mAppSettings.protectionEnabled, gameMode: mode,
-			});
+			// Multi-session serveur, Phase 4 (21/09/2026) : un ADMIN change le
+			// réglage PAR DÉFAUT du serveur (comme avant) ; un ANIMATEUR simple
+			// change SA PROPRE préférence (PUT /api/animators/me/preferences,
+			// jamais /api/settings qui lui est de toute façon refusé - voir
+			// requireAdmin côté GecoServer).
+			if (mCurrentAnimator.role === "ADMIN") {
+				await Api.updateSettings({
+					defaultLanguage: mAppSettings.defaultLanguage, soundMuted: mAppSettings.soundMuted,
+					soundVolume: mAppSettings.soundVolume, updateCheckUrl: mAppSettings.updateCheckUrl,
+					protectionEnabled: mAppSettings.protectionEnabled, gameMode: mode,
+				});
+			} else {
+				mCurrentAnimator.preferredGameMode = mode;
+				await Api.updateMyPreferences({ preferredLanguage: null, preferredGameMode: mode });
+			}
 			applyGameModeVisibility(mode);
 		};
 	});
@@ -918,8 +1008,17 @@ async function renderSettingsView() {
 		const langs = window.GecoI18n.getSupportedLangs();
 		selectEl.innerHTML = langs.map((l) => `<option value="${l.code}" ${l.code === selectedCode ? "selected" : ""}>${l.flag} ${escapeHtml(l.label)}</option>`).join("");
 	}
-	renderLangOptions(el("settingsDefaultLanguage"), settings.defaultLanguage);
+	// Multi-session serveur, Phase 4 (21/09/2026) : présélectionne la valeur
+	// EFFECTIVE pour cet animateur - sa propre préférence si elle est
+	// définie, sinon le réglage par défaut du serveur (même logique que
+	// mAppSettings.gameMode, voir applyEffectiveGameModeOverride ci-dessus).
+	// Les rafraîchissements plus bas (après import/suppression d'une langue,
+	// réservés à ADMIN) continuent, eux, d'utiliser settings.defaultLanguage
+	// directement - cohérent, ADMIN édite toujours le réglage serveur brut.
+	renderLangOptions(el("settingsDefaultLanguage"), mCurrentAnimator.preferredLanguage || settings.defaultLanguage);
 	renderLangOptions(el("settingsExportLanguage"), window.GecoI18n.getActiveLang());
+	el("settingsLanguageIntro").textContent = t(mCurrentAnimator.role === "ADMIN"
+		? "settings.language_intro" : "settings.language_intro_personal");
 
 	// Remonté par un utilisateur : changer le menu déroulant ne faisait rien de
 	// visible - un bouton "Valider" explicite est nécessaire pour (1) enregistrer
@@ -932,18 +1031,27 @@ async function renderSettingsView() {
 	// boutons gèrent la même fonction", comme demandé).
 	el("btnValidateDefaultLanguage").onclick = async () => {
 		const code = el("settingsDefaultLanguage").value;
-		// Remonté par un utilisateur : l'API attend les quatre réglages à chaque
-		// mise à jour (voir Dtos.UpdateSettingsRequest, aucun n'est optionnel côté
-		// serveur) - on renvoie donc toujours l'état courant complet, en ne
-		// changeant que le champ concerné. Oublier un champ ici l'écraserait
-		// silencieusement (ex. désactiverait la protection par PIN sans le
-		// vouloir) - piège déjà rencontré une fois, d'où ce commentaire.
-		await Api.updateSettings({
-			defaultLanguage: code,
-			soundMuted: mAppSettings.soundMuted, soundVolume: mAppSettings.soundVolume,
-			updateCheckUrl: mAppSettings.updateCheckUrl, protectionEnabled: mAppSettings.protectionEnabled,
-		});
-		mAppSettings.defaultLanguage = code;
+		// Multi-session serveur, Phase 4 (21/09/2026) : un ADMIN change le
+		// réglage PAR DÉFAUT du serveur (comme avant) ; un ANIMATEUR simple
+		// change SA PROPRE préférence - la synchronisation vers son compte se
+		// fait de toute façon automatiquement via le hook onChange plus haut
+		// (déclenché par setLang() ci-dessous dans les deux cas), donc rien
+		// de plus à faire explicitement ici pour son cas.
+		if (mCurrentAnimator.role === "ADMIN") {
+			// Remonté par un utilisateur : l'API attend les quatre réglages à
+			// chaque mise à jour (voir Dtos.UpdateSettingsRequest, aucun n'est
+			// optionnel côté serveur) - on renvoie donc toujours l'état courant
+			// complet, en ne changeant que le champ concerné. Oublier un champ
+			// ici l'écraserait silencieusement (ex. désactiverait la
+			// protection par PIN sans le vouloir) - piège déjà rencontré une
+			// fois, d'où ce commentaire.
+			await Api.updateSettings({
+				defaultLanguage: code,
+				soundMuted: mAppSettings.soundMuted, soundVolume: mAppSettings.soundVolume,
+				updateCheckUrl: mAppSettings.updateCheckUrl, protectionEnabled: mAppSettings.protectionEnabled,
+			});
+			mAppSettings.defaultLanguage = code;
+		}
 		window.GecoI18n.setLang(code);
 	};
 
@@ -5952,6 +6060,7 @@ async function initAppAfterAuth() {
 	safeInit("initChartZoomButtons", initChartZoomButtons);
 	safeInit("connectWs", connectWs);
 	await refreshAppSettings();
+	applyEffectiveGameModeOverride();
 	safeInit("renderGamesList", renderGamesList);
 }
 

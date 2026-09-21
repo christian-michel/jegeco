@@ -2224,3 +2224,9 @@ msgstr "Nouveau mot de passe pour {login} :"
 
 msgid "settings.animators_reset_password_done"
 msgstr "Mot de passe réinitialisé."
+
+msgid "settings.game_mode_intro_personal"
+msgstr "Choisissez comment VOUS préférez organiser vos parties par défaut : avec les cartes et jetons physiques habituels, ou avec le smartphone de chaque joueur. Ce choix est personnel, propre à votre compte - il n'affecte pas les autres animateurs."
+
+msgid "settings.language_intro_personal"
+msgstr "Choisissez VOTRE langue préférée pour l'interface animateur. Ce choix est personnel, propre à votre compte - il vous suit si vous vous connectez depuis un autre appareil, et n'affecte pas les autres animateurs."

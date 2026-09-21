@@ -92,6 +92,31 @@ public class Animator implements Serializable
 	@Temporal(TemporalType.TIMESTAMP)
 	private Date createdAt;
 
+	// Multi-session serveur, Phase 4 (21/09/2026) : préférences PERSONNELLES
+	// de cet animateur, distinctes des réglages partagés par tout le serveur
+	// (AppSettings.defaultLanguage/gameMode, réservés à ADMIN - voir
+	// GecoServer, requireAdmin sur PUT /api/settings). Nullable : tant
+	// qu'elles ne sont pas définies, l'animateur suit le réglage par défaut
+	// du serveur (voir applyEffectivePreferences() côté app.js) - jamais de
+	// valeur imposée à la création d'un compte.
+	//
+	// Pourquoi cet ajout : avant les comptes, n'importe qui pouvait changer
+	// librement la langue et le mode de jeu par défaut (PUT /api/settings,
+	// alors sans authentification). Depuis la Phase 2, cette route est
+	// réservée à ADMIN ("réglages serveur") - ce qui a de facto RETIRÉ ce
+	// réglage aux animateurs simples, alors que la langue et le mode de jeu
+	// préféré sont bien plus des préférences PERSONNELLES (chaque animateur
+	// peut être une personne différente, avec sa propre langue ; chaque
+	// animateur peut préférer organiser ses parties en classique ou en
+	// smartphone) que des réglages d'INSTALLATION comme les catalogues ou
+	// les plugins activés. Cette phase leur redonne la main, mais sur LEUR
+	// PROPRE préférence plutôt que sur le réglage partagé (voir PUT
+	// /api/animators/me/preferences, ouvert à tout animateur connecté).
+	private String preferredLanguage;
+	// Valeurs possibles : "classique"/"smartphone", mêmes valeurs que
+	// AppSettings.gameMode (voir Game mode radios, écran Paramètres).
+	private String preferredGameMode;
+
 	public Animator()
 	{
 		// Constructeur vide requis par JPA.
@@ -155,5 +180,25 @@ public class Animator implements Serializable
 	public Date getCreatedAt()
 	{
 		return createdAt;
+	}
+
+	public String getPreferredLanguage()
+	{
+		return preferredLanguage;
+	}
+
+	public void setPreferredLanguage(final String pPreferredLanguage)
+	{
+		preferredLanguage = pPreferredLanguage;
+	}
+
+	public String getPreferredGameMode()
+	{
+		return preferredGameMode;
+	}
+
+	public void setPreferredGameMode(final String pPreferredGameMode)
+	{
+		preferredGameMode = pPreferredGameMode;
 	}
 }

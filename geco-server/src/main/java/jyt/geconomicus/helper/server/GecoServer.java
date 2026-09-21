@@ -715,6 +715,21 @@ public class GecoServer
 			ctx.status(204);
 		});
 
+		// Multi-session serveur, Phase 4 (21/09/2026) : préférences
+		// PERSONNELLES (langue, mode de jeu par défaut) - voir
+		// Animator.preferredLanguage/preferredGameMode pour le raisonnement
+		// complet. AUCUN requireAdmin() ici, volontairement : n'importe quel
+		// animateur connecté peut modifier SA PROPRE préférence (résolue
+		// depuis la session, jamais depuis un id dans l'URL - "/me", pas
+		// "/{id}", pour qu'il soit structurellement impossible de modifier la
+		// préférence de quelqu'un d'autre par ce chemin).
+		pApp.put("/api/animators/me/preferences", ctx -> { //$NON-NLS-1$
+			final jyt.geconomicus.helper.Animator animator = requireAnimator(ctx);
+			final Dtos.UpdatePreferencesRequest req = ctx.bodyAsClass(Dtos.UpdatePreferencesRequest.class);
+			mAnimatorService.updatePreferences(animator.getId(), req.preferredLanguage(), req.preferredGameMode());
+			ctx.status(204);
+		});
+
 		// Protection des réglages PARTAGÉS PAR TOUT LE SERVEUR (catalogues,
 		// plugins, réglages, sauvegarde) - décision utilisateur du 21/09/2026 :
 		// réservés au rôle ADMIN, distinct des animateurs "simples" qui gèrent

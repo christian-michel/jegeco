@@ -2220,3 +2220,9 @@ msgstr "New password for {login}:"
 
 msgid "settings.animators_reset_password_done"
 msgstr "Password reset."
+
+msgid "settings.game_mode_intro_personal"
+msgstr "Choose how YOU prefer to run your games by default: with the usual physical cards and tokens, or with each player's smartphone. This choice is personal to your account - it does not affect other animators."
+
+msgid "settings.language_intro_personal"
+msgstr "Choose YOUR preferred language for the animator interface. This choice is personal to your account - it follows you if you log in from another device, and does not affect other animators."

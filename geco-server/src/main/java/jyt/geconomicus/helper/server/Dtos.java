@@ -440,11 +440,13 @@ public class Dtos
 	// JSON (après connexion, ou dans la liste des comptes pour un ADMIN) - le
 	// hash n'a rien à y faire, même si techniquement inutilisable sans le sel
 	// (défense en profondeur, pas de raison de l'exposer du tout).
-	public record AnimatorDto(Integer id, String login, String displayName, String role)
+	public record AnimatorDto(Integer id, String login, String displayName, String role, String preferredLanguage,
+			String preferredGameMode)
 	{
 		static AnimatorDto from(final jyt.geconomicus.helper.Animator a)
 		{
-			return new AnimatorDto(a.getId(), a.getLogin(), a.getDisplayName(), a.getRole().name());
+			return new AnimatorDto(a.getId(), a.getLogin(), a.getDisplayName(), a.getRole().name(),
+					a.getPreferredLanguage(), a.getPreferredGameMode());
 		}
 	}
 
@@ -457,6 +459,14 @@ public class Dtos
 	}
 
 	public record ResetPasswordRequest(String newPassword)
+	{
+	}
+
+	// Multi-session serveur, Phase 4 (21/09/2026) : préférences personnelles
+	// (voir Animator.preferredLanguage/preferredGameMode). Les deux champs
+	// sont nullables : le front n'envoie que celui qu'il vient de changer
+	// (voir AnimatorService.updatePreferences, qui laisse l'autre inchangé).
+	public record UpdatePreferencesRequest(String preferredLanguage, String preferredGameMode)
 	{
 	}
 }

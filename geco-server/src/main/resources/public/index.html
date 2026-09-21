@@ -346,7 +346,7 @@
 				     apparaît (masqué sinon, puisque sans objet en mode classique). -->
 				<div class="panel-card">
 					<h3 class="chart-title" data-i18n="settings.game_mode_title">Mode de jeu</h3>
-					<p class="galilee-explainer" data-i18n="settings.game_mode_intro">Choisissez comment se jouent les échanges entre joueurs : avec les cartes et jetons
+					<p class="galilee-explainer" id="settingsGameModeIntro" data-i18n="settings.game_mode_intro">Choisissez comment se jouent les échanges entre joueurs : avec les cartes et jetons
 						physiques habituels, ou avec le smartphone de chaque joueur.</p>
 					<div class="field-row">
 						<label class="checkbox-label" style="margin:0;">
@@ -380,40 +380,49 @@
 
 				<div class="panel-card">
 					<h3 class="chart-title" data-i18n="settings.language_title">Langue</h3>
-					<p class="galilee-explainer" data-i18n="settings.language_intro">Choisissez la langue par défaut de l'application, ou ajoutez/téléchargez un fichier
+					<p class="galilee-explainer" id="settingsLanguageIntro" data-i18n="settings.language_intro">Choisissez la langue par défaut de l'application, ou ajoutez/téléchargez un fichier
 						de langue (.po) pour le modifier ou vous en servir de modèle pour en créer une nouvelle.</p>
 
 					<label class="field-label" data-i18n="settings.default_language_label">Langue par défaut</label>
 					<select id="settingsDefaultLanguage" class="field-input"></select>
 					<button type="button" class="btn btn-primary btn-small" id="btnValidateDefaultLanguage" style="margin-top:0.5rem;" data-i18n="settings.default_language_validate_btn">Valider</button>
 
-					<div class="field-row" style="margin-top:1rem;">
-						<div>
-							<label class="field-label" data-i18n="settings.export_language_label">Télécharger un fichier de langue (modèle ou à modifier)</label>
-							<select id="settingsExportLanguage" class="field-input"></select>
-							<button type="button" class="btn btn-small" id="btnExportLanguage" style="margin-top:0.5rem;" data-i18n="settings.export_btn">Télécharger</button>
+					<!-- Multi-session serveur, Phase 4 (21/09/2026) : gestion des
+					     fichiers de langue eux-mêmes (télécharger/ajouter/supprimer)
+					     reste réservée à ADMIN - affecte tout le serveur, jamais un
+					     seul animateur. "Langue par défaut" juste au-dessus, elle,
+					     reste visible pour tous : devient la préférence PERSONNELLE
+					     de l'animateur connecté s'il n'est pas ADMIN (voir
+					     applyRoleVisibility()/renderSettingsView() dans app.js). -->
+					<div id="settingsLanguageAdminPanel">
+						<div class="field-row" style="margin-top:1rem;">
+							<div>
+								<label class="field-label" data-i18n="settings.export_language_label">Télécharger un fichier de langue (modèle ou à modifier)</label>
+								<select id="settingsExportLanguage" class="field-input"></select>
+								<button type="button" class="btn btn-small" id="btnExportLanguage" style="margin-top:0.5rem;" data-i18n="settings.export_btn">Télécharger</button>
+							</div>
+							<div>
+								<label class="field-label" data-i18n="settings.import_language_label">Ajouter un fichier de langue (.po)</label>
+								<input id="settingsImportLanguageCode" type="text" class="field-input" placeholder="ex: es" data-i18n-placeholder="settings.import_code_placeholder">
+								<input id="settingsImportLanguageFile" type="file" accept=".po" class="field-input" style="margin-top:0.5rem;">
+								<button type="button" class="btn btn-small btn-primary" id="btnImportLanguage" style="margin-top:0.5rem;" data-i18n="settings.import_btn">Importer</button>
+								<p id="settingsImportLanguageMessage" style="font-size:0.8rem;margin-top:0.4rem;display:none;"></p>
+							</div>
 						</div>
-						<div>
-							<label class="field-label" data-i18n="settings.import_language_label">Ajouter un fichier de langue (.po)</label>
-							<input id="settingsImportLanguageCode" type="text" class="field-input" placeholder="ex: es" data-i18n-placeholder="settings.import_code_placeholder">
-							<input id="settingsImportLanguageFile" type="file" accept=".po" class="field-input" style="margin-top:0.5rem;">
-							<button type="button" class="btn btn-small btn-primary" id="btnImportLanguage" style="margin-top:0.5rem;" data-i18n="settings.import_btn">Importer</button>
-							<p id="settingsImportLanguageMessage" style="font-size:0.8rem;margin-top:0.4rem;display:none;"></p>
-						</div>
-					</div>
 
-					<!-- Remonté par un utilisateur : la langue tout juste importée
-					     apparaissait bien dans le sélecteur de drapeaux (haut à droite)
-					     mais pas dans "Langue par défaut" (bug de rafraîchissement corrigé,
-					     voir app.js) - et il manquait un moyen de supprimer une langue
-					     personnalisée. Cette liste couvre les deux : elle montre toutes les
-					     langues installées, avec un bouton de suppression uniquement pour
-					     celles qui ne sont pas fournies par défaut avec l'application. -->
-					<label class="field-label" style="margin-top:1rem;" data-i18n="settings.installed_languages_label">Langues installées</label>
-					<div id="settingsLanguagesList" class="compare-games-list"></div>
+						<!-- Remonté par un utilisateur : la langue tout juste importée
+						     apparaissait bien dans le sélecteur de drapeaux (haut à droite)
+						     mais pas dans "Langue par défaut" (bug de rafraîchissement corrigé,
+						     voir app.js) - et il manquait un moyen de supprimer une langue
+						     personnalisée. Cette liste couvre les deux : elle montre toutes les
+						     langues installées, avec un bouton de suppression uniquement pour
+						     celles qui ne sont pas fournies par défaut avec l'application. -->
+						<label class="field-label" style="margin-top:1rem;" data-i18n="settings.installed_languages_label">Langues installées</label>
+						<div id="settingsLanguagesList" class="compare-games-list"></div>
+					</div>
 				</div>
 
-				<div class="panel-card">
+				<div class="panel-card" id="settingsSoundPanel">
 					<h3 class="chart-title" data-i18n="settings.sound_title">Son</h3>
 					<label class="checkbox-label">
 						<input id="settingsSoundMuted" type="checkbox">
@@ -427,7 +436,7 @@
 					</div>
 				</div>
 
-				<div class="panel-card">
+				<div class="panel-card" id="settingsPluginsPanel">
 					<h3 class="chart-title" data-i18n="settings.plugins_title">Systèmes d'échange disponibles</h3>
 					<p class="galilee-explainer" data-i18n="settings.plugins_intro">Choisissez les systèmes à proposer sur l'écran "Nouvelle partie". Un système
 						chargé mais pas encore jouable peut être activé pour test, mais ne permettra pas encore de créer une partie.</p>
@@ -439,7 +448,7 @@
 				     l'animateur), l'en informe, et lui propose le lien de téléchargement -
 				     jamais de téléchargement ni d'installation automatique, toujours à
 				     l'animateur de gérer la mise à jour manuellement. -->
-				<div class="panel-card">
+				<div class="panel-card" id="settingsUpdatePanel">
 					<h3 class="chart-title" data-i18n="settings.update_title">Mises à jour</h3>
 					<p class="galilee-explainer" data-i18n="settings.update_intro">L'application ne se met jamais à jour toute seule : elle peut seulement vérifier si une nouvelle version
 						existe (à partir d'une adresse que vous configurez ci-dessous) et vous proposer de la télécharger - le reste reste entre vos mains.</p>
@@ -459,7 +468,7 @@
 				<!-- Remonté par un utilisateur, pour finaliser l'étape 2 : une sauvegarde
 				     complète de la base de données, toutes les parties et tous les systèmes
 				     confondus, dans un seul fichier .zip téléchargeable. -->
-				<div class="panel-card">
+				<div class="panel-card" id="settingsBackupPanel">
 					<h3 class="chart-title" data-i18n="settings.backup_title">Sauvegarde</h3>
 					<p class="galilee-explainer" data-i18n="settings.backup_intro">Téléchargez une copie complète de toutes les parties enregistrées (tous systèmes d'échange confondus), dans un seul fichier - à conserver en lieu sûr, ou pour transférer l'historique vers une autre installation.</p>
 					<button type="button" class="btn btn-small btn-accent" id="btnDownloadBackup" data-i18n="settings.backup_btn">Télécharger une sauvegarde complète</button>
@@ -471,7 +480,7 @@
 				     explicitement ici. Une fois activée, chaque NOUVELLE partie créée
 				     reçoit un PIN à 6 chiffres (les parties déjà en cours restent
 				     accessibles sans PIN, jamais bloquées après coup). -->
-				<div class="panel-card">
+				<div class="panel-card" id="settingsProtectionPanel">
 					<h3 class="chart-title" data-i18n="settings.protection_title">Protection par code</h3>
 					<p class="galilee-explainer" data-i18n="settings.protection_intro">Une fois activée, chaque nouvelle partie reçoit un code PIN à 6 chiffres, à saisir pour y accéder - et chaque joueur reçoit un lien individuel donnant accès uniquement à ses propres informations. Les parties déjà créées avant l'activation restent accessibles sans code.</p>
 					<label class="checkbox-label">
