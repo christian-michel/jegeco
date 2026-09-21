@@ -25,6 +25,9 @@
 		<class>jyt.geconomicus.helper.EventTypeConverter</class>
 		<class>jyt.geconomicus.helper.Transaction</class>
 		<class>jyt.geconomicus.helper.CardSquareEvent</class>
+		<!-- Comptes animateurs (multi-session serveur, 21/09/2026) - Game
+		     porte désormais une relation @ManyToOne vers Animator. -->
+		<class>jyt.geconomicus.helper.Animator</class>
 		<properties>
 			<property name="jakarta.persistence.jdbc.driver" value="org.h2.Driver" />
 			<!-- Base en mémoire, isolée, jetable - nom distinct de celle de

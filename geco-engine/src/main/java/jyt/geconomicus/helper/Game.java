@@ -11,7 +11,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedQuery;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
@@ -191,6 +193,45 @@ public class Game implements Serializable
 	public void setSmartphoneCardPileJson(final String pSmartphoneCardPileJson)
 	{
 		smartphoneCardPileJson = pSmartphoneCardPileJson;
+	}
+
+	// Compte animateur propriétaire de cette partie (voir Animator) - ajouté le
+	// 21/09/2026 pour permettre à un même serveur d'héberger plusieurs
+	// animateurs indépendants, chacun avec ses propres parties (demande
+	// utilisateur : "une version serveur capable de gérer le multi session
+	// avec plusieurs animateurs qui ont chacuns leur profil et leurs
+	// parties"). Volontairement une simple relation optionnelle plutôt qu'un
+	// champ du constructeur : Animator vit dans ce même module geco-engine,
+	// aux côtés de Game/Player, en suivant exactement la même convention déjà
+	// en place pour les autres champs propres au web (Player.accessToken,
+	// smartphoneCardPileJson ci-dessus...) - un seul schéma de base partagé
+	// entre web et Swing (voir CLAUDE.md, "Base de données"). Nullable :
+	// - reste à null pour l'app Swing (geco-app), qui n'a - pour l'instant -
+	//   aucune notion de compte et continue de fonctionner à l'identique,
+	//   sans jamais lire ni écrire ce champ ;
+	// - reste à null pour toute partie créée AVANT l'introduction des
+	//   comptes, tant qu'une migration explicite ne l'a pas rattachée (voir
+	//   AnimatorService, qui rattache automatiquement les parties encore
+	//   orphelines au tout premier compte animateur créé sur le serveur -
+	//   choix utilisateur explicite plutôt que de les laisser orphelines ou
+	//   de les rendre visibles par tous sans propriétaire).
+	// @XmlTransient : jamais exporté/importé via l'export/import XML d'une
+	// partie (voir HelperUI/ImportDialog côté Swing) - Animator n'est pas
+	// prévu pour être (dé)sérialisé de cette façon, et un compte n'a de toute
+	// façon aucun sens hors du serveur qui l'héberge.
+	@XmlTransient
+	@ManyToOne
+	@JoinColumn(nullable = true)
+	private Animator owner;
+
+	public Animator getOwner()
+	{
+		return owner;
+	}
+
+	public void setOwner(final Animator pOwner)
+	{
+		owner = pOwner;
 	}
 
 	// Current date

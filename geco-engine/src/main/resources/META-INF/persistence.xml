@@ -9,6 +9,12 @@
 		<class>jyt.geconomicus.helper.Event</class>
 		<class>jyt.geconomicus.helper.Transaction</class>
 		<class>jyt.geconomicus.helper.CardSquareEvent</class>
+		<!-- Comptes animateurs (multi-session serveur, 21/09/2026) - voir
+		     Animator et Game.owner. Doit être listée ici : Game porte
+		     désormais une relation @ManyToOne vers Animator, EclipseLink a
+		     besoin de connaître les deux classes dans la même unité pour la
+		     résoudre. -->
+		<class>jyt.geconomicus.helper.Animator</class>
 		<properties>
 			<property name="jakarta.persistence.jdbc.driver" value="org.h2.Driver" />
 			<property name="jakarta.persistence.jdbc.url" value="jdbc:h2:~/geco.h2" />
