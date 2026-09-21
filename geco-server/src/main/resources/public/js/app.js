@@ -4377,11 +4377,25 @@ async function openEndOfTurnWizard() {
 				// wizNextAllPlayersMoney.onclick ci-dessous), jamais stocké
 				// tel quel dans ce cas.
 				const displayValue = isSmartphoneLibre ? roundUpIfExactlyHalf(totalTokens * game.weakCoinValue) : totalTokens;
+				// BUG TROUVÉ PAR L'AGENT DE CONTRÔLE (21/09/2026, second passage de
+				// relecture indépendante demandé par l'utilisateur) : si l'animateur
+				// laisse la valeur telle quelle (ce que la consigne du PDF encourage
+				// explicitement - "tomber juste" avec l'arrondi affiché), l'ancien
+				// code reconvertissait CETTE valeur arrondie en jetons au clic sur
+				// "Continuer" (voir onclick ci-dessous), donc l'arrondi vers le haut
+				// ("53,5" -> "54") était réellement PERSISTÉ via l'événement "W"
+				// (WEALTH_CHECKPOINT) qui suit - de la monnaie créée à partir de
+				// rien, en violation du strict TRM (voir CLAUDE.md). Correctif : on
+				// mémorise ici le VRAI compte de jetons non arrondi (data-true-weak)
+				// et la valeur affichée d'origine (data-prefill-display) ; au clic,
+				// si le champ n'a pas été retouché par l'animateur on réutilise le
+				// vrai compte directement (dérive nulle), et seulement s'il a été
+				// modifié à la main on reconvertit la valeur saisie comme avant.
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}</legend>
 				<label>${t(isSmartphoneLibre ? "wiz.field_monetary_units_simple" : "wiz.field_tokens_simple")}</label>
-				<input type="number" class="amWeak" value="${displayValue}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}">
+				<input type="number" class="amWeak" value="${displayValue}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}" data-true-weak="${prefill.weak}" data-prefill-display="${displayValue}">
 			</fieldset>`;
 			}).join("")}
 			<!-- Remonté par un utilisateur (21/09/2026, retour après une vraie
@@ -4397,12 +4411,25 @@ async function openEndOfTurnWizard() {
 		el("wizNextAllPlayersMoney").onclick = () => {
 			document.querySelectorAll(".death-inventory-player").forEach((fieldset) => {
 				const playerId = parseInt(fieldset.dataset.playerId, 10);
-				const entered = parseFloat(fieldset.querySelector(".amWeak").value || "0");
+				const input = fieldset.querySelector(".amWeak");
+				const entered = parseFloat(input.value || "0");
+				// Correctif (21/09/2026, bug trouvé par l'agent de contrôle
+				// indépendant - voir commentaire au prefill ci-dessus) : si le
+				// champ affiche encore exactement la valeur pré-remplie (arrondie
+				// éventuellement vers le haut pour l'affichage), on réutilise le
+				// VRAI compte de jetons non arrondi stocké au rendu (dérive
+				// nulle), au lieu de reconvertir l'arrondi affiché - qui aurait pu
+				// créer 0,5 unité monétaire de trop à chaque arrondi laissé tel
+				// quel. Seule une saisie manuelle de l'animateur (valeur ≠ du
+				// prefill) déclenche la reconversion classique.
+				const prefillDisplay = parseFloat(input.dataset.prefillDisplay || "0");
+				const trueWeak = parseInt(input.dataset.trueWeak || "0", 10);
+				const untouched = Math.abs(entered - prefillDisplay) < 1e-9;
 				// Reconversion en jetons (unité interne, voir commentaire plus
 				// haut) - seulement nécessaire en mode smartphone, où l'animateur
 				// vient de saisir une valeur monétaire, pas un compte de jetons.
 				const weak = isSmartphoneLibre
-					? Math.max(0, Math.round(entered / (game.weakCoinValue || 1)))
+					? (untouched ? trueWeak : Math.max(0, Math.round(entered / (game.weakCoinValue || 1))))
 					: Math.max(0, Math.round(entered));
 				allPlayersMoneyInventory[playerId] = { weak, medium: 0, strong: 0 };
 			});
