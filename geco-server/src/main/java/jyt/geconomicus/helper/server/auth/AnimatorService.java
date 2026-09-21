@@ -109,6 +109,34 @@ public class AnimatorService
 		}
 	}
 
+	/**
+	 * Réinitialise le mot de passe d'un compte existant (écran de gestion des
+	 * comptes, réservé au rôle ADMIN - voir GecoServer). L'ancien mot de passe
+	 * n'a pas besoin d'être connu : c'est un ADMIN authentifié qui agit ici,
+	 * pas l'animateur concerné lui-même retrouvant l'accès à son propre
+	 * compte (pas encore de mécanisme de ce type - hors périmètre de cette
+	 * phase, un serveur LAN de confiance restreinte n'en a pas un besoin
+	 * urgent).
+	 * @throws IllegalArgumentException si pAnimatorId ne correspond à aucun compte.
+	 */
+	public void resetPassword(final int pAnimatorId, final String pNewPlainPassword)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Animator animator = em.find(Animator.class, pAnimatorId);
+			if (animator == null)
+				throw new IllegalArgumentException("Animator not found: " + pAnimatorId); //$NON-NLS-1$
+			em.getTransaction().begin();
+			animator.setPasswordHash(PasswordHasher.hash(pNewPlainPassword));
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
 	private Animator findByLogin(final EntityManager pEm, final String pLogin)
 	{
 		try

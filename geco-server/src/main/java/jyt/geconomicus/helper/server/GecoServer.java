@@ -9,6 +9,7 @@ import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.ForbiddenResponse;
 import io.javalin.http.NotFoundResponse;
+import io.javalin.http.UnauthorizedResponse;
 import io.javalin.http.staticfiles.Location;
 import io.javalin.websocket.WsContext;
 
@@ -128,11 +129,19 @@ public class GecoServer
 	// "Connexion joueurs") sans avoir à deviner ou dupliquer le calcul
 	// "port + 8363" fait côté serveur.
 	private Integer mHttpsPort;
+	// Multi-session serveur, Phase 2 (21/09/2026) : comptes animateurs et
+	// sessions de connexion - voir jyt.geconomicus.helper.server.auth.
+	// mAnimatorService réutilise l'EntityManagerFactory déjà créée pour
+	// GameService (même raisonnement que mBackupService ci-dessus), plutôt
+	// que d'en ouvrir une seconde vers la même base.
+	private final jyt.geconomicus.helper.server.auth.AnimatorService mAnimatorService;
+	private final jyt.geconomicus.helper.server.auth.SessionService mSessionService = new jyt.geconomicus.helper.server.auth.SessionService();
 
 	public GecoServer(final GameService pGameService)
 	{
 		mGameService = pGameService;
 		mBackupService = new BackupService(pGameService.getEntityManagerFactory(), Path.of("backups-tmp")); //$NON-NLS-1$
+		mAnimatorService = new jyt.geconomicus.helper.server.auth.AnimatorService(pGameService.getEntityManagerFactory());
 	}
 
 	/** Résout un des trois catalogues étape 3 par son nom d'URL ; 404 si inconnu. */
@@ -274,6 +283,14 @@ public class GecoServer
 		app.exception(ForbiddenResponse.class, (e, ctx) -> {
 			System.out.println("[ERREUR 403] " + ctx.method() + " " + ctx.path() + " : " + e.getMessage()); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 			ctx.status(403).json(java.util.Map.of("error", e.getMessage())); //$NON-NLS-1$
+		});
+		// Multi-session serveur, Phase 2 (21/09/2026) : 401, distinct du 403
+		// ci-dessus - "pas connecté du tout" (voir requireAnimator) plutôt que
+		// "connecté mais rôle insuffisant" (voir requireAdmin, qui lève un 403
+		// ForbiddenResponse classique une fois l'identité déjà établie).
+		app.exception(UnauthorizedResponse.class, (e, ctx) -> {
+			System.out.println("[ERREUR 401] " + ctx.method() + " " + ctx.path() + " : " + e.getMessage()); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+			ctx.status(401).json(java.util.Map.of("error", e.getMessage())); //$NON-NLS-1$
 		});
 
 		// Chargement des plugins "système d'échange" (voir docs/11-plugin-api-contrat.md).
@@ -604,7 +621,146 @@ public class GecoServer
 			}
 		});
 
+		// --- Authentification (comptes animateurs, multi-session serveur, Phase 2, 21/09/2026) ---
+		// Voir jyt.geconomicus.helper.server.auth (AnimatorService, SessionService) et
+		// requireAnimator/requireAdmin plus bas dans ce fichier pour le détail du
+		// mécanisme. Volontairement un en-tête "X-Session-Token" (voir Api.js, même
+		// convention que "X-Game-Pin"), jamais un cookie.
+
+		pApp.post("/api/auth/login", ctx -> { //$NON-NLS-1$
+			// Même frein de débit que /unlock (10 tentatives/minute/IP) - un
+			// mot de passe se devine par force brute exactement comme un PIN,
+			// même raisonnement.
+			if (!allowRequest(ctx, "login", 10, 60)) //$NON-NLS-1$
+			{
+				ctx.status(429).json(java.util.Map.of("error", "Trop de tentatives, réessayez dans un instant.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			final Dtos.LoginRequest req = ctx.bodyAsClass(Dtos.LoginRequest.class);
+			final jyt.geconomicus.helper.Animator animator = mAnimatorService.verifyLogin(req.login(), req.password());
+			if (animator == null)
+			{
+				ctx.status(401).json(java.util.Map.of("error", "Identifiant ou mot de passe incorrect.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			final String token = mSessionService.createSession(animator.getId());
+			ctx.json(java.util.Map.of("token", token, "animator", Dtos.AnimatorDto.from(animator))); //$NON-NLS-1$ //$NON-NLS-2$
+		});
+
+		pApp.post("/api/auth/logout", ctx -> { //$NON-NLS-1$
+			mSessionService.invalidateSession(ctx.header("X-Session-Token")); //$NON-NLS-1$
+			ctx.status(204);
+		});
+
+		// Consultée au chargement de l'application (voir ensureAuthenticated()
+		// côté app.js) pour savoir si l'écran de connexion doit s'afficher -
+		// et, si oui, si c'est un premier démarrage (aucun compte du tout,
+		// écran de création du premier administrateur) ou une reconnexion
+		// normale (écran de connexion classique). setupNeeded n'a de sens que
+		// dans la réponse 401 : un animateur déjà connecté n'a pas besoin de
+		// cette information.
+		pApp.get("/api/auth/me", ctx -> { //$NON-NLS-1$
+			final jyt.geconomicus.helper.Animator animator = resolveCurrentAnimator(ctx);
+			if (animator == null)
+			{
+				final boolean setupNeeded = mAnimatorService.listAnimators().isEmpty();
+				ctx.status(401).json(java.util.Map.of("error", "Non connecté.", "setupNeeded", setupNeeded)); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			ctx.json(Dtos.AnimatorDto.from(animator));
+		});
+
+		// Liste des comptes - réservée à ADMIN (écran "Comptes animateurs",
+		// Paramètres).
+		pApp.get("/api/animators", ctx -> { //$NON-NLS-1$
+			requireAdmin(ctx);
+			ctx.json(mAnimatorService.listAnimators().stream().map(Dtos.AnimatorDto::from).toList());
+		});
+
+		// Création d'un compte. CAS PARTICULIER volontaire (bootstrap) : si
+		// AUCUN compte n'existe encore sur ce serveur, cette route est
+		// accessible SANS connexion (personne ne peut être connecté sur un
+		// serveur qui n'a encore aucun compte !) et force le rôle ADMIN quel
+		// que soit celui demandé - c'est la seule façon de créer le tout
+		// premier compte (voir aussi AnimatorService.createAnimator, qui lui
+		// rattache automatiquement toutes les parties déjà existantes). Dès
+		// qu'au moins un compte existe, la route redevient normalement
+		// réservée à ADMIN.
+		pApp.post("/api/animators", ctx -> { //$NON-NLS-1$
+			final boolean isBootstrap = mAnimatorService.listAnimators().isEmpty();
+			if (!isBootstrap)
+				requireAdmin(ctx);
+			final Dtos.CreateAnimatorRequest req = ctx.bodyAsClass(Dtos.CreateAnimatorRequest.class);
+			final jyt.geconomicus.helper.Animator.Role role = isBootstrap ? jyt.geconomicus.helper.Animator.Role.ADMIN
+					: jyt.geconomicus.helper.Animator.Role.valueOf(req.role());
+			try
+			{
+				final jyt.geconomicus.helper.Animator created = mAnimatorService.createAnimator(req.login(),
+						req.displayName(), req.password(), role);
+				ctx.status(201).json(Dtos.AnimatorDto.from(created));
+			}
+			catch (final jyt.geconomicus.helper.server.auth.AnimatorService.DuplicateLoginException e)
+			{
+				ctx.status(409).json(java.util.Map.of("error", "Cet identifiant est déjà pris.")); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+		});
+
+		// Réinitialisation d'un mot de passe - réservée à ADMIN (écran
+		// "Comptes animateurs").
+		pApp.put("/api/animators/{id}/password", ctx -> { //$NON-NLS-1$
+			requireAdmin(ctx);
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final Dtos.ResetPasswordRequest req = ctx.bodyAsClass(Dtos.ResetPasswordRequest.class);
+			mAnimatorService.resetPassword(id, req.newPassword());
+			ctx.status(204);
+		});
+
+		// Protection des réglages PARTAGÉS PAR TOUT LE SERVEUR (catalogues,
+		// plugins, réglages, sauvegarde) - décision utilisateur du 21/09/2026 :
+		// réservés au rôle ADMIN, distinct des animateurs "simples" qui gèrent
+		// seulement leurs propres parties (voir Phase 3, filtrage par
+		// propriétaire, pas encore fait à ce stade). Regroupés ici en un seul
+		// bloc plutôt qu'éparpillés à côté de chaque route, pour que
+		// l'ensemble de la surface protégée reste visible et auditable en un
+		// coup d'œil - voir requireAdmin/requireAnimator plus bas dans ce
+		// fichier.
+		//
+		// IMPORTANT, vérifié explicitement (voir player-view.js/i18n.js) : les
+		// routes de LECTURE /api/settings (GET), /api/catalogs/{kind} (GET) et
+		// /api/languages (GET) restent volontairement SANS AUCUNE protection -
+		// elles sont lues directement par les smartphones des JOUEURS (choix
+		// de langue, rendu des cartes...), qui n'ont et n'auront jamais de
+		// notion de compte. Seules les routes de LISTE/MUTATION réservées à
+		// l'écran animateur sont protégées ci-dessous.
+		pApp.before("/api/plugins", ctx -> requireAnimator(ctx)); //$NON-NLS-1$
+		pApp.before("/api/plugins/*", ctx -> requireAnimator(ctx)); //$NON-NLS-1$
+		pApp.before("/api/plugins/{id}/enabled", ctx -> requireAdmin(ctx)); //$NON-NLS-1$
+		pApp.before("/api/plugins/{id}", ctx -> requireAdmin(ctx)); //$NON-NLS-1$
+		pApp.before("/api/backup", ctx -> requireAdmin(ctx)); //$NON-NLS-1$
+		// GET /api/settings reste ouvert (voir plus haut) - seule sa mutation
+		// (PUT) est réservée à ADMIN, d'où la vérification de méthode plutôt
+		// qu'un before() qui s'appliquerait aux deux (même chemin exact).
+		pApp.before("/api/settings", ctx -> { //$NON-NLS-1$
+			if (ctx.method() == io.javalin.http.HandlerType.PUT)
+				requireAdmin(ctx);
+		});
+		pApp.before("/api/catalogs/{kind}/{id}", ctx -> requireAdmin(ctx)); //$NON-NLS-1$
+		pApp.before("/api/languages/{code}", ctx -> requireAdmin(ctx)); //$NON-NLS-1$
+		pApp.before("/api/languages/{code}/display", ctx -> requireAdmin(ctx)); //$NON-NLS-1$
+
 		// --- Parties ---
+		// Multi-session serveur, Phase 2 : la liste et la création de parties
+		// exigent désormais un animateur connecté, n'importe quel rôle -
+		// l'écran "Nouvelle partie"/"Parties récentes" de l'animateur n'est de
+		// toute façon plus atteignable côté front sans être déjà connecté
+		// (voir ensureAuthenticated() dans app.js). Étape suivante déjà
+		// planifiée (Phase 3) : filtrer la LISTE pour ne montrer que les
+		// parties de l'animateur connecté - pour l'instant, un animateur
+		// connecté voit encore TOUTES les parties, exactement comme avant
+		// l'introduction des comptes, seule la présence d'une connexion est
+		// désormais vérifiée.
+		pApp.before("/api/games", ctx -> requireAnimator(ctx)); //$NON-NLS-1$
+		pApp.before("/api/games/compare", ctx -> requireAnimator(ctx)); //$NON-NLS-1$
 
 		// Remonté par un utilisateur : protection par code PIN, activable/
 		// désactivable globalement (écran Paramètres, AppSettings.protectionEnabled).
@@ -701,11 +857,26 @@ public class GecoServer
 
 		// Création d'une partie : équivalent web de la boîte de dialogue "nouvelle partie" Swing.
 		pApp.post("/api/games", ctx -> { //$NON-NLS-1$
+			// requireAnimator() a déjà été vérifié par le before() ci-dessus,
+			// mais on a ici besoin de SON IDENTITÉ (pas juste sa présence) pour
+			// rattacher la partie créée à son compte (voir Game.owner) - une
+			// nouvelle partie a désormais TOUJOURS un propriétaire dès sa
+			// création, plus besoin d'attendre une migration comme pour les
+			// parties déjà existantes avant l'introduction des comptes (voir
+			// AnimatorService.createAnimator).
+			final jyt.geconomicus.helper.Animator currentAnimator = requireAnimator(ctx);
 			final CreateGameRequest req = ctx.bodyAsClass(CreateGameRequest.class);
 			final Game game = mGameService.createGame(req.moneySystem(), req.nbTurnsPlanned(), req.animatorPseudo(),
 					req.animatorEmail(), req.description(), req.curDate(), req.location(), req.moneyCardsFactor(),
 					req.turnDurationSeconds(), req.weakCoinValue(), req.tokenPenalty(), req.startingGoods(),
 					req.strictTrm(), req.weakCardValueInDU());
+			mGameService.setGameOwner(game.getId(), currentAnimator.getId());
+			// Même raisonnement que game.setPin(pin) juste en dessous : reflète
+			// localement, sur l'objet détaché déjà en main, l'écriture qui vient
+			// d'être faite séparément en base par setGameOwner() ci-dessus -
+			// cohérence de l'objet retourné avec la base, au cas où owner
+			// deviendrait un jour utile à GameDetailDto.
+			game.setOwner(currentAnimator);
 			// Remonté par un utilisateur : PIN à 6 chiffres généré uniquement si la
 			// protection est activée globalement (écran Paramètres) - une partie
 			// créée pendant que la protection est désactivée reste accessible sans
@@ -1754,6 +1925,50 @@ public class GecoServer
 			return; // protection désactivée globalement : comportement historique inchangé, aucune installation existante affectée
 		if (!mGameService.verifyGamePin(pGameId, pCtx.header("X-Game-Pin"))) //$NON-NLS-1$
 			throw new ForbiddenResponse("PIN de partie requis ou incorrect."); //$NON-NLS-1$
+	}
+
+	/**
+	 * Multi-session serveur, Phase 2 (21/09/2026) : résout l'animateur
+	 * actuellement connecté depuis l'en-tête "X-Session-Token" (même
+	 * convention que "X-Game-Pin" ci-dessus - voir SessionService pour le
+	 * choix d'un en-tête plutôt qu'un cookie). Retourne null sans lever
+	 * d'exception si non connecté/jeton invalide : laisse l'appelant décider
+	 * (une route peut vouloir un comportement différent selon qu'un animateur
+	 * est connecté ou non, voir GET /api/auth/me) - requireAnimator/
+	 * requireAdmin ci-dessous sont les variantes qui lèvent directement.
+	 */
+	private jyt.geconomicus.helper.Animator resolveCurrentAnimator(final Context pCtx)
+	{
+		final Integer animatorId = mSessionService.resolveSession(pCtx.header("X-Session-Token")); //$NON-NLS-1$
+		if (animatorId == null)
+			return null;
+		return mAnimatorService.getAnimator(animatorId);
+	}
+
+	/** Exige un animateur connecté, n'importe quel rôle. 401 sinon (voir UnauthorizedResponse ci-dessus). */
+	private jyt.geconomicus.helper.Animator requireAnimator(final Context pCtx)
+	{
+		final jyt.geconomicus.helper.Animator animator = resolveCurrentAnimator(pCtx);
+		if (animator == null)
+			throw new UnauthorizedResponse("Connexion requise."); //$NON-NLS-1$
+		return animator;
+	}
+
+	/**
+	 * Exige un animateur connecté avec le rôle ADMIN (catalogues, plugins,
+	 * réglages partagés, gestion des comptes - voir la discussion du
+	 * 21/09/2026 avec l'utilisateur sur le découpage des droits). 401 si pas
+	 * connecté du tout, 403 si connecté mais rôle ANIMATEUR insuffisant -
+	 * distinction volontaire (voir les deux gestionnaires d'exception
+	 * ci-dessus), utile pour que le front sache s'il doit renvoyer vers
+	 * l'écran de connexion ou simplement masquer l'action.
+	 */
+	private jyt.geconomicus.helper.Animator requireAdmin(final Context pCtx)
+	{
+		final jyt.geconomicus.helper.Animator animator = requireAnimator(pCtx);
+		if (animator.getRole() != jyt.geconomicus.helper.Animator.Role.ADMIN)
+			throw new ForbiddenResponse("Réservé aux comptes administrateur."); //$NON-NLS-1$
+		return animator;
 	}
 
 	/**

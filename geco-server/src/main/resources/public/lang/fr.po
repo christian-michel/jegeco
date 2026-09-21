@@ -2152,3 +2152,75 @@ msgstr "PDF pas encore ajouté localement — voir <code>public/docs-offline/REA
 
 msgid "docs.offline_pdf_missing_simple"
 msgstr "PDF pas encore ajouté localement."
+
+msgid "auth.login_title"
+msgstr "Connexion animateur"
+
+msgid "auth.login_label"
+msgstr "Identifiant"
+
+msgid "auth.password_label"
+msgstr "Mot de passe"
+
+msgid "auth.login_error"
+msgstr "Identifiant ou mot de passe incorrect."
+
+msgid "auth.login_submit"
+msgstr "Se connecter"
+
+msgid "auth.setup_title"
+msgstr "Bienvenue - créez le premier compte administrateur"
+
+msgid "auth.setup_intro"
+msgstr "Aucun compte n'existe encore sur ce serveur. Ce premier compte aura le rôle administrateur et héritera automatiquement de toutes les parties déjà présentes."
+
+msgid "auth.display_name_label"
+msgstr "Nom affiché"
+
+msgid "auth.setup_submit"
+msgstr "Créer le compte"
+
+msgid "auth.setup_error"
+msgstr "Impossible de créer ce compte (identifiant déjà pris, ou mot de passe trop court)."
+
+msgid "auth.logout_btn"
+msgstr "Se déconnecter"
+
+msgid "settings.animators_title"
+msgstr "Comptes animateurs"
+
+msgid "settings.animators_intro"
+msgstr "Chaque animateur dispose de son propre compte et de ses propres parties. Le rôle \"Administrateur\" donne en plus accès aux réglages partagés par tout le serveur (cette page, les catalogues, les plugins)."
+
+msgid "settings.animators_col_login"
+msgstr "Identifiant"
+
+msgid "settings.animators_col_name"
+msgstr "Nom affiché"
+
+msgid "settings.animators_col_role"
+msgstr "Rôle"
+
+msgid "settings.animators_new_title"
+msgstr "Créer un compte"
+
+msgid "settings.animators_role_animateur"
+msgstr "Animateur"
+
+msgid "settings.animators_role_admin"
+msgstr "Administrateur"
+
+msgid "settings.animators_create_btn"
+msgstr "Créer le compte"
+
+msgid "settings.animators_create_error"
+msgstr "Impossible de créer ce compte (identifiant déjà pris, ou champs invalides)."
+
+msgid "settings.animators_reset_password_btn"
+msgstr "Réinitialiser le mot de passe"
+
+msgid "settings.animators_reset_password_prompt"
+msgstr "Nouveau mot de passe pour {login} :"
+
+msgid "settings.animators_reset_password_done"
+msgstr "Mot de passe réinitialisé."

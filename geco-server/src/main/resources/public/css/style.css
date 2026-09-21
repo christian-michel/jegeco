@@ -72,6 +72,8 @@ body.money-libre .nav-item.active { background: var(--accent-libre); }
 .nav-icon svg, .stat-icon svg, .money-choice-icon svg { width: 18px; height: 18px; display: block; }
 
 .sidebar-footer { font-size: 0.68rem; color: #4d5578; padding: 0 0.25rem; }
+.sidebar-logout-btn { background: none; border: none; padding: 0; font: inherit; font-size: 0.68rem; color: #4d5578; text-decoration: underline; cursor: pointer; }
+.sidebar-logout-btn:hover { color: var(--sidebar-text); }
 
 .content { flex: 1; padding: 1.75rem 2.25rem; min-width: 0; }
 
@@ -109,6 +111,16 @@ body.money-libre .btn-primary { background: var(--accent-libre); }
 
 /* ============ Cartes génériques ============ */
 .panel-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.4em; }
+
+/* ============ Multi-session serveur, Phase 2 (21/09/2026) : écran de connexion ============ */
+.auth-gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--content-bg); padding: 1.5rem; }
+.auth-card { width: 100%; max-width: 380px; }
+.auth-card h2 { font-size: 1.05rem; margin: 0 0 0.6rem; }
+.auth-card form.hidden { display: none; }
+.auth-card .field-label { margin-top: 0.7rem; }
+.auth-card .field-input { width: 100%; box-sizing: border-box; }
+.auth-card .btn { width: 100%; }
+.auth-error { color: var(--danger); background: var(--danger-bg); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.85rem; margin-top: 0.6rem; }
 
 /* Liste à cocher des parties à comparer (vue "Comparer des parties") */
 .compare-games-list { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0 1.25rem; max-height: 340px; overflow-y: auto; }

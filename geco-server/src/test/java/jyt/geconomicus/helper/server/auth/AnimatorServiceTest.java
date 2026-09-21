@@ -166,6 +166,35 @@ class AnimatorServiceTest
 	}
 
 	@Test
+	void testResetPasswordAllowsLoginWithNewPasswordAndRejectsOldOne() throws Exception
+	{
+		final Animator animator = mAnimatorService.createAnimator("dora", "Dora", "ancienMotDePasse", Role.ANIMATEUR); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+
+		mAnimatorService.resetPassword(animator.getId(), "nouveauMotDePasse"); //$NON-NLS-1$
+
+		assertNull(mAnimatorService.verifyLogin("dora", "ancienMotDePasse"), "l'ancien mot de passe ne doit plus fonctionner"); //$NON-NLS-1$ //$NON-NLS-2$
+		assertNotNull(mAnimatorService.verifyLogin("dora", "nouveauMotDePasse"), "le nouveau mot de passe doit fonctionner"); //$NON-NLS-1$ //$NON-NLS-2$
+	}
+
+	/**
+	 * Vérifie GameService.setGameOwner (ajouté en Phase 2, 21/09/2026) : une
+	 * partie créée par un animateur connecté doit lui être rattachée dès sa
+	 * création (voir POST /api/games côté GecoServer, qui appelle cette
+	 * méthode juste après GameService.createGame).
+	 */
+	@Test
+	void testSetGameOwnerAttachesGameToTheGivenAnimator() throws Exception
+	{
+		final Animator animator = mAnimatorService.createAnimator("erwan", "Erwan", "motdepasse1", Role.ANIMATEUR); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final Game game = mGameService.createGame(Game.MONEY_TROC, 12, "AnimTest", null, "partie fraîche", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-09-21", "Ceres", 1, 180, 1.0, false, 4, false, 0.5); //$NON-NLS-1$ //$NON-NLS-2$
+
+		mGameService.setGameOwner(game.getId(), animator.getId());
+
+		assertEquals(animator.getId(), mGameService.getGame(game.getId()).getOwner().getId());
+	}
+
+	@Test
 	void testPasswordHasherProducesDifferentHashesForSamePasswordAndVerifiesCorrectly()
 	{
 		final String hash1 = PasswordHasher.hash("memePassword"); //$NON-NLS-1$

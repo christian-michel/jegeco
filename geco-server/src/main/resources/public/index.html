@@ -13,7 +13,51 @@
 <script src="/js/vendor/qrcode.js"></script>
 </head>
 <body>
-	<div class="app-shell">
+	<!-- Multi-session serveur, Phase 2 (21/09/2026) : écran de connexion/
+	     création du premier compte, affiché AVANT tout le reste de
+	     l'application - voir ensureAuthenticated() dans app.js, qui bascule
+	     entre celui-ci et #appShell selon le résultat de GET /api/auth/me.
+	     Visible par défaut (pas de classe "hidden" ici) pour éviter tout
+	     "flash" de contenu animateur avant que la vérification de connexion
+	     n'ait eu le temps de répondre - c'est #appShell qui est caché par
+	     défaut ci-dessous, à l'inverse de tous les autres écrans de ce
+	     fichier. -->
+	<div id="authGate" class="auth-gate">
+		<div class="panel-card auth-card">
+			<div class="sidebar-logo" style="justify-content:center;margin-bottom:1.2rem;">
+				<span class="logo-mark">Ğ</span>
+				<span class="logo-text">GECONOMICUS<br><strong>HELPER</strong></span>
+			</div>
+
+			<!-- Connexion normale (au moins un compte existe déjà sur ce serveur). -->
+			<form id="authLoginForm">
+				<h2 data-i18n="auth.login_title">Connexion animateur</h2>
+				<label class="field-label" data-i18n="auth.login_label">Identifiant</label>
+				<input id="authLoginField" type="text" class="field-input" autocomplete="username" required>
+				<label class="field-label" data-i18n="auth.password_label">Mot de passe</label>
+				<input id="authPasswordField" type="password" class="field-input" autocomplete="current-password" required>
+				<div id="authLoginError" class="auth-error hidden"></div>
+				<button type="submit" class="btn btn-primary" style="margin-top:0.8rem;" data-i18n="auth.login_submit">Se connecter</button>
+			</form>
+
+			<!-- Premier démarrage (AUCUN compte n'existe encore sur ce serveur) -
+			     voir setupNeeded dans la réponse de GET /api/auth/me. -->
+			<form id="authSetupForm" class="hidden">
+				<h2 data-i18n="auth.setup_title">Bienvenue - créez le premier compte administrateur</h2>
+				<p class="galilee-explainer" data-i18n="auth.setup_intro">Aucun compte n'existe encore sur ce serveur. Ce premier compte aura le rôle administrateur et héritera automatiquement de toutes les parties déjà présentes.</p>
+				<label class="field-label" data-i18n="auth.login_label">Identifiant</label>
+				<input id="authSetupLoginField" type="text" class="field-input" autocomplete="username" required>
+				<label class="field-label" data-i18n="auth.display_name_label">Nom affiché</label>
+				<input id="authSetupDisplayNameField" type="text" class="field-input" required>
+				<label class="field-label" data-i18n="auth.password_label">Mot de passe</label>
+				<input id="authSetupPasswordField" type="password" class="field-input" autocomplete="new-password" required minlength="8">
+				<div id="authSetupError" class="auth-error hidden"></div>
+				<button type="submit" class="btn btn-primary" style="margin-top:0.8rem;" data-i18n="auth.setup_submit">Créer le compte</button>
+			</form>
+		</div>
+	</div>
+
+	<div class="app-shell hidden" id="appShell">
 		<!-- Sidebar sombre, persistante, façon maquette -->
 		<aside class="sidebar">
 			<div class="sidebar-logo">
@@ -70,6 +114,13 @@
 			</nav>
 
 			<div id="connStatus" class="conn-status conn-offline">connexion...</div>
+			<!-- Multi-session serveur, Phase 2 (21/09/2026) : identité de
+			     l'animateur connecté + déconnexion - voir ensureAuthenticated()/
+			     bindLogoutButton() dans app.js. -->
+			<div class="sidebar-footer" id="currentAnimatorFooter">
+				<span id="currentAnimatorName"></span>
+				· <button type="button" id="btnLogout" class="sidebar-logout-btn" data-i18n="auth.logout_btn">Se déconnecter</button>
+			</div>
 			<div class="sidebar-footer">v2.0.0 · Phase 2 (web)</div>
 		</aside>
 
@@ -427,6 +478,57 @@
 						<input id="settingsProtectionEnabled" type="checkbox">
 						<span data-i18n="settings.protection_label">Activer la protection par code</span>
 					</label>
+				</div>
+
+				<!-- Multi-session serveur, Phase 2 (21/09/2026) : comptes
+				     animateurs - visible uniquement pour le rôle ADMIN (voir
+				     applyRoleVisibility() dans app.js, classe "hidden" posée/
+				     retirée selon le rôle du compte connecté). Un ANIMATEUR
+				     simple ne voit pas cette section - cohérent avec le fait que
+				     le serveur la refuse de toute façon côté API. -->
+				<div class="panel-card hidden" id="settingsAnimatorsPanel">
+					<h3 class="chart-title" data-i18n="settings.animators_title">Comptes animateurs</h3>
+					<p class="galilee-explainer" data-i18n="settings.animators_intro">Chaque animateur dispose de son propre compte et de ses propres parties. Le rôle "Administrateur" donne en plus accès aux réglages partagés par tout le serveur (cette page, les catalogues, les plugins).</p>
+					<table class="activity-table" id="settingsAnimatorsTable">
+						<thead>
+							<tr>
+								<th data-i18n="settings.animators_col_login">Identifiant</th>
+								<th data-i18n="settings.animators_col_name">Nom affiché</th>
+								<th data-i18n="settings.animators_col_role">Rôle</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody id="settingsAnimatorsTableBody"></tbody>
+					</table>
+
+					<h4 style="margin-top:1.2rem;" data-i18n="settings.animators_new_title">Créer un compte</h4>
+					<form id="settingsNewAnimatorForm">
+						<div class="field-row">
+							<div>
+								<label class="field-label" data-i18n="auth.login_label">Identifiant</label>
+								<input id="settingsNewAnimatorLogin" type="text" class="field-input" required>
+							</div>
+							<div>
+								<label class="field-label" data-i18n="auth.display_name_label">Nom affiché</label>
+								<input id="settingsNewAnimatorDisplayName" type="text" class="field-input" required>
+							</div>
+						</div>
+						<div class="field-row">
+							<div>
+								<label class="field-label" data-i18n="auth.password_label">Mot de passe</label>
+								<input id="settingsNewAnimatorPassword" type="password" class="field-input" autocomplete="new-password" required minlength="8">
+							</div>
+							<div>
+								<label class="field-label" data-i18n="settings.animators_col_role">Rôle</label>
+								<select id="settingsNewAnimatorRole" class="field-input">
+									<option value="ANIMATEUR" data-i18n="settings.animators_role_animateur">Animateur</option>
+									<option value="ADMIN" data-i18n="settings.animators_role_admin">Administrateur</option>
+								</select>
+							</div>
+						</div>
+						<div id="settingsNewAnimatorError" class="auth-error hidden"></div>
+						<button type="submit" class="btn btn-primary btn-small" style="margin-top:0.7rem;" data-i18n="settings.animators_create_btn">Créer le compte</button>
+					</form>
 				</div>
 			</section>
 

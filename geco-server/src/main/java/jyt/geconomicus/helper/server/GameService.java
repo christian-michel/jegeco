@@ -204,6 +204,37 @@ public class GameService
 	}
 
 	/**
+	 * Rattache une partie à un compte animateur (voir Game.owner, Animator) -
+	 * méthode SÉPARÉE de createGame() plutôt qu'un paramètre supplémentaire de
+	 * celle-ci, pour ne pas devoir toucher tous ses appels existants (tests
+	 * inclus) rien que pour cet ajout du 21/09/2026 (multi-session serveur,
+	 * Phase 2) : GecoServer l'appelle juste après createGame(), désormais que
+	 * la création d'une partie exige un animateur connecté (voir POST
+	 * /api/games).
+	 */
+	public void setGameOwner(final int pGameId, final int pAnimatorId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				throw new IllegalArgumentException("Game not found: " + pGameId); //$NON-NLS-1$
+			final jyt.geconomicus.helper.Animator animator = em.find(jyt.geconomicus.helper.Animator.class,
+					pAnimatorId);
+			if (animator == null)
+				throw new IllegalArgumentException("Animator not found: " + pAnimatorId); //$NON-NLS-1$
+			em.getTransaction().begin();
+			game.setOwner(animator);
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
 	 * Supprime une partie et tout ce qui lui est rattaché (joueurs, événements) -
 	 * le cascade REMOVE déjà configuré sur Game.players/events (voir Game.java) s'en
 	 * charge automatiquement, pas besoin de les supprimer un par un ici.

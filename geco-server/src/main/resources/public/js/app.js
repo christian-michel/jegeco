@@ -126,6 +126,21 @@ function storeGamePin(pGameId, pPin) {
 	try { localStorage.setItem(`gecoGamePin_${pGameId}`, pPin); } catch (err) { /* pas grave si indisponible (navigation privée, etc.) */ }
 }
 
+// Multi-session serveur, Phase 2 (21/09/2026) : jeton de connexion animateur
+// (voir SessionService côté serveur) - même mécanisme de stockage que
+// getStoredGamePin/storeGamePin ci-dessus (localStorage, un seul appareil se
+// reconnecte automatiquement), même en-tête HTTP ("X-Session-Token", même
+// convention que "X-Game-Pin").
+function getStoredSessionToken() {
+	try { return localStorage.getItem("gecoSessionToken"); } catch (err) { return null; }
+}
+function storeSessionToken(pToken) {
+	try { localStorage.setItem("gecoSessionToken", pToken); } catch (err) { /* pas grave si indisponible */ }
+}
+function clearStoredSessionToken() {
+	try { localStorage.removeItem("gecoSessionToken"); } catch (err) { /* pas grave si indisponible */ }
+}
+
 async function api(path, options = {}) {
 	// Remonté par un utilisateur : si un PIN est déjà mémorisé pour cette partie
 	// (voir storeGamePin), on l'inclut systématiquement - sans effet si la
@@ -136,7 +151,25 @@ async function api(path, options = {}) {
 		const pin = getStoredGamePin(gameIdMatch[1]);
 		if (pin) headers["X-Game-Pin"] = pin;
 	}
+	// Jeton de session animateur, inclus systématiquement (voir ci-dessus) -
+	// sans effet sur les routes qui n'en ont pas besoin (le serveur ignore
+	// l'en-tête dans ce cas, exactement comme X-Game-Pin sur une partie non
+	// protégée).
+	const sessionToken = getStoredSessionToken();
+	if (sessionToken) headers["X-Session-Token"] = sessionToken;
 	let res = await fetch(path, { ...options, headers });
+	// Session expirée/invalide (ex. redémarrage du serveur - les sessions
+	// sont en mémoire, voir SessionService) : plutôt que de laisser chaque
+	// appelant gérer un 401 individuellement, on efface le jeton devenu
+	// invalide et on relance l'écran de connexion - jamais pour les routes
+	// d'authentification elles-mêmes (un login qui échoue avec le mauvais
+	// mot de passe ne doit PAS provoquer ce comportement, juste remonter
+	// l'erreur normalement à l'appelant, voir authLoginForm plus bas).
+	if ((res.status === 401) && !path.startsWith("/api/auth/") && (mBackgroundRefreshDepth === 0)) {
+		clearStoredSessionToken();
+		await ensureAuthenticated();
+		throw new Error("Session expirée, reconnexion nécessaire.");
+	}
 	if ((res.status === 403) && gameIdMatch && (mBackgroundRefreshDepth === 0)) {
 		// Partie protégée, PIN manquant ou incorrect : le demande une fois via une
 		// simple invite navigateur (choix pragmatique - c'est une interaction rare,
@@ -160,6 +193,176 @@ async function api(path, options = {}) {
 	if (!res.ok) throw new Error(`API error ${res.status} on ${path}`);
 	if (res.status === 204) return null;
 	return res.json();
+}
+
+// ========== Multi-session serveur, Phase 2 (21/09/2026) : connexion animateur ==========
+// Voir CLAUDE.md/GecoServer.java (jyt.geconomicus.helper.server.auth) pour le
+// mécanisme serveur. Tout ce bloc gère l'écran #authGate (voir index.html) :
+// affiché avant le reste de l'application tant qu'aucune connexion valide
+// n'est établie.
+
+let mCurrentAnimator = null;
+
+/**
+ * Vérifie la connexion au tout premier chargement (et après une session
+ * expirée, voir api() ci-dessus). Bascule vers #appShell si déjà connecté,
+ * sinon affiche #authGate (écran de connexion normal, ou de création du
+ * tout premier compte si le serveur n'en a encore aucun - voir
+ * setupNeeded, renvoyé UNIQUEMENT dans la réponse 401 de GET /api/auth/me).
+ * @return {Promise<boolean>} true si déjà connecté (le reste de
+ *   l'application peut s'initialiser), false sinon (l'écran de connexion
+ *   est affiché, à l'utilisateur de se connecter).
+ */
+async function ensureAuthenticated() {
+	// Appel direct (pas via Api.getMe()/api()) : on a besoin d'inspecter le
+	// corps du 401 (champ setupNeeded), qu'api() ne remonte pas - elle lève
+	// une simple Error pour toute réponse non-ok, par conception (voir
+	// api() plus haut).
+	const token = getStoredSessionToken();
+	const headers = token ? { "X-Session-Token": token } : {};
+	let res;
+	try {
+		res = await fetch("/api/auth/me", { headers });
+	} catch (err) {
+		// Serveur injoignable au tout premier chargement (rare, mais déjà
+		// arrivé en usage réel pour d'autres requêtes - voir refreshPlayer
+		// côté player-view.js) : affiche l'écran de connexion, l'utilisateur
+		// pourra réessayer depuis là plutôt que de rester bloqué sur une
+		// page blanche.
+		showAuthScreen(false);
+		return false;
+	}
+	if (res.ok) {
+		mCurrentAnimator = await res.json();
+		el("authGate").classList.add("hidden");
+		el("appShell").classList.remove("hidden");
+		applyRoleVisibility(mCurrentAnimator.role);
+		el("currentAnimatorName").textContent = mCurrentAnimator.displayName || mCurrentAnimator.login;
+		return true;
+	}
+	clearStoredSessionToken();
+	let setupNeeded = false;
+	try { setupNeeded = !!(await res.json()).setupNeeded; } catch (err) { /* corps vide/inattendu - traité comme "connexion normale" */ }
+	showAuthScreen(setupNeeded);
+	return false;
+}
+
+function showAuthScreen(pSetupNeeded) {
+	el("appShell").classList.add("hidden");
+	el("authGate").classList.remove("hidden");
+	el("authLoginForm").classList.toggle("hidden", pSetupNeeded);
+	el("authSetupForm").classList.toggle("hidden", !pSetupNeeded);
+}
+
+/**
+ * Affiche/masque les sections réservées au rôle ADMIN (voir la discussion du
+ * 21/09/2026 avec l'utilisateur sur le découpage des droits) - purement
+ * cosmétique, le serveur refuse de toute façon ces actions à un ANIMATEUR
+ * simple (voir requireAdmin côté GecoServer) : ce n'est pas ici la barrière
+ * de sécurité, seulement une aide pour ne pas montrer des boutons qui
+ * échoueraient de toute façon.
+ */
+function applyRoleVisibility(pRole) {
+	el("settingsAnimatorsPanel").classList.toggle("hidden", pRole !== "ADMIN");
+}
+
+function bindAuthForms() {
+	el("authLoginForm").addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const errorEl = el("authLoginError");
+		errorEl.classList.add("hidden");
+		try {
+			const result = await Api.login(el("authLoginField").value, el("authPasswordField").value);
+			storeSessionToken(result.token);
+			el("authPasswordField").value = "";
+			await ensureAuthenticated();
+			initAppAfterAuth();
+		} catch (err) {
+			errorEl.textContent = window.GecoI18n.t("auth.login_error");
+			errorEl.classList.remove("hidden");
+		}
+	});
+
+	el("authSetupForm").addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const errorEl = el("authSetupError");
+		errorEl.classList.add("hidden");
+		try {
+			// Pas encore connecté (c'est justement le but de cet écran) :
+			// POST /api/animators est exceptionnellement ouvert tant qu'aucun
+			// compte n'existe encore sur le serveur (voir GecoServer, route
+			// isBootstrap) - le rôle demandé ici n'a d'ailleurs aucune
+			// importance, le serveur force ADMIN pour ce tout premier compte.
+			await Api.createAnimator({
+				login: el("authSetupLoginField").value,
+				displayName: el("authSetupDisplayNameField").value,
+				password: el("authSetupPasswordField").value,
+				role: "ADMIN",
+			});
+			const result = await Api.login(el("authSetupLoginField").value, el("authSetupPasswordField").value);
+			storeSessionToken(result.token);
+			await ensureAuthenticated();
+			initAppAfterAuth();
+		} catch (err) {
+			errorEl.textContent = window.GecoI18n.t("auth.setup_error");
+			errorEl.classList.remove("hidden");
+		}
+	});
+
+	el("btnLogout").addEventListener("click", async () => {
+		try { await Api.logout(); } catch (err) { /* jeton déjà invalide côté serveur - sans importance, on nettoie quand même localement */ }
+		clearStoredSessionToken();
+		mCurrentAnimator = null;
+		// Rechargement complet plutôt qu'un simple retour à l'écran de
+		// connexion : remet à zéro tout l'état en mémoire de l'application
+		// (partie ouverte, WebSocket, minuteurs...) sans avoir à réimplémenter
+		// cette remise à zéro à la main pour chaque état existant.
+		window.location.reload();
+	});
+
+	// Création d'un nouvel animateur (écran Paramètres, réservé ADMIN - voir
+	// renderAnimatorsPanel). Lié une seule fois ici (comme le reste de
+	// bindAuthForms, appelée une fois par bindActions) plutôt qu'à chaque
+	// affichage de l'écran Paramètres, pour ne jamais accumuler plusieurs
+	// gestionnaires sur le même formulaire.
+	el("settingsNewAnimatorForm").addEventListener("submit", async (e) => {
+		e.preventDefault();
+		const errorEl = el("settingsNewAnimatorError");
+		errorEl.classList.add("hidden");
+		try {
+			await Api.createAnimator({
+				login: el("settingsNewAnimatorLogin").value,
+				displayName: el("settingsNewAnimatorDisplayName").value,
+				password: el("settingsNewAnimatorPassword").value,
+				role: el("settingsNewAnimatorRole").value,
+			});
+			el("settingsNewAnimatorForm").reset();
+			await renderAnimatorsPanel();
+		} catch (err) {
+			errorEl.textContent = window.GecoI18n.t("settings.animators_create_error");
+			errorEl.classList.remove("hidden");
+		}
+	});
+}
+
+async function renderAnimatorsPanel() {
+	const t = window.GecoI18n.t;
+	const animators = await Api.listAnimators();
+	el("settingsAnimatorsTableBody").innerHTML = animators.map((a) => `
+		<tr>
+			<td>${escapeHtml(a.login)}</td>
+			<td>${escapeHtml(a.displayName || "")}</td>
+			<td>${a.role === "ADMIN" ? escapeHtml(t("settings.animators_role_admin")) : escapeHtml(t("settings.animators_role_animateur"))}</td>
+			<td><button type="button" class="btn btn-small" data-reset-password-id="${a.id}" data-reset-password-login="${escapeHtml(a.login)}">${escapeHtml(t("settings.animators_reset_password_btn"))}</button></td>
+		</tr>`).join("");
+	el("settingsAnimatorsTableBody").querySelectorAll("[data-reset-password-id]").forEach((btn) => {
+		btn.addEventListener("click", async () => {
+			const newPassword = window.prompt(t("settings.animators_reset_password_prompt").replace("{login}", btn.dataset.resetPasswordLogin));
+			if (!newPassword) return;
+			await Api.resetAnimatorPassword(btn.dataset.resetPasswordId, newPassword);
+			alert(t("settings.animators_reset_password_done"));
+		});
+	});
 }
 
 const Api = {
@@ -187,6 +390,13 @@ const Api = {
 	getComparison: (ids) => api(`/api/games/compare?ids=${ids.join(",")}`),
 	listPlugins: () => api("/api/plugins"),
 	setPluginEnabled: (id, enabled) => api(`/api/plugins/${id}/enabled`, { method: "PUT", body: JSON.stringify({ enabled }) }),
+	// Multi-session serveur, Phase 2 (21/09/2026) : comptes animateurs / connexion.
+	login: (login, password) => api("/api/auth/login", { method: "POST", body: JSON.stringify({ login, password }) }),
+	logout: () => api("/api/auth/logout", { method: "POST" }),
+	getMe: () => api("/api/auth/me"),
+	listAnimators: () => api("/api/animators"),
+	createAnimator: (body) => api("/api/animators", { method: "POST", body: JSON.stringify(body) }),
+	resetAnimatorPassword: (id, newPassword) => api(`/api/animators/${id}/password`, { method: "PUT", body: JSON.stringify({ newPassword }) }),
 	// Remonté par un utilisateur : écran Paramètres (langue par défaut, son,
 	// langues personnalisées) - voir AppSettings/LanguageService côté serveur.
 	getSettings: () => api("/api/settings"),
@@ -677,6 +887,14 @@ async function renderSettingsView() {
 	el("settingsGameModeClassic").checked = settings.gameMode !== "smartphone";
 	el("settingsGameModeSmartphone").checked = settings.gameMode === "smartphone";
 	applyGameModeVisibility(settings.gameMode);
+
+	// Multi-session serveur, Phase 2 (21/09/2026) : comptes animateurs -
+	// visibilité déjà posée par applyRoleVisibility() à la connexion, on ne
+	// recharge la liste que si la section est effectivement visible (rôle
+	// ADMIN), pour ne pas faire un appel réseau inutile pour un ANIMATEUR
+	// simple qui de toute façon ne verrait rien.
+	if (mCurrentAnimator && (mCurrentAnimator.role === "ADMIN"))
+		renderAnimatorsPanel();
 	document.querySelectorAll("input[name=settingsGameMode]").forEach((radio) => {
 		radio.onchange = async () => {
 			const mode = document.querySelector("input[name=settingsGameMode]:checked").value;
@@ -5682,10 +5900,17 @@ function safeInit(label, fn) {
 		console.error(`Échec de l'initialisation "${label}" :`, err);
 	}
 }
-safeInit("renderIcons", renderIcons);
-safeInit("bindActions", bindActions);
-safeInit("initChartZoomButtons", initChartZoomButtons);
-safeInit("connectWs", connectWs);
+// Multi-session serveur, Phase 2 (21/09/2026) : bindAuthForms() est liée
+// INCONDITIONNELLEMENT, avant même de savoir si l'animateur est déjà
+// connecté - le formulaire de connexion doit fonctionner AVANT toute
+// connexion, par définition. Tout le reste de l'initialisation (ci-dessous,
+// dans initAppAfterAuth) est en revanche différé jusqu'à connexion réussie
+// (voir ensureAuthenticated()) : bindActions() attache des gestionnaires sur
+// des écrans/boutons qui manipulent des parties, connectWs() ouvre un
+// WebSocket qui a besoin d'un animateur identifié, etc. - aucun des deux ne
+// doit s'exécuter tant que l'écran de connexion est affiché.
+safeInit("bindAuthForms", bindAuthForms);
+
 // BUG TROUVÉ ET CORRIGÉ (19/09/2026, remonté par l'utilisateur, PDF "Retours -
 // 20260919" : "Attention aux erreurs de label par moment" sur l'écran
 // "Nouvelle partie") : refreshAppSettings() (qui peuple mAppSettings.gameMode,
@@ -5708,8 +5933,32 @@ safeInit("connectWs", connectWs);
 // une fois "smartphone" devenu le réglage par défaut (voir AppSettings.java).
 // Corrigé en attendant explicitement la fin de refreshAppSettings() avant de
 // lancer renderGamesList() - mAppSettings est alors garanti à jour avant la
-// première sélection automatique de plugin.
-(async () => {
+// première sélection automatique de plugin. Cet ordre (refreshAppSettings
+// avant renderGamesList) est PRÉSERVÉ tel quel ci-dessous, seulement déplacé
+// dans une fonction nommée pour pouvoir être relancé après une connexion
+// réussie (voir bindAuthForms) sans dupliquer cette séquence.
+let mAppInitializedAfterAuth = false;
+async function initAppAfterAuth() {
+	// Grade-fou : la connexion réussie déclenche cette fonction, mais
+	// ensureAuthenticated() peut aussi être rappelée plus tard (session
+	// expirée puis reconnexion, voir api()) - ne réexécute bindActions()/
+	// connectWs() qu'une seule fois par vraie ouverture de page, pour ne
+	// jamais attacher deux fois les mêmes gestionnaires d'événements ni
+	// ouvrir un second WebSocket.
+	if (mAppInitializedAfterAuth) return;
+	mAppInitializedAfterAuth = true;
+	safeInit("renderIcons", renderIcons);
+	safeInit("bindActions", bindActions);
+	safeInit("initChartZoomButtons", initChartZoomButtons);
+	safeInit("connectWs", connectWs);
 	await refreshAppSettings();
 	safeInit("renderGamesList", renderGamesList);
+}
+
+(async () => {
+	if (await ensureAuthenticated())
+		await initAppAfterAuth();
+	// Sinon, l'écran de connexion/création du premier compte est affiché
+	// (voir ensureAuthenticated()) - initAppAfterAuth() sera appelée après
+	// une connexion réussie, voir bindAuthForms() ci-dessus.
 })();

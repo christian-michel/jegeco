@@ -432,4 +432,31 @@ public class Dtos
 					r.createdAtEpochMs(), r.status());
 		}
 	}
+
+	// ============ Multi-session serveur, Phase 2 (21/09/2026) : comptes animateurs ============
+	// Voir jyt.geconomicus.helper.server.auth (AnimatorService, SessionService).
+
+	// Jamais de champ passwordHash ici : ce DTO est ce que le client reçoit en
+	// JSON (après connexion, ou dans la liste des comptes pour un ADMIN) - le
+	// hash n'a rien à y faire, même si techniquement inutilisable sans le sel
+	// (défense en profondeur, pas de raison de l'exposer du tout).
+	public record AnimatorDto(Integer id, String login, String displayName, String role)
+	{
+		static AnimatorDto from(final jyt.geconomicus.helper.Animator a)
+		{
+			return new AnimatorDto(a.getId(), a.getLogin(), a.getDisplayName(), a.getRole().name());
+		}
+	}
+
+	public record LoginRequest(String login, String password)
+	{
+	}
+
+	public record CreateAnimatorRequest(String login, String displayName, String password, String role)
+	{
+	}
+
+	public record ResetPasswordRequest(String newPassword)
+	{
+	}
 }
