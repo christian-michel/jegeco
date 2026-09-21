@@ -985,11 +985,7 @@ async function renderSettingsView() {
 			// jamais /api/settings qui lui est de toute façon refusé - voir
 			// requireAdmin côté GecoServer).
 			if (mCurrentAnimator.role === "ADMIN") {
-				await Api.updateSettings({
-					defaultLanguage: mAppSettings.defaultLanguage, soundMuted: mAppSettings.soundMuted,
-					soundVolume: mAppSettings.soundVolume, updateCheckUrl: mAppSettings.updateCheckUrl,
-					protectionEnabled: mAppSettings.protectionEnabled, gameMode: mode,
-				});
+				await patchServerSettings({ gameMode: mode });
 			} else {
 				mCurrentAnimator.preferredGameMode = mode;
 				await Api.updateMyPreferences({ preferredLanguage: null, preferredGameMode: mode });
@@ -1038,19 +1034,7 @@ async function renderSettingsView() {
 		// (déclenché par setLang() ci-dessous dans les deux cas), donc rien
 		// de plus à faire explicitement ici pour son cas.
 		if (mCurrentAnimator.role === "ADMIN") {
-			// Remonté par un utilisateur : l'API attend les quatre réglages à
-			// chaque mise à jour (voir Dtos.UpdateSettingsRequest, aucun n'est
-			// optionnel côté serveur) - on renvoie donc toujours l'état courant
-			// complet, en ne changeant que le champ concerné. Oublier un champ
-			// ici l'écraserait silencieusement (ex. désactiverait la
-			// protection par PIN sans le vouloir) - piège déjà rencontré une
-			// fois, d'où ce commentaire.
-			await Api.updateSettings({
-				defaultLanguage: code,
-				soundMuted: mAppSettings.soundMuted, soundVolume: mAppSettings.soundVolume,
-				updateCheckUrl: mAppSettings.updateCheckUrl, protectionEnabled: mAppSettings.protectionEnabled,
-			});
-			mAppSettings.defaultLanguage = code;
+			await patchServerSettings({ defaultLanguage: code });
 		}
 		window.GecoI18n.setLang(code);
 	};
@@ -1194,12 +1178,9 @@ async function renderSettingsView() {
 	el("settingsSoundVolumeValue").textContent = `${settings.soundVolume}%`;
 
 	async function saveSoundSettings() {
-		mAppSettings.soundMuted = el("settingsSoundMuted").checked;
-		mAppSettings.soundVolume = parseInt(el("settingsSoundVolume").value, 10);
-		await Api.updateSettings({
-			defaultLanguage: mAppSettings.defaultLanguage,
-			soundMuted: mAppSettings.soundMuted, soundVolume: mAppSettings.soundVolume,
-			updateCheckUrl: mAppSettings.updateCheckUrl, protectionEnabled: mAppSettings.protectionEnabled,
+		await patchServerSettings({
+			soundMuted: el("settingsSoundMuted").checked,
+			soundVolume: parseInt(el("settingsSoundVolume").value, 10),
 		});
 	}
 	el("settingsSoundMuted").onchange = () => {
@@ -1223,11 +1204,7 @@ async function renderSettingsView() {
 
 	el("btnSaveUpdateUrl").onclick = async () => {
 		const url = el("settingsUpdateCheckUrl").value.trim();
-		await Api.updateSettings({
-			defaultLanguage: mAppSettings.defaultLanguage, soundMuted: mAppSettings.soundMuted,
-			soundVolume: mAppSettings.soundVolume, updateCheckUrl: url, protectionEnabled: mAppSettings.protectionEnabled,
-		});
-		mAppSettings.updateCheckUrl = url;
+		await patchServerSettings({ updateCheckUrl: url });
 		settings.updateCheckUrl = url;
 	};
 
@@ -1266,12 +1243,7 @@ async function renderSettingsView() {
 	// --- Protection par code ---
 	el("settingsProtectionEnabled").checked = settings.protectionEnabled;
 	el("settingsProtectionEnabled").onchange = async () => {
-		mAppSettings.protectionEnabled = el("settingsProtectionEnabled").checked;
-		await Api.updateSettings({
-			defaultLanguage: mAppSettings.defaultLanguage, soundMuted: mAppSettings.soundMuted,
-			soundVolume: mAppSettings.soundVolume, updateCheckUrl: mAppSettings.updateCheckUrl,
-			protectionEnabled: mAppSettings.protectionEnabled,
-		});
+		await patchServerSettings({ protectionEnabled: el("settingsProtectionEnabled").checked });
 	};
 
 	// --- Plugins (systèmes d'échange) ---
@@ -3731,6 +3703,38 @@ const TIMER_RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 // défaut déjà gérée par i18n.js, son ici) - rafraîchis au démarrage et après
 // toute modification depuis l'écran Paramètres, voir renderSettingsView().
 let mAppSettings = { defaultLanguage: "fr", soundMuted: false, soundVolume: 100, protectionEnabled: false };
+
+// BUG TROUVÉ ET CORRIGÉ (21/09/2026, remonté par l'utilisateur : "le son du
+// sifflet sur l'application de l'animateur n'est pas constant [...] il
+// arrive un moment où le son repasse à son niveau le plus fort, au cours de
+// la partie"). Cause racine : chaque écran Paramètres réutilisait la copie
+// EN MÉMOIRE de mAppSettings (chargée à l'ouverture de CET onglet) pour
+// reconstruire l'objet complet attendu par PUT /api/settings (voir
+// Dtos.UpdateSettingsRequest, aucun champ optionnel côté serveur) - un AUTRE
+// onglet/appareil resté ouvert plus longtemps, avec donc une copie plus
+// ancienne (ex. soundVolume avant qu'on le baisse depuis un autre poste),
+// écrasait silencieusement TOUT réglage changé entretemps ailleurs dès qu'il
+// enregistrait lui-même un changement, même totalement indépendant (ex.
+// changer la langue par défaut réécrivait un soundVolume périmé). Repart
+// désormais systématiquement de l'état RÉEL du serveur juste avant d'écrire,
+// plutôt que de la copie potentiellement obsolète déjà en mémoire - seul le
+// champ réellement modifié est fourni par l'appelant, tout le reste vient de
+// cette lecture fraîche.
+async function patchServerSettings(pPartialUpdate) {
+	const current = await Api.getSettings();
+	// Ne garde que les six champs attendus par Dtos.UpdateSettingsRequest -
+	// current contient aussi currentVersion (lecture seule, jamais accepté en
+	// écriture), qu'il ne faut donc jamais renvoyer tel quel.
+	const merged = {
+		defaultLanguage: current.defaultLanguage, soundMuted: current.soundMuted,
+		soundVolume: current.soundVolume, updateCheckUrl: current.updateCheckUrl,
+		protectionEnabled: current.protectionEnabled, gameMode: current.gameMode,
+		...pPartialUpdate,
+	};
+	await Api.updateSettings(merged);
+	mAppSettings = { ...current, ...merged };
+	return mAppSettings;
+}
 // Étape 3, mode smartphone (écran Paramètres) : onglet actif du panneau des
 // trois tableaux (Cartes/Visuels/Avatars) - voir renderCatalogsPanel().
 let mSettingsCatalogKind = "cartes";
@@ -4299,6 +4303,25 @@ async function openEndOfTurnWizard() {
 		return Math.round(pValue * 100) / 100;
 	}
 
+	// Remonté par un utilisateur (21/09/2026, retour après une vraie partie en
+	// monnaie libre + smartphone) : "sur l'écran de l'assistant et sur l'écran
+	// des joueurs qui ont un score avec xxx,5 arrondi à l'entier supérieur.
+	// Par exemple : 53,5 devient 54". Vise à tomber juste avec la masse
+	// monétaire globale une fois affiché à l'animateur/au joueur (l'arrondi
+	// EXACT à .5 vient de weakCoinValue fractionnaire, ex. 0.5, combiné à un
+	// nombre impair de jetons faibles). Volontairement ciblé sur le cas
+	// EXACT ".5" plutôt qu'un arrondi général à l'entier : ne touche donc
+	// jamais un montant qui n'est pas pile sur une moitié d'unité (ex. 53,3
+	// reste 53,3) - round2() reste la seule fonction utilisée pour tout le
+	// reste (fin de partie, inventaire de mort individuelle...), volontairement
+	// PAS modifiée ici pour ne pas changer ces autres écrans, non concernés
+	// par ce retour.
+	function roundUpIfExactlyHalf(pValue) {
+		const rounded = round2(pValue);
+		const fraction = rounded - Math.floor(rounded);
+		return Math.abs(fraction - 0.5) < 1e-9 ? Math.ceil(rounded) : rounded;
+	}
+
 	// Étape 1 (nouvel ordre demandé par un utilisateur) : inventaire en JETONS de
 	// TOUS les joueurs actifs, mourants et survivants confondus - avant même de
 	// déclencher quoi que ce soit. Objectif : établir un contrôle de collecte
@@ -4353,7 +4376,7 @@ async function openEndOfTurnWizard() {
 				// sinon - reconverti en jetons au clic sur "Continuer" (voir
 				// wizNextAllPlayersMoney.onclick ci-dessous), jamais stocké
 				// tel quel dans ce cas.
-				const displayValue = isSmartphoneLibre ? round2(totalTokens * game.weakCoinValue) : totalTokens;
+				const displayValue = isSmartphoneLibre ? roundUpIfExactlyHalf(totalTokens * game.weakCoinValue) : totalTokens;
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}</legend>
@@ -4361,7 +4384,13 @@ async function openEndOfTurnWizard() {
 				<input type="number" class="amWeak" value="${displayValue}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}">
 			</fieldset>`;
 			}).join("")}
-			<div id="allPlayersMoneyCheckBlock" style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--border);">
+			<!-- Remonté par un utilisateur (21/09/2026, retour après une vraie
+			     partie) : le contrôle d'écart avec la masse monétaire globale
+			     ("Écart : X sur une masse de Y...") reste calculé (voir
+			     updateCheck() ci-dessous, inchangé - sans effet de bord ailleurs)
+			     mais n'est plus affiché à l'animateur - masqué plutôt que
+			     supprimé, pour rester réversible. -->
+			<div id="allPlayersMoneyCheckBlock" class="hidden" style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px solid var(--border);">
 				<p class="am-remaining" style="font-weight:600;"></p>
 			</div>
 			<button type="button" class="btn btn-primary btn-block" id="wizNextAllPlayersMoney">${t("wiz.continue_btn")}</button>`;
@@ -4411,25 +4440,49 @@ async function openEndOfTurnWizard() {
 	// tour - leurs jetons ont déjà été collectés à l'étape précédente. Une fois
 	// validé, déclenche réellement la mort/renaissance (l'événement DEATH,
 	// jamais enregistré avant ce point).
-	function renderStepDyingCardsDU() {
+	async function renderStepDyingCardsDU() {
 		hideGenericButtons();
 		const du = computeCurrentDU();
 		const dying = sortByName(game.players.filter((p) => p.active && selectedDeathIds.includes(p.id)));
 
+		// Remonté par un utilisateur (21/09/2026, retour après une vraie partie
+		// en monnaie libre + smartphone) : "préremplir l'inventaire des cartes
+		// du joueur qui meurt en indiquant le nombre de cartes de valeur
+		// faible, de valeur moyenne et de valeur forte qu'il détient au moment
+		// de sa mort" - jusqu'ici les trois champs partaient toujours de 0,
+		// obligeant l'animateur à compter/ressaisir à la main un inventaire que
+		// l'application connaît déjà (voir computeEndGamePrefill, même
+		// mécanisme déjà utilisé pour le bilan de fin de PARTIE ci-dessous -
+		// réutilisé tel quel ici, générique, plutôt que dupliqué).
+		let levelById = new Map();
+		if (dying.some((p) => p.hasStartingAllocation)) {
+			try {
+				const catalog = await Api.getCatalog("cartes");
+				levelById = new Map(catalog.map((c) => [c.id, c.niveau]));
+			} catch (err) {
+				pushDebugLog("ERREUR", "renderStepDyingCardsDU: échec du chargement du catalogue -", err);
+			}
+		}
+		const prefills = await Promise.all(dying.map((p) => computeEndGamePrefill(p, levelById)));
+		const prefillByPlayerId = new Map(dying.map((p, i) => [p.id, prefills[i]]));
+
 		el("dlgTitle").textContent = t("wiz.death_du_title");
 		el("dlgBody").innerHTML = `
 			<p>${t("wiz.death_du_intro", { du })}</p>
-			${dying.map((p) => `
+			${dying.map((p) => {
+				const pre = prefillByPlayerId.get(p.id);
+				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
 				<legend>${t("wiz.dying_this_turn", { name: escapeHtml(p.name) })}</legend>
 				<label>${t("game.field_weak_cards")}</label>
-				<input type="number" class="duCardWeak" value="0" min="0">
+				<input type="number" class="duCardWeak" value="${pre.weak}" min="0">
 				<label>${t("game.field_medium_cards")}</label>
-				<input type="number" class="duCardMedium" value="0" min="0">
+				<input type="number" class="duCardMedium" value="${pre.medium}" min="0">
 				<label>${t("game.field_strong_cards")}</label>
-				<input type="number" class="duCardStrong" value="0" min="0">
+				<input type="number" class="duCardStrong" value="${pre.strong}" min="0">
 				<p class="du-result" style="font-size:0.82rem;color:var(--text-dim);margin-top:0.4rem;"></p>
-			</fieldset>`).join("")}
+			</fieldset>`;
+			}).join("")}
 			<button type="button" class="btn btn-primary btn-block" id="wizNextDeathDU">${t("wiz.validate_rebirth_btn")}</button>`;
 		el("wizNextDeathDU").onclick = async () => {
 			// Enregistré comme un vrai événement de mort (même principe que
@@ -5484,6 +5537,16 @@ async function openEndOfTurnWizard() {
 			// recliquer séparément sur le bouton "Nouveau tour" du tableau de bord.
 			if (autoStart) {
 				await Api.recordEvent(state.currentGameId, { type: "T", playerId: null, principal: 0, interest: 0 });
+				// BUG TROUVÉ ET CORRIGÉ (21/09/2026, remonté par l'utilisateur :
+				// "il n'y a pas de coup de sifflet lorsque la partie redémarre et
+				// que le compte à rebours s'enclenche") : contrairement aux deux
+				// autres chemins qui démarrent un tour (btnStartNewTurn,
+				// btnStartGame, voir plus bas dans ce fichier), ce démarrage
+				// automatique depuis l'assistant de fin de tour n'appelait
+				// jamais playWhistle("start") - un simple oubli, sans rapport
+				// avec une mort/renaissance éventuelle ce tour-là (le bug
+				// touchait TOUT tour démarré automatiquement depuis l'assistant).
+				playWhistle("start");
 			}
 			dlg.close();
 			restoreDefaultButtons();
@@ -5811,6 +5874,18 @@ function bindActions() {
 		// est terminé, quelle que soit la façon dont ça a été déclenché.
 		stopTurnTimer();
 		playWhistle("stop");
+		// BUG TROUVÉ ET CORRIGÉ (21/09/2026, remonté par l'utilisateur : "au
+		// moment où [un joueur] renaît, l'application donne un coup de sifflet
+		// [...] il ne faut pas le faire ici") : contrairement au chemin
+		// automatique ci-dessus (compte à rebours arrivé à 0, voir update()),
+		// ce clic manuel ne posait jamais state.timer.endToastShown à true.
+		// Tant que l'assistant de fin de tour restait ouvert après un "Fin de
+		// tour" manuel, CHAQUE rafraîchissement reçu par WebSocket (dont celui
+		// déclenché par la validation de la renaissance d'un joueur pendant
+		// l'assistant) retombait dans la même branche de update() et rejouait
+		// le sifflet - symétrique au chemin automatique, qui le pose
+		// immédiatement pour la même raison.
+		state.timer.endToastShown = true;
 		const toast = el("turnEndToast");
 		toast.textContent = state.currentGame.turnNumber >= state.currentGame.nbTurnsPlanned
 			? window.GecoI18n.t("game.toast_end_last_turn") : window.GecoI18n.t("game.toast_end_turn");

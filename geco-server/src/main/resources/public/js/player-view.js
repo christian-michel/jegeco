@@ -471,7 +471,12 @@ async function renderDashboard() {
 		// en place (nombre de jetons + ligne "soit X unités monétaires").
 		if (usesMonetaryUnitsOnly()) {
 			el("balanceCardSubtitle").textContent = t("trade.balance_label_monetary");
-			el("balanceCardValue").textContent = jetonsToMonetaryUnits(state.player.tradeBalance);
+			// isLibreGame() : voir roundUpIfExactlyHalf() - uniquement en
+			// monnaie libre, jamais en dette+smartphone (hors périmètre du
+			// retour utilisateur du 21/09/2026, non concernée par ce point).
+			el("balanceCardValue").textContent = isLibreGame()
+				? roundUpIfExactlyHalf(jetonsToMonetaryUnits(state.player.tradeBalance))
+				: jetonsToMonetaryUnits(state.player.tradeBalance);
 			el("balanceUnitLabel").textContent = t("playerView.stat_unit_monetary");
 			el("balanceMonetaryEquiv").textContent = "";
 			el("balanceMonetaryEquiv").classList.add("hidden");
@@ -631,7 +636,11 @@ async function renderProfile() {
 		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_coins");
 		el("statCoinsMonetaryEquiv").textContent = "";
 	} else if (usesMonetaryUnitsOnly()) {
-		el("statCoins").textContent = jetonsToMonetaryUnits(state.player.tradeBalance);
+		// isLibreGame() : voir roundUpIfExactlyHalf() plus haut - même
+		// périmètre que balanceCardValue ci-dessus (onglet Accueil).
+		el("statCoins").textContent = isLibreGame()
+			? roundUpIfExactlyHalf(jetonsToMonetaryUnits(state.player.tradeBalance))
+			: jetonsToMonetaryUnits(state.player.tradeBalance);
 		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_monetary");
 		el("statCoinsMonetaryEquiv").textContent = "";
 	} else {
@@ -961,6 +970,19 @@ function cardPriceInDuTable() {
 function jetonsToMonetaryUnits(pJetons) {
 	const weakCoinValue = (state.player && state.player.weakCoinValue) || 1;
 	return Math.round(pJetons * weakCoinValue * 100) / 100;
+}
+
+// Remonté par un utilisateur (21/09/2026, retour après une vraie partie en
+// monnaie libre + smartphone) : "sur l'écran de l'assistant et sur l'écran
+// des joueurs qui ont un score avec xxx,5 arrondi à l'entier supérieur. Par
+// exemple : 53,5 devient 54". Volontairement ciblé sur le cas EXACT ".5"
+// (ne touche jamais un solde qui n'est pas pile sur une moitié d'unité) -
+// voir la même fonction (nommée pareil) côté app.js, jetonsToMonetaryUnits()
+// n'est elle PAS modifiée pour ne pas changer les autres affichages
+// (delta de transaction, montant d'activité...) non concernés par ce retour.
+function roundUpIfExactlyHalf(pValue) {
+	const fraction = pValue - Math.floor(pValue);
+	return Math.abs(fraction - 0.5) < 1e-9 ? Math.ceil(pValue) : pValue;
 }
 
 function computeLibreCardPrice(pLevel) {

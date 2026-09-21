@@ -41,8 +41,15 @@
 				<!-- options générées en JS -->
 			</select>
 
-			<label class="field-label" data-i18n="join.color_label">Votre couleur</label>
-			<div id="colorPicker" class="swatch-row"></div>
+			<!-- Remonté par un utilisateur (21/09/2026, retour après une vraie
+			     partie) : "pas très utile dans le reste du jeu" - favoriteColor
+			     est envoyé au serveur (voir joinGame() dans player.js) et
+			     persisté, mais n'est utilisé nulle part ailleurs dans
+			     l'affichage (ni avatar, ni classement) - masqué ici plutôt que
+			     retiré entièrement, pour rester réversible si un usage futur
+			     apparaît. -->
+			<label class="field-label hidden" data-i18n="join.color_label">Votre couleur</label>
+			<div id="colorPicker" class="swatch-row hidden"></div>
 
 			<button id="btnStep1Next" class="btn-primary btn-block" data-i18n="join.btn_continue">Continuer</button>
 		</section>
