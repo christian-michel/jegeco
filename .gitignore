@@ -40,3 +40,16 @@ target/
 # jamais des fichiers source du projet.
 /jdk-portable/
 /maven-portable/
+
+# Autre artefact Maven standard (maven-shade-plugin), généré à côté de
+# target/ plutôt que dedans - jamais un fichier source.
+dependency-reduced-pom.xml
+
+# Log JPA/Hibernate généré au lancement local du serveur (voir
+# geco-server/src/main/resources/logback.xml ou équivalent) - propre à
+# chaque exécution, jamais un fichier source.
+gecoJPA.log
+
+# Worktrees Git créés par des agents Claude Code (sous-tâches isolées) -
+# infrastructure de session, jamais du contenu du dépôt.
+/.claude/worktrees/
