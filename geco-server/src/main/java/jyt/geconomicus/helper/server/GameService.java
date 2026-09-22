@@ -1868,13 +1868,39 @@ public class GameService
 				// Cherche un modèle réuni en 4 exemplaires ou plus dans
 				// l'inventaire ACTUEL (déjà rejoué : dotation + transactions +
 				// carrés précédents) - le premier trouvé, peu importe l'ordre.
+				//
+				// BUG CRITIQUE TROUVÉ (22/09/2026, remonté par l'utilisateur sur une
+				// vraie partie 2 joueurs/8 tours : "les carrés s'emballent et ne se
+				// comptent pas, le joueur peut arriver à 5 cartes sans avoir
+				// déclenché de carré") : cette boucle s'arrêtait sur le PREMIER
+				// modèle à 4+ exemplaires rencontré, quel que soit son niveau - y
+				// compris un modèle déjà au niveau "tresforte" (le plus haut, sans
+				// promotion possible, voir le garde-fou juste en dessous qui
+				// retournait alors IMMÉDIATEMENT sans rien encaisser). Résultat :
+				// dès qu'un joueur accumulait 4 cartes tresforte identiques (aucune
+				// promotion possible, donc jamais rendu à 0 en dessous), CE modèle
+				// gagnait la course d'itération à CHAQUE appel suivant (ordre de
+				// Map stable pour un même jeu de clés) - bloquant alors
+				// SILENCIEUSEMENT tout encaissement de carré pour ce joueur, y
+				// compris à des niveaux inférieurs (moyenne/forte) où un autre
+				// modèle avait pourtant lui aussi atteint 4+ exemplaires entre-
+				// temps : confirmé par la capture d'écran jointe, montrant TROIS
+				// modèles distincts bloqués à 5 exemplaires chacun, sur DEUX
+				// niveaux différents (forte ET tresforte) en même temps. Corrigé :
+				// on ignore dès cette détection les modèles déjà au niveau maximum
+				// (aucune promotion possible pour eux, par conception - voir le
+				// commentaire plus bas), pour continuer à chercher un AUTRE modèle
+				// réellement encaissable plutôt que d'abandonner tout le reste sur
+				// la seule base de ce premier modèle rencontré.
 				final java.util.Map<String, Integer> inventory = computePlayerCardInventory(pGameId, pPlayerId);
 				String squareCardId = null;
 				String squareLevel = null;
 				for (final java.util.Map.Entry<String, Integer> e : inventory.entrySet())
 				{
 					final String level = findLevelOfCard(pilesByLevel, e.getKey());
-					if ((e.getValue() >= 4) && (level != null))
+					final int candidateLevelIndex = (level == null) ? -1 : LEVEL_ORDER.indexOf(level);
+					final boolean promotable = (candidateLevelIndex >= 0) && (candidateLevelIndex < LEVEL_ORDER.size() - 1);
+					if ((e.getValue() >= 4) && promotable)
 					{
 						squareCardId = e.getKey();
 						squareLevel = level;
@@ -1882,13 +1908,16 @@ public class GameService
 					}
 				}
 				if (squareCardId == null)
-					return cashedInThisCall; // rien à encaisser, on s'arrête là
-				
+					// Rien à encaisser : soit aucun modèle n'a 4+ exemplaires, soit
+					// les seuls carrés présents sont déjà au niveau maximum
+					// (tresforte) - jamais de promotion possible dans ce cas, par
+					// conception (pas de niveau au-dessus dans ce modèle simplifié).
+					return cashedInThisCall;
 
+				// squareLevel vient d'être confirmé "promotable" par la boucle de
+				// détection ci-dessus (candidateLevelIndex < LEVEL_ORDER.size() - 1)
+				// - levelIndex + 1 désigne donc TOUJOURS un niveau valide.
 				final int levelIndex = LEVEL_ORDER.indexOf(squareLevel);
-				if ((levelIndex < 0) || (levelIndex >= LEVEL_ORDER.size() - 1))
-					return cashedInThisCall; // déjà au niveau le plus haut (tresforte) - pas de niveau supérieur dans ce modèle simplifié
-
 				final String nextLevel = LEVEL_ORDER.get(levelIndex + 1);
 				final java.util.Map<String, Integer> samePile = pilesByLevel.get(squareLevel);
 				final java.util.Map<String, Integer> nextPile = pilesByLevel.get(nextLevel);

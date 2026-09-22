@@ -47,8 +47,11 @@ dependency-reduced-pom.xml
 
 # Log JPA/Hibernate généré au lancement local du serveur (voir
 # geco-server/src/main/resources/logback.xml ou équivalent) - propre à
-# chaque exécution, jamais un fichier source.
+# chaque exécution, jamais un fichier source. Variantes générées par
+# `mvn test` dans chaque module (geco-engine/geco-server) incluses.
 gecoJPA.log
+gecoJPA-test.log
+gecoJPA-server-test.log
 
 # Worktrees Git créés par des agents Claude Code (sous-tâches isolées) -
 # infrastructure de session, jamais du contenu du dépôt.
