@@ -17,6 +17,16 @@ const ACCESSORIES = [
 	{ id: "hat", label: "🎩" },
 ];
 
+// Mélange de Fisher-Yates, en place - utilisé par la galerie d'avatars pour
+// présenter les entrées dans un ordre aléatoire plutôt que par id croissant.
+function shuffleInPlace(pArray) {
+	for (let i = pArray.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[pArray[i], pArray[j]] = [pArray[j], pArray[i]];
+	}
+	return pArray;
+}
+
 const state = {
 	gameId: null,
 	name: "",
@@ -126,6 +136,15 @@ async function initAvatarGallery() {
 	} catch (e) {
 		console.warn("Catalogue d'avatars indisponible, galerie vide (repli SVG toujours actif).", e);
 	}
+
+	// Remonté par l'utilisateur (22/09/2026) : présenter les avatars dans un
+	// ordre aléatoire plutôt que toujours par id croissant (qui regroupait
+	// visuellement les avatars ajoutés ensemble, au même endroit de la
+	// grille). Mélange fait UNE SEULE FOIS ici, avant tout rendu - jamais
+	// re-mélangé à chaque changement de filtre (renderGrid re-filtre
+	// simplement ce même tableau déjà mélangé), sinon les avatars
+	// sauteraient de position à chaque clic sur un filtre.
+	shuffleInPlace(catalog);
 
 	// Le filtre "teint" est peuplé dynamiquement à partir des valeurs réellement
 	// présentes dans le catalogue, plutôt que codées en dur - s'adapte
