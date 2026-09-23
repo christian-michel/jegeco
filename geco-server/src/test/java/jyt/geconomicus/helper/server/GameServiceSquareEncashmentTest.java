@@ -107,11 +107,20 @@ class GameServiceSquareEncashmentTest
 			sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
 					"tresforte-" + gameId + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
 
+		// Au moins 1 carré attendu (le carré tresforte lui-même) - PAS
+		// forcément exactement 1 : p1 détient aussi sa VRAIE main de départ
+		// (4 cartes faibles réelles, voir setUpGameWithTwoPlayers), et la
+		// carte de récompense du carré tresforte (un modèle faible tiré au
+		// hasard) peut par coïncidence compléter un DEUXIÈME carré, tout à
+		// fait légitime, avec ces cartes de départ déjà en main - le garde-
+		// fou du 22/09/2026 (degenerateLevelsThisCall) laisse maintenant la
+		// boucle continuer pour l'encaisser aussi, plutôt que de s'arrêter
+		// prématurément.
 		final List<CardSquareEvent> squares = sService.checkAndCashInSquares(gameId, p1);
-		assertEquals(1, squares.size(), "un seul carré attendu (4 tresforte_0, rien d'autre)"); //$NON-NLS-1$
-		final CardSquareEvent square = squares.get(0);
+		assertTrue(!squares.isEmpty(), "au moins un carré attendu (le carré tresforte)"); //$NON-NLS-1$
+		final CardSquareEvent square = squares.stream().filter(s -> "tresforte".equals(s.getCashedLevel())) //$NON-NLS-1$
+				.findFirst().orElseThrow(() -> new AssertionError("le carré tresforte lui-même doit être présent parmi les carrés encaissés")); //$NON-NLS-1$
 		assertTrue(square.isTriggeredRevolution(), "un carré tresforte réellement bouclé doit déclencher une révolution"); //$NON-NLS-1$
-		assertEquals("tresforte", square.getCashedLevel()); //$NON-NLS-1$
 		assertEquals("faible", square.getPromotedLevel(), //$NON-NLS-1$
 				"la carte de récompense doit boucler vers le niveau faible, pas rester bloquée"); //$NON-NLS-1$
 		assertEquals(1, square.getRevolutionCountAfter());
@@ -166,6 +175,118 @@ class GameServiceSquareEncashmentTest
 		final Map<String, Integer> inventoryAfter = sService.computePlayerCardInventory(gameId, p1);
 		assertTrue(inventoryAfter.getOrDefault("forte_0", 0) < 4, //$NON-NLS-1$
 				"le carré forte_0 aurait dû être encaissé, pas resté bloqué par le carré tresforte"); //$NON-NLS-1$
+	}
+
+	/**
+	 * Vérifie le correctif du 22/09/2026 (trouvé en TESTANT la rotation des
+	 * valeurs sur un vrai playtest 4 joueurs, pas anticipé à la conception) :
+	 * une promotion DÉGÉNÉRÉE (aucune vraie diversité de modèle disponible,
+	 * voir le commentaire détaillé dans checkAndCashInSquares) à un niveau ne
+	 * doit plus jamais empêcher l'encaissement d'un carré COMPLÈTEMENT
+	 * DIFFÉRENT, à un autre niveau, dans le même appel. Avant ce correctif,
+	 * l'ancien garde-fou (14/09/2026) retournait immédiatement dès qu'UN SEUL
+	 * niveau dégénérait, laissant tout le reste - même parfaitement
+	 * encaissable - en attente indéfiniment tant que l'ordre d'itération
+	 * (stable pour un même jeu de clés) continuait à faire gagner ce même
+	 * niveau dégénéré à chaque appel suivant. Confirmé en vrai playtest :
+	 * bloqué sur des dizaines d'appels consécutifs, cinq modèles "moyenne"
+	 * distincts (chacun déjà à 5+ exemplaires) jamais encaissés.
+	 */
+	@Test
+	void testDegeneratePromotionAtOneLevelNeverStarvesADifferentEligibleSquare() throws Exception
+	{
+		final Map<String, List<String>> catalog = new LinkedHashMap<>();
+		catalog.put("faible", List.of("faible_0", "faible_1", "faible_2")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+		// moyenne/forte : UN SEUL modèle chacun, délibérément - nécessaire
+		// pour forcer une VRAIE dégénérescence (aucun autre modèle possible,
+		// ni au même niveau ni au niveau cible).
+		catalog.put("moyenne", List.of("moyenne_0")); //$NON-NLS-1$ //$NON-NLS-2$
+		catalog.put("forte", List.of("forte_0")); //$NON-NLS-1$ //$NON-NLS-2$
+		catalog.put("tresforte", List.of("tresforte_0")); //$NON-NLS-1$ //$NON-NLS-2$
+
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 12, "AnimDegenTest", null, //$NON-NLS-1$
+				"test carre degenere n'affame pas les autres", "2026-09-22", "Ceres", 1, 180, 1.0, false, 0, true, //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				0.5);
+		final int gameId = game.getId();
+		final int p0 = sService.addPlayer(gameId, "P0").getId(); //$NON-NLS-1$
+		final int p1 = sService.addPlayer(gameId, "P1").getId(); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, catalog);
+		sService.recordEvent(gameId, "W", p1, 0, 0, 0, 0, 0, null, 0, 0, 1_000_000, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		int nonce = 0;
+		// recordTransaction ne touche JAMAIS la pioche partagée elle-même
+		// (Game.smartphoneCardPileJson) - seul un VRAI traitement de carré la
+		// fait bouger (voir checkAndCashInSquares, samePile/nextPile.merge).
+		// Pour épuiser RÉELLEMENT la pioche "forte" (5 exemplaires au total,
+		// un seul modèle), il faut donc faire vivre 5 VRAIES promotions
+		// moyenne -> forte, chacune consommant 1 exemplaire de la pioche
+		// forte - jamais un raccourci artificiel qui laisserait la pioche
+		// intacte pendant que la main du joueur, elle, semble pleine.
+		final java.util.List<CardSquareEvent> setupSquares = new java.util.ArrayList<>();
+		for (int cycle = 0; cycle < 6; cycle++)
+		{
+			for (int i = 0; i < 4; i++)
+				sService.recordTransaction(gameId, p0, p1, "moyenne_0", "moyenne", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
+						"n" + gameId + "-" + (nonce++), System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+			setupSquares.addAll(sService.checkAndCashInSquares(gameId, p1));
+		}
+		final boolean moyenneDegeneratedDuringSetup = setupSquares.stream()
+				.anyMatch(s -> "moyenne".equals(s.getCashedLevel()) //$NON-NLS-1$
+						&& s.getCashedCardTypeId().equals(s.getPromotedCardTypeId()));
+		assertTrue(moyenneDegeneratedDuringSetup,
+				"préalable du scénario : après 6 cycles (largement plus que les 5 exemplaires de la pioche forte), " //$NON-NLS-1$
+						+ "le carré moyenne_0 doit avoir dégénéré au moins une fois (pioche forte épuisée) - carrés observés : " //$NON-NLS-1$
+						+ setupSquares); //$NON-NLS-1$
+
+		// Place maintenant, EN MÊME TEMPS : un NOUVEAU carré moyenne_0 (qui va
+		// à coup sûr dégénérer à nouveau, la pioche forte restant épuisée) ET
+		// un carré tresforte_0 COMPLÈTEMENT DIFFÉRENT, à un niveau distinct,
+		// jamais touché jusqu'ici (pioche "tresforte" intacte - promotion
+		// saine attendue, en boucle vers "faible" - toujours de la place).
+		// tresforte_0 délibérément choisi plutôt que faible_0 (première
+		// version de ce test, insuffisante - voir ci-dessous) : la main de
+		// départ de p1 (dealStartingHandsForLibreIfNeeded) pioche TOUJOURS
+		// dans le niveau "faible" en tout premier, avant même la moindre
+		// transaction - une carte faible_X entre donc dans l'inventaire (une
+		// LinkedHashMap, ordre = première apparition) AVANT moyenne_0,
+		// quelle que soit la suite. Le bug (ancien garde-fou qui
+		// "return"-ait au lieu de continuer) ne se manifeste QUE si le
+		// niveau dégénéré est rencontré AVANT le niveau sain dans cet ordre
+		// d'itération - une première version de ce test utilisait faible_0
+		// comme carré "sain", et passait donc À TORT même contre l'ancien
+		// code buggé (faible_0 déjà présent dès la main de départ, itéré et
+		// encaissé AVANT que moyenne_0 ne dégénère et ne fasse "return").
+		// tresforte_0, lui, n'entre dans l'inventaire de p1 QUE par la
+		// transaction bypass juste en dessous - donc APRÈS moyenne_0 (déjà
+		// présent depuis les 6 cycles de préparation) dans l'ordre
+		// d'itération : exactement la situation qui, en vrai playtest,
+		// affamait silencieusement des carrés entiers.
+		for (int i = 0; i < 4; i++)
+			sService.recordTransaction(gameId, p0, p1, "moyenne_0", "moyenne", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
+					"n" + gameId + "-" + (nonce++), System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+		for (int i = 0; i < 4; i++)
+			sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
+					"n" + gameId + "-" + (nonce++), System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+
+		final List<CardSquareEvent> squares = sService.checkAndCashInSquares(gameId, p1);
+
+		// Pas de nouvelle vérification "le carré moyenne_0 dégénère
+		// EXACTEMENT ici" - après 6 cycles, l'état précis de sa pioche (voire
+		// son épuisement total) n'est plus garanti de façon déterministe ;
+		// seul le préalable ci-dessus (au moins une dégénérescence pendant
+		// les 6 cycles de préparation) importait pour planter le décor. Ce
+		// qui compte VRAIMENT ici : quoi qu'il soit advenu du carré
+		// moyenne_0 dans CET appel, le carré tresforte_0 - complètement
+		// différent, sur une pioche saine - ne doit jamais rester affamé.
+		final boolean tresforteSquareProcessed = squares.stream().anyMatch(
+				s -> "tresforte".equals(s.getCashedLevel()) && "tresforte_0".equals(s.getCashedCardTypeId())); //$NON-NLS-1$ //$NON-NLS-2$
+		assertTrue(tresforteSquareProcessed,
+				"le carré tresforte_0, complètement différent, aurait dû être encaissé dans le même appel - " //$NON-NLS-1$
+						+ "pas affamé par la dégénérescence du carré moyenne_0 (correctif du 22/09/2026), carrés obtenus : " //$NON-NLS-1$
+						+ squares); //$NON-NLS-1$
 	}
 
 	@Test

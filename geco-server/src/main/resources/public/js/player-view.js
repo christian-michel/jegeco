@@ -800,10 +800,36 @@ function groupCardsForDisplay(items, sortMode) {
 			if (!groups.has(level)) groups.set(level, []);
 			groups.get(level).push(item);
 		}
-		return order.filter((level) => groups.has(level)).map((level) => {
+		// Rotation des valeurs (22/09/2026, "révolution économique" - voir
+		// Game.revolutionCount/cardPriceInDuTable) : remonté par l'utilisateur
+		// - "vérifie que les cartes changent bien au niveau de l'organisation
+		// des cartes sur l'écran du smartphone des joueurs (filtre et
+		// organisation de cartes par valeur)". Le NOM de chaque catégorie
+		// physique (ex. "faible") ne change jamais - c'est toujours la même
+		// pioche/le même mécanisme de carré - mais après une révolution, ce
+		// n'est PLUS forcément la moins chère : les groupes sont donc
+		// désormais ORDONNÉS par prix ACTUEL croissant (le moins cher en
+		// premier, cohérent avec ce tri "par valeur"), et le prix courant est
+		// affiché dans le titre pour lever toute ambiguïté entre le nom de la
+		// catégorie et sa valeur du moment. Uniquement en monnaie libre (seul
+		// système où le prix varie réellement, voir isLibreGame) - la dette
+		// garde son barème fixe, l'ordre physique reste donc son seul critère
+		// pertinent, inchangé.
+		const priceTable = isLibreGame() ? cardPriceInDuTable() : null;
+		const orderedLevels = priceTable
+			? order.filter((level) => groups.has(level)).sort((a, b) => priceTable[a] - priceTable[b])
+			: order.filter((level) => groups.has(level));
+		return orderedLevels.map((level) => {
 			const cards = groups.get(level);
+			// Pas de suffixe d'unité (ex. "u.m.") : convention déjà établie
+			// ailleurs dans cet écran (voir balanceCardValue/jetonsToMonetaryUnits) -
+			// un nombre brut d'unités monétaires, sans libellé, le contexte
+			// (l'écran "Mes cartes") suffit à le faire comprendre.
+			const priceSuffix = priceTable
+				? ` · ${jetonsToMonetaryUnits(computeLibreCardPrice(level).weak)}`
+				: "";
 			return {
-				title: t("playerView.cards_group_value_title", { level: catalogEnumLabel("level", level) }),
+				title: t("playerView.cards_group_value_title", { level: catalogEnumLabel("level", level) }) + priceSuffix,
 				count: cards.reduce((sum, c) => sum + c.count, 0),
 				cards,
 			};

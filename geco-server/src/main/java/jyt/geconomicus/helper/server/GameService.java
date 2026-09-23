@@ -1858,6 +1858,24 @@ public class GameService
 		// il laisse simplement toute révolution SUPPLÉMENTAIRE pour un appel
 		// ultérieur (le prochain achat/échange la déclenchera normalement).
 		boolean revolutionAlreadyHappenedThisCall = false;
+		// Niveaux où une promotion DÉGÉNÉRÉE (aucune vraie diversité de modèle
+		// disponible pour "promouvoir" - voir le commentaire détaillé plus bas,
+		// au niveau du garde-fou du 14/09/2026) vient de se produire CE call -
+		// trouvé lors d'un vrai test (22/09/2026, rotation des valeurs) :
+		// l'ancien comportement ("return cashedInThisCall" dès qu'UN SEUL
+		// niveau dégénère) arrêtait TOUTE la fonction, même quand un modèle
+		// COMPLÈTEMENT DIFFÉRENT (ex. plusieurs modèles "moyenne" déjà à 5+
+		// exemplaires) restait, lui, parfaitement encaissable - starvant
+		// indéfiniment ces autres carrés dès que le niveau dégénéré gagnait la
+		// course d'itération en premier (ordre de Map stable pour un même jeu
+		// de clés, donc pas juste un coup de malchance ponctuel : confirmé
+		// bloqué sur PLUSIEURS dizaines d'appels consécutifs lors d'un
+		// playtest réel). Corrigé : un niveau dégénéré est désormais
+		// simplement exclu de la détection pour le RESTE de ce call (la boucle
+		// continue à chercher un AUTRE modèle réellement encaissable), au lieu
+		// d'abandonner tout le reste - même principe que
+		// revolutionAlreadyHappenedThisCall ci-dessus.
+		final java.util.Set<String> degenerateLevelsThisCall = new java.util.HashSet<>();
 		while (safetyIterations++ < 50)
 		{
 			final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -1920,9 +1938,12 @@ public class GameService
 					// Une révolution déjà survenue CE call rend tout NOUVEAU carré
 					// tresforte temporairement "non éligible" ici (voir le garde-fou
 					// revolutionAlreadyHappenedThisCall en tête de méthode) - il sera
-					// détecté normalement lors d'un appel ultérieur.
+					// détecté normalement lors d'un appel ultérieur. Même principe
+					// pour un niveau déjà marqué dégénéré ce call (voir
+					// degenerateLevelsThisCall en tête de méthode).
 					final boolean promotable = (level != null) && (LEVEL_ORDER.indexOf(level) >= 0)
-							&& !(isTopLevel && revolutionAlreadyHappenedThisCall);
+							&& !(isTopLevel && revolutionAlreadyHappenedThisCall)
+							&& !degenerateLevelsThisCall.contains(level);
 					if ((e.getValue() >= 4) && promotable)
 					{
 						squareCardId = e.getKey();
@@ -2119,15 +2140,28 @@ public class GameService
 				// suivante de cette même boucle - confirmé par un vrai playtest :
 				// 408 carrés d'affilée en un seul appel, consommant la TOTALITÉ du
 				// stock restant de ce modèle pour un gain économique nul (une
-				// "promotion" vers... le même niveau). On encaisse bien CE carré
-				// (le joueur n'est jamais bloqué, intention du correctif du
-				// 05/09/2026 préservée), mais on arrête la boucle ICI plutôt que
-				// de la laisser se ré-déclencher sur ce même modèle dégénéré - un
-				// futur échange qui redistribue la pioche pourra relancer une
-				// vraie cascade plus tard, une fois la diversité des modèles
-				// restaurée dans cette pioche.
+				// "promotion" vers... le même niveau).
+				//
+				// BUG CRITIQUE TROUVÉ ET CORRIGÉ (22/09/2026, en testant la
+				// rotation des valeurs sur un vrai playtest 4 joueurs) : le
+				// correctif d'origine ci-dessus retournait alors IMMÉDIATEMENT
+				// ("return cashedInThisCall"), arrêtant TOUTE la fonction - même
+				// quand un modèle COMPLÈTEMENT DIFFÉRENT (ex. cinq modèles
+				// "moyenne" distincts, chacun déjà à 5+ exemplaires) restait, lui,
+				// parfaitement encaissable. Puisque l'ordre d'itération de
+				// l'inventaire est stable pour un même jeu de clés, ce niveau
+				// dégénéré gagnait la course à CHAQUE appel suivant - confirmé
+				// bloqué sur des DIZAINES d'appels consécutifs lors d'un vrai
+				// playtest, empêchant toute progression vers une révolution
+				// pourtant à portée de main. On encaisse bien CE carré (le joueur
+				// n'est jamais bloqué, intention du correctif du 05/09/2026
+				// préservée), et on exclut désormais ce niveau précis de la
+				// détection pour le RESTE de ce call (jamais toute la fonction) -
+				// la boucle continue à chercher un AUTRE modèle réellement
+				// encaissable, exactement le même principe que
+				// revolutionAlreadyHappenedThisCall plus haut.
 				if (promotedCardId.equals(squareCardId))
-					return cashedInThisCall;
+					degenerateLevelsThisCall.add(squareLevel);
 			}
 			finally
 			{
