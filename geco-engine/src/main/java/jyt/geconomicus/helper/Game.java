@@ -195,6 +195,31 @@ public class Game implements Serializable
 		smartphoneCardPileJson = pSmartphoneCardPileJson;
 	}
 
+	// Étape 3, monnaie libre, mode smartphone (22/09/2026, remonté par
+	// l'utilisateur : "quand on arrive à faire un carré de cartes très
+	// fortes... il peut être intéressant de mettre en place une rotation des
+	// valeurs, d'autant que cela est conforme à la règle du jeu" - voir
+	// geconomicus.glibre.org/rules.html, "révolution économique") : nombre de
+	// fois qu'un carré au niveau physique le plus haut ("tresforte") a
+	// bouclé vers le niveau "faible" depuis le début de la partie (voir
+	// GameService.checkAndCashInSquares, désormais un cycle fermé plutôt
+	// qu'un cul-de-sac). Ce compteur fait tourner le PRIX de chaque niveau
+	// (voir cardPriceInDU ci-dessous) - jamais l'ordre physique de tirage des
+	// cartes lui-même, qui reste toujours faible->moyenne->forte->tresforte,
+	// exactement comme avant : seule la valeur marchande de chaque niveau
+	// change, pas la pioche. Démarre à 0 (aucune révolution, barème normal).
+	private int revolutionCount;
+
+	public int getRevolutionCount()
+	{
+		return revolutionCount;
+	}
+
+	public void setRevolutionCount(final int pRevolutionCount)
+	{
+		revolutionCount = pRevolutionCount;
+	}
+
 	// Compte animateur propriétaire de cette partie (voir Animator) - ajouté le
 	// 21/09/2026 pour permettre à un même serveur d'héberger plusieurs
 	// animateurs indépendants, chacun avec ses propres parties (demande
@@ -740,28 +765,44 @@ public class Game implements Serializable
 		weakCardValueInDU = pWeakCardValueInDU;
 	}
 
+	// Ordre physique fixe des niveaux (jamais changé par une révolution, voir
+	// revolutionCount ci-dessus - seul le PRIX associé à chaque niveau
+	// tourne). Même liste que GameService.LEVEL_ORDER côté serveur (pioche/
+	// carré) - dupliquée ici volontairement : cardPriceInDU ne doit dépendre
+	// de rien d'autre que Game lui-même (aucune dépendance vers geco-server,
+	// qui dépend déjà de geco-engine, jamais l'inverse).
+	private static final java.util.List<String> LEVEL_ORDER = java.util.List.of("faible", "moyenne", "forte", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+			"tresforte"); //$NON-NLS-1$
+
 	/**
 	 * Prix en DU pour chaque niveau, dans les mêmes proportions que
 	 * l'ancienne échelle abstraite fixe (3/6/12/24, voir levelValue) - 1 DU
 	 * = 6 unités de cette échelle. La base (niveau "faible") est désormais
 	 * {@link #weakCardValueInDU}, réglable par partie plutôt qu'une
 	 * constante fixe à 0,5 - voir son commentaire pour le détail complet.
+	 * <p>
+	 * Correctif (22/09/2026, "rotation des valeurs" - voir revolutionCount) :
+	 * SANS révolution (revolutionCount == 0), le barème reste exactement
+	 * celui d'avant (faible le moins cher, tresforte le plus cher). Après N
+	 * révolutions, le barème tourne de N crans : le niveau qui occupait le
+	 * rang (position - N, modulo 4) prend le prix de la position d'origine -
+	 * concrètement, après 1 révolution, "faible" prend le prix qu'avait
+	 * "tresforte" (le plus cher), "moyenne" prend celui de "faible" (le
+	 * moins cher), etc. Après 4 révolutions, on retombe exactement sur le
+	 * barème normal (cycle fermé, jamais une valeur qui s'envole sans fin).
 	 */
 	public double cardPriceInDU(final String pLevel)
 	{
-		switch (pLevel)
-		{
-			case "faible":
-				return weakCardValueInDU;
-			case "moyenne":
-				return weakCardValueInDU * 2;
-			case "forte":
-				return weakCardValueInDU * 4;
-			case "tresforte":
-				return weakCardValueInDU * 8;
-			default:
-				return 0;
-		}
+		final int physicalIndex = LEVEL_ORDER.indexOf(pLevel);
+		if (physicalIndex < 0)
+			return 0; // niveau inconnu (ne devrait jamais arriver)
+		final int nbLevels = LEVEL_ORDER.size();
+		final int priceRank = ((physicalIndex - revolutionCount) % nbLevels + nbLevels) % nbLevels;
+		// Barème de base, dans l'ordre croissant des rangs 0..3 - mêmes
+		// proportions 1/2/4/8 qu'avant, jamais changées.
+		final double[] basePricesByRank = { weakCardValueInDU, weakCardValueInDU * 2, weakCardValueInDU * 4,
+				weakCardValueInDU * 8 };
+		return basePricesByRank[priceRank];
 	}
 
 	/**

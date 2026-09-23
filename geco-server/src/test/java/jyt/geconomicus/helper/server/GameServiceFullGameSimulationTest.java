@@ -416,7 +416,8 @@ class GameServiceFullGameSimulationTest
 				.orElseThrow();
 		return Dtos.PlayerSelfViewDto.from(player, sService.computeTradeBalance(gameId, playerId),
 				game.getMoneySystem(), sService.isTradingAllowed(game), game.getWeakCoinValue(),
-				game.getPausedRemainingSeconds() != null, game.computeCurrentDU(), game.getWeakCardValueInDU());
+				game.getPausedRemainingSeconds() != null, game.computeCurrentDU(), game.getWeakCardValueInDU(),
+				game.getRevolutionCount());
 	}
 
 	private boolean isActive(final int gameId, final int playerId)

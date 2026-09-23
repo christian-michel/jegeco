@@ -1957,6 +1957,9 @@ msgstr "4× {cashed} → 1× {promoted}"
 msgid "playerView.history_square_breakthrough"
 msgstr "Technological breakthrough"
 
+msgid "playerView.history_square_revolution"
+msgstr "Revolution #{n}: values have rotated"
+
 # ============ Squares in the animator's exchange panel (31/08/2026) ============
 msgid "game.squares_section_title"
 msgstr "Squares cashed in ({count})"
@@ -1967,6 +1970,9 @@ msgstr "4× {cashed} → 1× {promoted}"
 msgid "game.squares_breakthrough"
 msgstr "Technological breakthrough"
 
+msgid "game.squares_revolution"
+msgstr "Revolution #{n}: values have rotated"
+
 # ============ Grouping by value in My cards (31/08/2026) ============
 msgid "playerView.cards_group_value_title"
 msgstr "{level} value cards"
@@ -1975,8 +1981,18 @@ msgstr "{level} value cards"
 msgid "playerView.square_anim_title"
 msgstr "Square completed! 🎉"
 
+# ============ Value rotation / "economic revolution" (22/09/2026) ============
+msgid "playerView.square_anim_title_revolution"
+msgstr "REVOLUTION! 🔄"
+
 msgid "playerView.square_anim_detail"
 msgstr "4× {cashed} traded for 1× {promoted}"
+
+msgid "playerView.revolution_toast"
+msgstr "🔄 Revolution! Card values just rotated."
+
+msgid "game.toast_revolution"
+msgstr "🔄 Revolution #{n}: card values just rotated."
 
 # ============ Temporary toast notifications (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"

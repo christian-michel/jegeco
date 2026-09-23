@@ -952,9 +952,30 @@ const LEVEL_JETON_PRICE = {
 // lieu d'être figé à 0.5 pour toutes les parties - PlayerSelfViewDto expose
 // cette valeur (weakCardValueInDU) pour que ce calcul reste synchronisé avec
 // le serveur sans jamais dupliquer une constante qui pourrait diverger.
+// Correctif (22/09/2026), "rotation des valeurs" - suite utilisateur : "quand
+// on arrive à faire un carré de cartes très fortes... il peut être
+// intéressant de mettre en place une rotation des valeurs, d'autant que cela
+// est conforme à la règle du jeu" (voir geconomicus.glibre.org/rules.html,
+// "révolution économique") - à chaque carré réellement bouclé depuis le
+// niveau physique le plus haut ("tresforte") vers "faible" (voir
+// GameService.checkAndCashInSquares), Game.revolutionCount augmente de 1 et
+// le barème tourne d'un cran : le niveau physique le moins avancé dans le
+// cycle prend le prix le plus élevé. Portage EXACT de Game.cardPriceInDU
+// côté moteur (même ordre LEVEL_ORDER, même formule de rotation) - jamais
+// réinventée séparément, PlayerSelfViewDto expose revolutionCount pour le
+// même motif que weakCardValueInDU juste au-dessus.
+const CARD_LEVEL_ORDER = ["faible", "moyenne", "forte", "tresforte"];
 function cardPriceInDuTable() {
 	const weak = (state.player && state.player.weakCardValueInDU) || 0.5;
-	return { faible: weak, moyenne: weak * 2, forte: weak * 4, tresforte: weak * 8 };
+	const revolutionCount = (state.player && state.player.revolutionCount) || 0;
+	const basePricesByRank = [weak, weak * 2, weak * 4, weak * 8];
+	const table = {};
+	CARD_LEVEL_ORDER.forEach((level, physicalIndex) => {
+		const nbLevels = CARD_LEVEL_ORDER.length;
+		const priceRank = (((physicalIndex - revolutionCount) % nbLevels) + nbLevels) % nbLevels;
+		table[level] = basePricesByRank[priceRank];
+	});
+	return table;
 }
 
 // Prix d'une carte de monnaie LIBRE, en jetons faibles PHYSIQUES à cet
@@ -1320,13 +1341,19 @@ function historySquareRowHtml(sq) {
 	const promotedName = promotedEntry ? (catalogTextValue(promotedEntry.nom) || sq.promotedCardTypeId) : sq.promotedCardTypeId;
 	const breakthroughBadge = sq.triggeredBreakthrough
 		? `<span style="color:var(--primary-purple);font-weight:800;"> ⚡ ${escapeHtmlLocal(t("playerView.history_square_breakthrough"))}</span>` : "";
+	// Badge "révolution" (22/09/2026, "rotation des valeurs") - distinct de
+	// triggeredBreakthrough (rupture technologique, une seule fois par
+	// partie) : celui-ci se répète à chaque carré tresforte réellement
+	// bouclé, voir CardSquareEvent.isTriggeredRevolution.
+	const revolutionBadge = sq.triggeredRevolution
+		? `<span style="color:var(--danger, #dc2626);font-weight:800;"> 🔄 ${escapeHtmlLocal(t("playerView.history_square_revolution", { n: sq.revolutionCountAfter }))}</span>` : "";
 	return `
 	<li class="leaderboard-item">
 		<div class="player-info">
 			<div class="avatar-badge bg-purple">⬡</div>
 			<div>
 				<div class="player-name">${escapeHtmlLocal(t("playerView.history_square_title"))}</div>
-				<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t("playerView.history_square_detail", { cashed: cashedName, promoted: promotedName }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: sq.turnNumber }))}${breakthroughBadge}</div>
+				<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t("playerView.history_square_detail", { cashed: cashedName, promoted: promotedName }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: sq.turnNumber }))}${breakthroughBadge}${revolutionBadge}</div>
 			</div>
 		</div>
 	</li>`;
@@ -2341,6 +2368,19 @@ function connectPlayerWs() {
 		// déclenche l'animation automatiquement, pour CE joueur uniquement.
 		if ((msg.type === "square") && state.player && (msg.payload.playerId === state.player.id))
 			enqueueSquareAnimation(msg.payload);
+		// Révolution économique (22/09/2026, "rotation des valeurs" - voir
+		// Game.revolutionCount/cardPriceInDuTable) : contrairement au carré
+		// lui-même (animation propre au seul joueur concerné, ci-dessus), une
+		// révolution change le PRIX de toutes les cartes pour TOUT LE MONDE -
+		// chaque joueur doit donc en être informé, pas seulement celui qui a
+		// fait le carré. rafraîchit le solde/les prix affichés (refreshPlayer
+		// relit PlayerSelfViewDto, qui inclut le revolutionCount à jour) avant
+		// le toast, pour que l'onglet Cartes montre déjà les bons prix si le
+		// joueur l'ouvre juste après.
+		if ((msg.type === "square") && msg.payload.triggeredRevolution) {
+			refreshPlayer();
+			showToast(t("playerView.revolution_toast"));
+		}
 		// Nouveau tour démarré (voir bouton "Démarrer la partie", app.js) -
 		// remonté par l'utilisateur (02/09/2026) : "il faut aussi que l'écran
 		// des joueurs montre automatiquement l'écran des Cartes". Ne
@@ -2490,7 +2530,14 @@ async function playSquareAnimation(squareDto, pSkippedCount) {
 
 	const overlay = el("squareAnimOverlay");
 	const board = el("squareAnimBoard");
-	el("squareAnimTitle").textContent = t("playerView.square_anim_title");
+	// Révolution économique (22/09/2026, "rotation des valeurs") : un titre
+	// distinct pour le carré qui déclenche RÉELLEMENT une révolution (jamais
+	// pour un simple carré tresforte qui se replie faute d'autre modèle
+	// disponible, voir triggeredRevolution côté serveur) - le joueur sait
+	// immédiatement que ce carré-ci a un effet plus large que d'habitude.
+	el("squareAnimTitle").textContent = squareDto.triggeredRevolution
+		? t("playerView.square_anim_title_revolution")
+		: t("playerView.square_anim_title");
 	el("squareAnimSubtitle").textContent = "";
 	board.classList.remove("shake-impact");
 	board.innerHTML = "";

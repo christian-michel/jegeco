@@ -70,11 +70,11 @@ public class Dtos
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
 			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused, int jetonWeak,
 			int jetonMedium, int jetonStrong, int currentDuValue, double weakCardValueInDU,
-			boolean hasStartingAllocation)
+			boolean hasStartingAllocation, int revolutionCount)
 	{
 		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
 				final boolean pTradingAllowed, final double pWeakCoinValue, final boolean pIsPaused,
-				final int pCurrentDuValue, final double pWeakCardValueInDU)
+				final int pCurrentDuValue, final double pWeakCardValueInDU, final int pRevolutionCount)
 		{
 			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
@@ -90,7 +90,12 @@ public class Dtos
 					// deux ne doit être confondu avec isDebtGame()/isLibreGame() seuls,
 					// qui ne reflètent que le système MONÉTAIRE, pas le mode de suivi) -
 					// voir isSmartphoneTrackedPlayer() dans player-view.js.
-					p.getStartingCardsJson() != null);
+					p.getStartingCardsJson() != null,
+					// revolutionCount : ajouté le 22/09/2026 ("rotation des valeurs",
+					// voir Game.revolutionCount/cardPriceInDU) - nécessaire pour que
+					// cardPriceInDuTable() côté player-view.js reste synchronisé avec
+					// le serveur, même principe que weakCardValueInDU juste au-dessus.
+					pRevolutionCount);
 		}
 	}
 
@@ -160,7 +165,12 @@ public class Dtos
 	 */
 	public record CardSquareEventDto(Integer id, Integer playerId, String playerName, int turnNumber, long timestamp,
 			String cashedCardTypeId, String cashedLevel, String promotedCardTypeId, String promotedLevel,
-			java.util.List<String> replenishedCardIds, boolean triggeredBreakthrough)
+			java.util.List<String> replenishedCardIds, boolean triggeredBreakthrough,
+			// triggeredRevolution/revolutionCountAfter : ajoutés le 22/09/2026
+			// ("rotation des valeurs" - voir CardSquareEvent/Game.revolutionCount) -
+			// permettent à app.js/player-view.js de déclencher l'animation
+			// "RÉVOLUTION !" et d'afficher le nouveau barème sans requête séparée.
+			boolean triggeredRevolution, int revolutionCountAfter)
 	{
 		static CardSquareEventDto from(final jyt.geconomicus.helper.CardSquareEvent s)
 		{
@@ -178,7 +188,8 @@ public class Dtos
 			}
 			return new CardSquareEventDto(s.getId(), s.getPlayer().getId(), s.getPlayer().getName(), s.getTurnNumber(),
 					s.getTstamp() == null ? 0 : s.getTstamp().getTime(), s.getCashedCardTypeId(), s.getCashedLevel(),
-					s.getPromotedCardTypeId(), s.getPromotedLevel(), replenished, s.isTriggeredBreakthrough());
+					s.getPromotedCardTypeId(), s.getPromotedLevel(), replenished, s.isTriggeredBreakthrough(),
+					s.isTriggeredRevolution(), s.getRevolutionCountAfter());
 		}
 	}
 
@@ -197,7 +208,8 @@ public class Dtos
 			int totalCreditsOutstanding, int turnDurationSeconds, long turnStartedAtEpochMs, List<PlayerDto> players,
 			List<EventDto> events, int moneyCardsFactor, double weakCoinValue, String animatorPseudo,
 			int seizedValues, int moneyInvestBank, int cardsInvestBank, Integer pausedRemainingSeconds,
-			int startingGoods, boolean strictTrm, String pin, int currentDuValue, double weakCardValueInDU)
+			int startingGoods, boolean strictTrm, String pin, int currentDuValue, double weakCardValueInDU,
+			int revolutionCount)
 	{
 		static GameDetailDto from(final Game g)
 		{
@@ -243,7 +255,11 @@ public class Dtos
 					g.getMoneyCardsFactor(), g.getWeakCoinValue(), g.getAnimatorPseudo(),
 					g.getSeizedValues(), g.getMoneyInvestBank(), g.getCardsInvestBank(), g.getPausedRemainingSeconds(),
 					g.getStartingGoods(), g.isStrictTrm(), g.getPin(), g.computeCurrentDU(),
-					g.getWeakCardValueInDU());
+					g.getWeakCardValueInDU(),
+					// revolutionCount : ajouté le 22/09/2026 ("rotation des valeurs", voir
+					// Game.revolutionCount/cardPriceInDU) - lu par app.js pour afficher le
+					// barème de prix courant à l'animateur, jamais recalculé séparément.
+					g.getRevolutionCount());
 		}
 	}
 

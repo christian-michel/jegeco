@@ -87,7 +87,37 @@ public class CardSquareEvent implements Serializable
 	// technologique) - voir GameService, qui enregistre alors AUSSI un
 	// Event de type XTECHNOLOGICAL_BREAKTHROUGH pour que le calcul de
 	// richesse existant (StatsService, currentFactor *= 2) en tienne compte.
+	// Se déclenche UNE SEULE FOIS par partie (jamais aux occurrences
+	// suivantes) - volontairement DÉCOUPLÉ de triggeredRevolution ci-dessous
+	// (22/09/2026), qui lui se répète : un doublement du facteur de richesse
+	// à CHAQUE révolution aurait fait croître le graphique de richesse de
+	// façon exponentielle et non maîtrisée sur une partie longue, un effet
+	// non demandé par l'utilisateur (qui a seulement demandé la rotation des
+	// PRIX des cartes, pas une réévaluation de la courbe de richesse).
 	private boolean triggeredBreakthrough;
+
+	// Vrai si CET encaissement est un carré au niveau physique le plus haut
+	// ("tresforte") qui a RÉELLEMENT bouclé vers "faible" (jamais si le
+	// repli "aucun autre modèle disponible" s'est déclenché à la place -
+	// voir GameService.checkAndCashInSquares) - ajouté le 22/09/2026, suite
+	// utilisateur : "il peut être intéressant de mettre en place une
+	// rotation des valeurs, d'autant que cela est conforme à la règle du
+	// jeu" (voir geconomicus.glibre.org/rules.html, "révolution
+	// économique"). Contrairement à triggeredBreakthrough, se répète à
+	// CHAQUE fois (pas seulement la première) - c'est ce qui fait tourner
+	// Game.revolutionCount, donc le prix de chaque niveau (voir
+	// Game.cardPriceInDU). Purement informatif pour l'UI (déclenche
+	// l'animation "RÉVOLUTION !" côté client) - la vraie donnée de jeu reste
+	// Game.revolutionCount, jamais recalculée séparément ailleurs.
+	private boolean triggeredRevolution;
+
+	// Valeur de Game.revolutionCount immédiatement APRÈS cet encaissement
+	// (donc après incrémentation si triggeredRevolution est vrai) - capturée
+	// ici pour que l'animation puisse afficher "Révolution n°X" sans avoir à
+	// relire Game séparément (évite une course avec un encaissement suivant
+	// qui aurait déjà incrémenté le compteur avant que le client ne lise
+	// cet événement).
+	private int revolutionCountAfter;
 
 	@SuppressWarnings("unused")
 	private CardSquareEvent()
@@ -97,7 +127,8 @@ public class CardSquareEvent implements Serializable
 
 	public CardSquareEvent(final Game pGame, final Player pPlayer, final String pCashedCardTypeId,
 			final String pCashedLevel, final String pPromotedCardTypeId, final String pPromotedLevel,
-			final String pReplenishedCardIdsJson, final boolean pTriggeredBreakthrough)
+			final String pReplenishedCardIdsJson, final boolean pTriggeredBreakthrough,
+			final boolean pTriggeredRevolution, final int pRevolutionCountAfter)
 	{
 		super();
 		game = pGame;
@@ -110,6 +141,8 @@ public class CardSquareEvent implements Serializable
 		promotedLevel = pPromotedLevel;
 		replenishedCardIdsJson = pReplenishedCardIdsJson;
 		triggeredBreakthrough = pTriggeredBreakthrough;
+		triggeredRevolution = pTriggeredRevolution;
+		revolutionCountAfter = pRevolutionCountAfter;
 	}
 
 	public Integer getId()
@@ -165,5 +198,15 @@ public class CardSquareEvent implements Serializable
 	public boolean isTriggeredBreakthrough()
 	{
 		return triggeredBreakthrough;
+	}
+
+	public boolean isTriggeredRevolution()
+	{
+		return triggeredRevolution;
+	}
+
+	public int getRevolutionCountAfter()
+	{
+		return revolutionCountAfter;
 	}
 }

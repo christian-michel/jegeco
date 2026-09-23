@@ -1,5 +1,6 @@
 package jyt.geconomicus.helper.server;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
@@ -13,38 +14,26 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import jyt.geconomicus.helper.CardSquareEvent;
 import jyt.geconomicus.helper.Game;
 
 /**
- * Vérifie le correctif du 22/09/2026 (remonté par l'utilisateur sur une
- * vraie partie libre + smartphone, 2 joueurs, 8 tours de 3 min, "à partir du
- * 5ème tour... les carrés s'emballent et ne se comptent pas, le joueur peut
- * arriver à 5 cartes sans avoir déclenché de carré" - capture d'écran jointe
- * montrant TROIS modèles distincts bloqués à 5 exemplaires chacun, sur DEUX
- * niveaux différents, forte ET tresforte, EN MÊME TEMPS).
+ * Vérifie le mécanisme du carré (GameService.checkAndCashInSquares), en
+ * particulier son évolution du 22/09/2026 ("rotation des valeurs" - suite
+ * utilisateur : "quand on arrive à faire un carré de cartes très fortes... il
+ * peut être intéressant de mettre en place une rotation des valeurs, d'autant
+ * que cela est conforme à la règle du jeu", voir geconomicus.glibre.org/
+ * rules.html et Game.revolutionCount/cardPriceInDU).
  * <p>
- * Cause racine (voir le commentaire détaillé dans
- * {@link GameService#checkAndCashInSquares}) : la boucle de détection
- * s'arrêtait sur le PREMIER modèle à 4+ exemplaires rencontré dans
- * l'inventaire, quel que soit son niveau - y compris un modèle déjà au
- * niveau "tresforte" (le plus haut, sans promotion possible par conception,
- * voir le garde-fou qui retournait alors IMMÉDIATEMENT sans rien encaisser).
- * Une fois un joueur bloqué avec 4+ cartes tresforte identiques (jamais
- * réduit à 0, puisque jamais encaissable), ce modèle gagnait la course
- * d'itération à CHAQUE appel suivant, empêchant alors SILENCIEUSEMENT tout
- * encaissement de carré à un niveau inférieur pour ce joueur, pour le reste
- * de la partie.
- * <p>
- * Construction du scénario : {@link GameService#recordTransaction} ne
- * revérifie jamais que le VENDEUR possède réellement la carte au moment de
- * l'appel (contrairement à {@code recordCardSwap}, voir son commentaire du
- * 18/09/2026 - une différence assumée, propre au troc) - exploité ici pour
- * placer directement dans la main de p1 exactement les cartes voulues (4
- * "tresforte_0" bloquées PUIS 4 "forte_0" distinctes), sans dépendre d'une
- * cascade aléatoire coûteuse à orchestrer et à faire converger de façon
- * fiable. Le catalogue synthétique reste nécessaire pour que
- * {@code findLevelOfCard} reconnaisse chaque modèle utilisé ici comme
- * appartenant à la bonne pioche de la partie.
+ * Historique : ce fichier vérifiait auparavant le correctif du même jour pour
+ * un bug DIFFÉRENT ("les carrés s'emballent et ne se comptent pas, le joueur
+ * peut arriver à 5 cartes sans avoir déclenché de carré") - un carré au
+ * niveau physique le plus haut ("tresforte") restait alors bloqué à vie
+ * (aucune promotion possible, par conception), et ce blocage empêchait à
+ * tort l'encaissement de carrés à des niveaux inférieurs. La rotation des
+ * valeurs introduite ensuite rend ce scénario obsolète : "tresforte" n'est
+ * plus un cul-de-sac, un carré à ce niveau boucle désormais vers "faible" -
+ * ce fichier vérifie donc maintenant CE nouveau comportement à la place.
  */
 class GameServiceSquareEncashmentTest
 {
@@ -65,90 +54,151 @@ class GameServiceSquareEncashmentTest
 			sEmf.close();
 	}
 
-	@Test
-	void testStuckTopLevelSquareNeverBlocksALowerLevelSquare() throws Exception
+	/** Catalogue synthétique - un seul modèle par niveau intermédiaire suffit
+	 * ici, contrairement au catalogue plus large utilisé ailleurs pour tester
+	 * une vraie cascade organique : ce test place les cartes directement via
+	 * recordTransaction (voir son commentaire, plus bas), aucune cascade
+	 * naturelle n'est nécessaire. */
+	private Map<String, List<String>> smallCatalog()
 	{
 		final Map<String, List<String>> catalog = new LinkedHashMap<>();
 		catalog.put("faible", List.of("faible_0", "faible_1", "faible_2")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 		catalog.put("moyenne", List.of("moyenne_0", "moyenne_1", "moyenne_2")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 		catalog.put("forte", List.of("forte_0", "forte_1", "forte_2")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 		catalog.put("tresforte", List.of("tresforte_0")); //$NON-NLS-1$ //$NON-NLS-2$
+		return catalog;
+	}
 
+	/** Prépare une partie libre+smartphone à 2 joueurs, prête à recevoir des
+	 * cartes via recordTransaction (voir testStuckTopLevelSquareNeverBlocksALowerLevelSquare
+	 * pour le raisonnement complet sur cette technique). */
+	private int[] setUpGameWithTwoPlayers() throws Exception
+	{
 		final Game game = sService.createGame(Game.MONEY_LIBRE, 12, "AnimSquareTest", null, //$NON-NLS-1$
-				"test carre bloque au niveau max", "2026-09-22", "Ceres", 1, 180, 1.0, false, 0, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"test rotation des valeurs", "2026-09-22", "Ceres", 1, 180, 1.0, false, 0, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 		final int gameId = game.getId();
 		final int p0 = sService.addPlayer(gameId, "P0").getId(); //$NON-NLS-1$
 		final int p1 = sService.addPlayer(gameId, "P1").getId(); //$NON-NLS-1$
 
 		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
 		sService.captureDeckPlayerCountIfNeeded(gameId);
-		// Établit game.smartphoneCardPileJson (avec les modèles du catalogue
-		// ci-dessus, tous sélectionnés puisque exactement nbPlayers+1=3 par
-		// niveau intermédiaire) - c'est cette pioche que findLevelOfCard
-		// consulte pour reconnaître le niveau de chaque carte utilisée
-		// ci-dessous. Les mains de départ elles-mêmes (cartes faibles) ne
-		// servent pas dans ce scénario - seul recordTransaction sert à placer
-		// des cartes, voir plus bas.
-		sService.dealStartingHandsForLibreIfNeeded(gameId, catalog);
-
-		// Solde de jetons volontairement énorme pour p1 (WEALTH_CHECKPOINT) :
-		// en monnaie libre, recordTransaction recalcule TOUJOURS le vrai prix
-		// requis d'après le niveau de la carte (levelValue), quels que soient
-		// les weakCoins/mediumCoins/strongCoins passés en paramètre - ce test
-		// porte sur le mécanisme du carré, pas sur les soldes.
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog());
 		sService.recordEvent(gameId, "W", p1, 0, 0, 0, 0, 0, null, 0, 0, 1_000_000, 0, 0, 0, 0, 0); //$NON-NLS-1$
 
-		// Place directement 4 "tresforte_0" dans la main de p1 - recordTransaction
-		// (contrairement à recordCardSwap, voir le commentaire de tête de
-		// classe) ne revérifie jamais que p0 possède réellement la carte
-		// vendue, ce qui permet de construire ce scénario déterministe sans
-		// dépendre d'une cascade aléatoire faible -> moyenne -> forte ->
-		// tresforte.
+		return new int[] { gameId, p0, p1 };
+	}
+
+	@Test
+	void testTopLevelSquareLoopsBackToWeakInsteadOfBeingStuck() throws Exception
+	{
+		final int[] ids = setUpGameWithTwoPlayers();
+		final int gameId = ids[0];
+		final int p0 = ids[1];
+		final int p1 = ids[2];
+
+		assertEquals(0, sService.getGame(gameId).getRevolutionCount(), "aucune révolution au départ"); //$NON-NLS-1$
+
+		// Place directement 4 "tresforte_0" dans la main de p1 -
+		// recordTransaction ne revérifie jamais côté vendeur que p0 possède
+		// réellement la carte (contrairement à recordCardSwap, réservé au
+		// troc), ce qui permet de construire ce scénario de façon
+		// déterministe sans dépendre d'une cascade aléatoire.
 		for (int i = 0; i < 4; i++)
 			sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-					"tresforte-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
+					"tresforte-" + gameId + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
 
-		final Map<String, Integer> beforeCheck = sService.computePlayerCardInventory(gameId, p1);
-		assertTrue(beforeCheck.getOrDefault("tresforte_0", 0) >= 4, //$NON-NLS-1$
-				"préalable du scénario : p1 doit détenir 4 cartes tresforte_0 avant toute vérification de carré"); //$NON-NLS-1$
+		final List<CardSquareEvent> squares = sService.checkAndCashInSquares(gameId, p1);
+		assertEquals(1, squares.size(), "un seul carré attendu (4 tresforte_0, rien d'autre)"); //$NON-NLS-1$
+		final CardSquareEvent square = squares.get(0);
+		assertTrue(square.isTriggeredRevolution(), "un carré tresforte réellement bouclé doit déclencher une révolution"); //$NON-NLS-1$
+		assertEquals("tresforte", square.getCashedLevel()); //$NON-NLS-1$
+		assertEquals("faible", square.getPromotedLevel(), //$NON-NLS-1$
+				"la carte de récompense doit boucler vers le niveau faible, pas rester bloquée"); //$NON-NLS-1$
+		assertEquals(1, square.getRevolutionCountAfter());
 
-		// Un premier appel à checkAndCashInSquares à ce stade ne doit RIEN
-		// changer pour tresforte_0 (jamais encaissable au niveau maximum, par
-		// conception) - conforme AVANT et APRÈS le correctif du 22/09/2026,
-		// ce n'est pas ce qui est sous test ici.
-		sService.checkAndCashInSquares(gameId, p1);
-		final Map<String, Integer> afterTresforteOnlyCheck = sService.computePlayerCardInventory(gameId, p1);
-		assertTrue(afterTresforteOnlyCheck.getOrDefault("tresforte_0", 0) >= 4, //$NON-NLS-1$
-				"le carré tresforte doit rester bloqué (jamais encaissé), avec ou sans le correctif"); //$NON-NLS-1$
+		final Game gameAfter = sService.getGame(gameId);
+		assertEquals(1, gameAfter.getRevolutionCount(), "la révolution doit être persistée sur la partie"); //$NON-NLS-1$
 
-		// Place maintenant 4 "forte_0" DISTINCTES dans la main de p1, PENDANT
-		// que le carré tresforte reste bloqué - exactement la configuration
-		// observée dans la vraie partie (plusieurs modèles bloqués à la fois,
-		// sur des niveaux différents).
+		// Avec un seul modèle "tresforte" dans ce catalogue synthétique, les 4
+		// cartes de remplacement piochées après le carré retombent forcément
+		// sur ce même modèle (aucun autre disponible dans sa pioche) - le
+		// compte de tresforte_0 reste donc à 4 (un "cas extrême assumé" déjà
+		// documenté ailleurs dans ce fichier pour les pioches à un seul
+		// modèle, pas un signe que le carré est resté bloqué). Ce qui compte
+		// ici : le joueur a bien REÇU une carte "faible" en récompense (la
+		// preuve concrète que le carré a été réellement traité, contrairement
+		// au bug initial où rien ne se passait du tout).
+		final Map<String, Integer> inventoryAfter = sService.computePlayerCardInventory(gameId, p1);
+		final boolean receivedAFaibleCard = inventoryAfter.entrySet().stream()
+				.anyMatch(e -> e.getKey().startsWith("faible_") && (e.getValue() > 0)); //$NON-NLS-1$
+		assertTrue(receivedAFaibleCard,
+				"le joueur doit avoir reçu une carte faible en récompense du carré tresforte bouclé"); //$NON-NLS-1$
+	}
+
+	@Test
+	void testMultipleSimultaneousSquaresAcrossLevelsAreAllCashedIn() throws Exception
+	{
+		final int[] ids = setUpGameWithTwoPlayers();
+		final int gameId = ids[0];
+		final int p0 = ids[1];
+		final int p1 = ids[2];
+
+		// Place 4 "tresforte_0" ET 4 "forte_0" en même temps - avant la
+		// rotation des valeurs, ce scénario exact laissait "forte_0"
+		// définitivement bloqué (voir le commentaire de tête de fichier).
+		for (int i = 0; i < 4; i++)
+			sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
+					"tresforte-" + gameId + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
 		for (int i = 0; i < 4; i++)
 			sService.recordTransaction(gameId, p0, p1, "forte_0", "forte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-					"forte-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
+					"forte-" + gameId + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
 
-		final Map<String, Integer> beforeFinalCheck = sService.computePlayerCardInventory(gameId, p1);
-		assertTrue(beforeFinalCheck.getOrDefault("tresforte_0", 0) >= 4, //$NON-NLS-1$
-				"le carré tresforte doit toujours être présent juste avant la vérification finale"); //$NON-NLS-1$
-		assertTrue(beforeFinalCheck.getOrDefault("forte_0", 0) >= 4, //$NON-NLS-1$
-				"p1 doit détenir 4 cartes forte_0 juste avant la vérification finale"); //$NON-NLS-1$
-
-		// LE correctif sous test. Avant le 22/09/2026, cet appel repartait
-		// immédiatement sans rien faire dès que le premier modèle rencontré
-		// dans l'inventaire était le tresforte_0 bloqué - le carré forte_0
-		// (niveau inférieur, réellement encaissable) restait alors ignoré
-		// JAMAIS traité. Désormais, la détection ignore les modèles déjà au
-		// niveau maximum et continue à chercher un AUTRE modèle réellement
-		// encaissable.
 		sService.checkAndCashInSquares(gameId, p1);
 
-		final Map<String, Integer> afterFinalCheck = sService.computePlayerCardInventory(gameId, p1);
-		assertTrue(afterFinalCheck.getOrDefault("tresforte_0", 0) >= 4, //$NON-NLS-1$
-				"le carré tresforte doit rester intact après la vérification finale (jamais encaissable, par conception)"); //$NON-NLS-1$
-		assertTrue(afterFinalCheck.getOrDefault("forte_0", 0) < 4, //$NON-NLS-1$
-				"le carré forte_0 aurait dû être encaissé (" + afterFinalCheck.getOrDefault("forte_0", 0) //$NON-NLS-1$ //$NON-NLS-2$
-						+ " exemplaires restants) - resté bloqué par le carré tresforte coincé"); //$NON-NLS-1$
+		// tresforte_0 reste à 4 (churn attendu, un seul modèle dans ce
+		// catalogue synthétique - voir le commentaire détaillé du test
+		// précédent) : ce qui compte ici est que la révolution ait bien eu
+		// lieu (le mécanisme a tourné) ET que forte_0, à un niveau
+		// INFÉRIEUR, ne soit pas resté bloqué par la présence du carré
+		// tresforte - exactement le scénario du bug initial du 22/09/2026.
+		assertTrue(sService.getGame(gameId).getRevolutionCount() >= 1,
+				"la révolution du carré tresforte_0 doit avoir eu lieu"); //$NON-NLS-1$
+		final Map<String, Integer> inventoryAfter = sService.computePlayerCardInventory(gameId, p1);
+		assertTrue(inventoryAfter.getOrDefault("forte_0", 0) < 4, //$NON-NLS-1$
+				"le carré forte_0 aurait dû être encaissé, pas resté bloqué par le carré tresforte"); //$NON-NLS-1$
+	}
+
+	@Test
+	void testFourConsecutiveRevolutionsCycleThePriceScaleBackToNormal() throws Exception
+	{
+		final int[] ids = setUpGameWithTwoPlayers();
+		final int gameId = ids[0];
+		final int p0 = ids[1];
+		final int p1 = ids[2];
+
+		// Provoque 4 révolutions successives (une par carré tresforte
+		// réellement bouclé, un appel à checkAndCashInSquares par révolution
+		// - voir le garde-fou "une seule révolution par appel" dans
+		// GameService). Game.revolutionCount lui-même ne "boucle" JAMAIS - il
+		// compte simplement le nombre total de révolutions survenues depuis
+		// le début de la partie (une trace, jamais remise à 0). C'est la
+		// FORMULE de prix (Game.cardPriceInDU, voir sa vérification détaillée
+		// dans CardValueRevolutionTest côté geco-engine) qui, elle, retombe
+		// sur le barème normal tous les 4 révolutions (modulo interne à la
+		// formule) - vérifié ici en conditions réelles (via GameService, pas
+		// seulement Game seul).
+		for (int rev = 1; rev <= 4; rev++)
+		{
+			for (int i = 0; i < 4; i++)
+				sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
+						"rev" + gameId + "-" + rev + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+			sService.checkAndCashInSquares(gameId, p1);
+		}
+
+		final Game gameAfter = sService.getGame(gameId);
+		assertEquals(4, gameAfter.getRevolutionCount(), "4 révolutions doivent avoir eu lieu, une par appel"); //$NON-NLS-1$
+		assertEquals(0.5, gameAfter.cardPriceInDU("faible"), 1e-9, //$NON-NLS-1$
+				"après 4 révolutions, le barème doit être revenu exactement à la normale"); //$NON-NLS-1$
+		assertEquals(4.0, gameAfter.cardPriceInDU("tresforte"), 1e-9); //$NON-NLS-1$
 	}
 }

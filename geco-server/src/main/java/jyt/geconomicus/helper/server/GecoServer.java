@@ -1178,7 +1178,7 @@ public class GecoServer
 			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
 					game.getMoneySystem(), mGameService.isTradingAllowed(game), game.getWeakCoinValue(),
 					game.getPausedRemainingSeconds() != null, game.computeCurrentDU(),
-					game.getWeakCardValueInDU()));
+					game.getWeakCardValueInDU(), game.getRevolutionCount()));
 		});
 
 		// Inventaire de cartes d'un joueur, par SON PROPRE jeton (voir "Mes
@@ -2067,8 +2067,9 @@ public class GecoServer
 				// fixe en DU") sans mettre à jour cet appel - constructeur appelé avec un
 				// argument manquant, erreur de compilation ("actual and formal argument lists
 				// differ in length"). Simplement propagé depuis pDto, comme tous les autres champs.
-				// Même chose pour weakCardValueInDU, ajouté le 13/09/2026.
-				pDto.currentDuValue(), pDto.weakCardValueInDU());
+				// Même chose pour weakCardValueInDU, ajouté le 13/09/2026, et pour
+				// revolutionCount, ajouté le 22/09/2026 (voir Game.revolutionCount).
+				pDto.currentDuValue(), pDto.weakCardValueInDU(), pDto.revolutionCount());
 	}
 
 	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement

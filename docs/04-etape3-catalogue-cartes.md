@@ -106,15 +106,47 @@ recherchées.
   Implication : il faut modéliser un stock/pioche par carte (nombre d'exemplaires
   restants), décrémenté à chaque tirage lors d'un carré, potentiellement à plat
   (stock épuisé = plus aucune carte de ce type disponible pour cette partie).
-- **Révolution économique (palier final rouge) — RÉSOLU ET CONFIRMÉ** : quand un
-  joueur constitue un carré avec des cartes rouges (dernier palier), une
-  révolution économique se déclenche : les cartes jaunes deviennent plus
-  précieuses que les cartes rouges, et le joueur obtient une carte jaune.
-  Confirmé par l'utilisateur : c'est exactement le mécanisme déjà existant
-  `XTECHNOLOGICAL_BREAKTHROUGH` (`currentFactor *= 2` dans `StatsService`), un
-  simple doublement d'un facteur de valeur global — **pas** de réordonnancement
-  complexe des 4 couleurs à implémenter, la logique existante se réutilise telle
-  quelle.
+- **Révolution économique (palier final rouge) — DÉCISION ROUVERTE ET
+  RÉIMPLÉMENTÉE le 22/09/2026** : la décision d'origine ci-dessous (simple
+  réutilisation cosmétique de `XTECHNOLOGICAL_BREAKTHROUGH`, sans vrai
+  réordonnancement) a été explicitement rouverte par l'utilisateur : "quand on
+  arrive à faire un carré de cartes très fortes... il peut être intéressant de
+  mettre en place une rotation des valeurs, d'autant que cela est conforme à
+  la règle du jeu" - suite au bug du même jour ("les carrés s'emballent et ne
+  se comptent pas") où un carré au niveau maximum restait bloqué à vie faute
+  de niveau supérieur. Implémenté pour de vrai cette fois (voir
+  `Game.revolutionCount`/`cardPriceInDU`, `GameService.checkAndCashInSquares`) :
+  - Le tirage physique des cartes reste dans l'ordre fixe
+    faible→moyenne→forte→tresforte, mais boucle désormais de tresforte vers
+    faible au lieu d'être un cul-de-sac - un carré au niveau maximum n'est
+    plus jamais bloqué, quel que soit le nombre de tours joués.
+  - Chaque carré RÉELLEMENT bouclé depuis tresforte (jamais le repli "aucun
+    autre modèle disponible") déclenche une révolution : `revolutionCount`
+    augmente de 1, et le PRIX de chaque niveau tourne d'un cran (jamais
+    l'ordre de tirage lui-même) - après une révolution, "faible" prend le
+    prix qu'avait "tresforte" (le plus cher), et ainsi de suite ; après 4
+    révolutions (autant que de niveaux), le barème revient exactement à la
+    normale (cycle fermé).
+  - Garde-fou ajouté suite à un test réel : avec un seul modèle "tresforte"
+    en circulation, les 4 cartes de remplacement retombent nécessairement sur
+    ce même modèle, reformant IMMÉDIATEMENT un nouveau carré identique dans
+    le MÊME appel (confirmé : 23 révolutions d'un coup dans un scénario
+    synthétique) - au plus UNE révolution est désormais traitée par appel à
+    `checkAndCashInSquares`, une éventuelle reformation immédiate étant
+    laissée pour l'appel suivant (le prochain achat/échange), jamais bloquant
+    mais jamais une rafale illisible pour les joueurs.
+  - Portée volontairement limitée à la monnaie LIBRE (déjà un prix dynamique,
+    en DU) - la dette garde son barème fixe en jetons (`LEVEL_JETON_PRICE`,
+    inchangé, plusieurs commentaires existants disaient déjà "jamais changé"),
+    le troc n'a de toute façon aucun prix. Le bouclage physique du carré
+    lui-même (jamais bloqué), en revanche, bénéficie aux TROIS systèmes -
+    `checkAndCashInSquares` reste agnostique du système monétaire, comme
+    documenté plus haut.
+  - `XTECHNOLOGICAL_BREAKTHROUGH`/`currentFactor *= 2` (StatsService, graphique
+    de richesse) reste INCHANGÉ et se déclenche toujours UNE SEULE fois par
+    partie (jamais à chaque révolution) - volontairement DÉCOUPLÉ de la
+    rotation des valeurs, pour ne pas faire croître le graphique de richesse
+    de façon exponentielle et non maîtrisée sur une partie longue.
 - **Illustrations** : production via ChatGPT, par lots de 6 (une famille de
   produit à la fois : 1 produit + ses 4-5 constituants). Gabarit d'assemblage
   prêt et testé (`etape3-assets/`, voir ci-dessous) : dynamique, il suffit de

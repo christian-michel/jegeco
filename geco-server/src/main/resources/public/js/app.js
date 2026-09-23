@@ -653,6 +653,19 @@ function connectWs() {
 			} finally {
 				mBackgroundRefreshDepth--;
 			}
+			// Révolution économique (22/09/2026, "rotation des valeurs" - voir
+			// Game.revolutionCount) : l'historique des carrés (déjà rafraîchi
+			// juste au-dessus) montre bien le badge 🔄, mais un événement aussi
+			// rare et global (change le prix de TOUTES les cartes) mérite un
+			// signal immédiat, même si l'animateur n'a pas l'historique ouvert
+			// sous les yeux - même emplacement/mécanisme que le toast "Fin de
+			// tour"/"Nouveau tour" (#turnEndToast, réutilisé tel quel).
+			if ((msg.type === "square") && msg.payload.triggeredRevolution) {
+				const toast = el("turnEndToast");
+				toast.textContent = window.GecoI18n.t("game.toast_revolution", { n: msg.payload.revolutionCountAfter });
+				toast.classList.remove("hidden");
+				setTimeout(() => { toast.classList.add("hidden"); toast.textContent = window.GecoI18n.t("game.toast_end_turn"); }, 3000);
+			}
 		}
 	};
 }
@@ -3340,6 +3353,7 @@ async function renderTransactionsPanel(gameId) {
 					${t("game.squares_detail", { cashed: escapeHtml(cardName(sq.cashedCardTypeId)), promoted: escapeHtml(cardName(sq.promotedCardTypeId)) })}
 					· ${t("game.transactions_turn_label", { n: sq.turnNumber })}
 					${sq.triggeredBreakthrough ? ` · ⚡ ${escapeHtml(t("game.squares_breakthrough"))}` : ""}
+					${sq.triggeredRevolution ? ` · 🔄 ${escapeHtml(t("game.squares_revolution", { n: sq.revolutionCountAfter }))}` : ""}
 				</span>
 			</li>`).join("")}
 		</ul>`;

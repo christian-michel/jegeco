@@ -1961,6 +1961,9 @@ msgstr "4× {cashed} → 1× {promoted}"
 msgid "playerView.history_square_breakthrough"
 msgstr "Rupture technologique"
 
+msgid "playerView.history_square_revolution"
+msgstr "Révolution n°{n} : les valeurs ont tourné"
+
 # ============ Carrés dans le panneau echanges animateur (31/08/2026) ============
 msgid "game.squares_section_title"
 msgstr "Carrés encaissés ({count})"
@@ -1971,6 +1974,9 @@ msgstr "4× {cashed} → 1× {promoted}"
 msgid "game.squares_breakthrough"
 msgstr "Rupture technologique"
 
+msgid "game.squares_revolution"
+msgstr "Révolution n°{n} : les valeurs ont tourné"
+
 # ============ Regroupement par valeur dans Mes cartes (31/08/2026) ============
 msgid "playerView.cards_group_value_title"
 msgstr "Cartes de valeur {level}"
@@ -1979,8 +1985,18 @@ msgstr "Cartes de valeur {level}"
 msgid "playerView.square_anim_title"
 msgstr "Carré encaissé ! 🎉"
 
+# ============ Rotation des valeurs / "révolution économique" (22/09/2026) ============
+msgid "playerView.square_anim_title_revolution"
+msgstr "RÉVOLUTION ! 🔄"
+
 msgid "playerView.square_anim_detail"
 msgstr "4× {cashed} échangées contre 1× {promoted}"
+
+msgid "playerView.revolution_toast"
+msgstr "🔄 Révolution ! Les valeurs des cartes viennent de tourner."
+
+msgid "game.toast_revolution"
+msgstr "🔄 Révolution n°{n} : les valeurs des cartes viennent de tourner."
 
 # ============ Infobulles temporaires (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"

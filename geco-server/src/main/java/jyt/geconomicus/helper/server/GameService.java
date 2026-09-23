@@ -1842,6 +1842,22 @@ public class GameService
 		// encaissé dans un cas vraiment dégénéré plutôt que de figer toute
 		// l'application pour tout le monde.
 		int safetyIterations = 0;
+		// Au plus UNE révolution par appel (22/09/2026, voir le commentaire
+		// détaillé sur la détection du carré plus bas) : quand le niveau
+		// "tresforte" n'a, pour cette partie, qu'un seul modèle disponible
+		// (ou plus qu'un seul en stock), les 4 cartes de remplacement piochées
+		// juste après un carré bouclé retombent nécessairement sur ce même
+		// modèle - le joueur se retrouve donc IMMÉDIATEMENT avec un nouveau
+		// carré tresforte identique, prêt à boucler de nouveau dès l'itération
+		// suivante de cette même boucle. Laissé tel quel, un seul appel
+		// pourrait déclencher des dizaines de révolutions d'un coup (confirmé
+		// par test : 23 dans un cas synthétique à un seul modèle tresforte) -
+		// une rafale peu lisible pour les joueurs ("RÉVOLUTION !" affiché 23
+		// fois d'un coup). Ce garde-fou n'empêche jamais l'encaissement lui-
+		// même (jamais bloquant, contrairement au bug initial du 22/09/2026) :
+		// il laisse simplement toute révolution SUPPLÉMENTAIRE pour un appel
+		// ultérieur (le prochain achat/échange la déclenchera normalement).
+		boolean revolutionAlreadyHappenedThisCall = false;
 		while (safetyIterations++ < 50)
 		{
 			final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -1869,37 +1885,44 @@ public class GameService
 				// l'inventaire ACTUEL (déjà rejoué : dotation + transactions +
 				// carrés précédents) - le premier trouvé, peu importe l'ordre.
 				//
-				// BUG CRITIQUE TROUVÉ (22/09/2026, remonté par l'utilisateur sur une
-				// vraie partie 2 joueurs/8 tours : "les carrés s'emballent et ne se
-				// comptent pas, le joueur peut arriver à 5 cartes sans avoir
-				// déclenché de carré") : cette boucle s'arrêtait sur le PREMIER
-				// modèle à 4+ exemplaires rencontré, quel que soit son niveau - y
-				// compris un modèle déjà au niveau "tresforte" (le plus haut, sans
-				// promotion possible, voir le garde-fou juste en dessous qui
-				// retournait alors IMMÉDIATEMENT sans rien encaisser). Résultat :
-				// dès qu'un joueur accumulait 4 cartes tresforte identiques (aucune
-				// promotion possible, donc jamais rendu à 0 en dessous), CE modèle
-				// gagnait la course d'itération à CHAQUE appel suivant (ordre de
-				// Map stable pour un même jeu de clés) - bloquant alors
-				// SILENCIEUSEMENT tout encaissement de carré pour ce joueur, y
-				// compris à des niveaux inférieurs (moyenne/forte) où un autre
-				// modèle avait pourtant lui aussi atteint 4+ exemplaires entre-
-				// temps : confirmé par la capture d'écran jointe, montrant TROIS
-				// modèles distincts bloqués à 5 exemplaires chacun, sur DEUX
-				// niveaux différents (forte ET tresforte) en même temps. Corrigé :
-				// on ignore dès cette détection les modèles déjà au niveau maximum
-				// (aucune promotion possible pour eux, par conception - voir le
-				// commentaire plus bas), pour continuer à chercher un AUTRE modèle
-				// réellement encaissable plutôt que d'abandonner tout le reste sur
-				// la seule base de ce premier modèle rencontré.
+				// BUG CRITIQUE TROUVÉ ET CORRIGÉ (22/09/2026, remonté par
+				// l'utilisateur sur une vraie partie 2 joueurs/8 tours : "les
+				// carrés s'emballent et ne se comptent pas, le joueur peut arriver
+				// à 5 cartes sans avoir déclenché de carré") : cette boucle
+				// s'arrêtait sur le PREMIER modèle à 4+ exemplaires rencontré,
+				// quel que soit son niveau - y compris un modèle déjà au niveau
+				// "tresforte" (le plus haut d'alors, sans promotion possible à
+				// l'époque). Un modèle tresforte bloqué (jamais réduit) gagnait
+				// alors la course d'itération à CHAQUE appel suivant, empêchant
+				// SILENCIEUSEMENT tout encaissement de carré pour ce joueur, même
+				// à des niveaux inférieurs où un AUTRE modèle avait pourtant lui
+				// aussi atteint 4+ exemplaires.
+				//
+				// ROTATION DES VALEURS / "révolution économique" (22/09/2026,
+				// suite utilisateur : "il peut être intéressant de mettre en place
+				// une rotation des valeurs" - voir geconomicus.glibre.org/
+				// rules.html et Game.revolutionCount) : cette même situation
+				// n'existe plus DU TOUT désormais - TOUS les niveaux sont
+				// "promotable" (aucune restriction ici), puisque le niveau
+				// physique le plus haut ("tresforte") boucle maintenant vers
+				// "faible" au lieu d'être un cul-de-sac (voir nextLevel plus bas,
+				// calculé modulo). Le garde-fou ci-dessus reste néanmoins utile en
+				// principe (ne jamais abandonner tout le reste sur la base du
+				// premier modèle rencontré) si un futur niveau redevenait un
+				// jour non-promotable.
 				final java.util.Map<String, Integer> inventory = computePlayerCardInventory(pGameId, pPlayerId);
 				String squareCardId = null;
 				String squareLevel = null;
 				for (final java.util.Map.Entry<String, Integer> e : inventory.entrySet())
 				{
 					final String level = findLevelOfCard(pilesByLevel, e.getKey());
-					final int candidateLevelIndex = (level == null) ? -1 : LEVEL_ORDER.indexOf(level);
-					final boolean promotable = (candidateLevelIndex >= 0) && (candidateLevelIndex < LEVEL_ORDER.size() - 1);
+					final boolean isTopLevel = LEVEL_ORDER.get(LEVEL_ORDER.size() - 1).equals(level);
+					// Une révolution déjà survenue CE call rend tout NOUVEAU carré
+					// tresforte temporairement "non éligible" ici (voir le garde-fou
+					// revolutionAlreadyHappenedThisCall en tête de méthode) - il sera
+					// détecté normalement lors d'un appel ultérieur.
+					final boolean promotable = (level != null) && (LEVEL_ORDER.indexOf(level) >= 0)
+							&& !(isTopLevel && revolutionAlreadyHappenedThisCall);
 					if ((e.getValue() >= 4) && promotable)
 					{
 						squareCardId = e.getKey();
@@ -1908,17 +1931,16 @@ public class GameService
 					}
 				}
 				if (squareCardId == null)
-					// Rien à encaisser : soit aucun modèle n'a 4+ exemplaires, soit
-					// les seuls carrés présents sont déjà au niveau maximum
-					// (tresforte) - jamais de promotion possible dans ce cas, par
-					// conception (pas de niveau au-dessus dans ce modèle simplifié).
-					return cashedInThisCall;
+					return cashedInThisCall; // rien à encaisser, on s'arrête là
 
-				// squareLevel vient d'être confirmé "promotable" par la boucle de
-				// détection ci-dessus (candidateLevelIndex < LEVEL_ORDER.size() - 1)
-				// - levelIndex + 1 désigne donc TOUJOURS un niveau valide.
+				// Boucle fermée (22/09/2026) : le niveau suivant reprend "faible"
+				// une fois "tresforte" dépassé (modulo), au lieu de s'arrêter en
+				// cul-de-sac - voir le commentaire de tête de méthode sur la
+				// rotation des valeurs. squareLevel est TOUJOURS un niveau connu
+				// (vient d'être confirmé par la détection ci-dessus), levelIndex
+				// est donc toujours >= 0.
 				final int levelIndex = LEVEL_ORDER.indexOf(squareLevel);
-				final String nextLevel = LEVEL_ORDER.get(levelIndex + 1);
+				final String nextLevel = LEVEL_ORDER.get((levelIndex + 1) % LEVEL_ORDER.size());
 				final java.util.Map<String, Integer> samePile = pilesByLevel.get(squareLevel);
 				final java.util.Map<String, Integer> nextPile = pilesByLevel.get(nextLevel);
 				// BUG TROUVÉ (remonté par l'utilisateur, 02/09/2026) : ce garde-fou
@@ -2036,11 +2058,34 @@ public class GameService
 								.setParameter("gameId", pGameId).setParameter("lvl", "tresforte") //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 								.getSingleResult() == 0);
 
+				// Révolution économique (22/09/2026, "rotation des valeurs" - voir
+				// Game.revolutionCount/cardPriceInDU) : se déclenche à CHAQUE
+				// carré réellement bouclé depuis le niveau physique le plus haut
+				// ("tresforte") vers "faible" - jamais si le repli "aucun autre
+				// modèle disponible" s'est produit à la place (nextPileExhausted),
+				// aucun vrai bouclage n'ayant alors eu lieu. Contrairement à
+				// isFirstBreakthrough ci-dessus, se répète à chaque occurrence :
+				// c'est ce qui fait tourner le prix de chaque niveau au fil d'une
+				// partie longue.
+				final boolean isRevolution = !nextPileExhausted
+						&& LEVEL_ORDER.get(LEVEL_ORDER.size() - 1).equals(squareLevel);
+
 				final Player player = em.find(Player.class, pPlayerId);
 				em.getTransaction().begin();
 				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
+				// Mutation de game.revolutionCount faite DANS la transaction
+				// (comme smartphoneCardPileJson juste au-dessus), jamais avant
+				// begin() - un champ modifié sur une entité gérée hors
+				// transaction n'est pas garanti d'être persisté par ce provider
+				// JPA.
+				if (isRevolution)
+				{
+					game.setRevolutionCount(game.getRevolutionCount() + 1);
+					revolutionAlreadyHappenedThisCall = true;
+				}
 				final CardSquareEvent squareEvent = new CardSquareEvent(game, player, squareCardId, squareLevel,
-						promotedCardId, promotedLevel, toJsonQuietly(mapper, replenished), isFirstBreakthrough);
+						promotedCardId, promotedLevel, toJsonQuietly(mapper, replenished), isFirstBreakthrough,
+						isRevolution, game.getRevolutionCount());
 				em.persist(squareEvent);
 				em.getTransaction().commit();
 				cashedInThisCall.add(squareEvent);
