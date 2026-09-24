@@ -24,6 +24,9 @@ geco-multimodule/
 │                   -> c'est ici qu'il faut chercher/modifier les RÈGLES DU JEU
 ├── geco-app/       module Maven : l'ancienne interface Swing (conservée, "--classic")
 ├── geco-server/    module Maven : le serveur web (Javalin) + le front (public/)
+│   ├── .../server/auth/   comptes animateurs (login/mot de passe, rôles
+│   │                      ADMIN/ANIMATEUR, sessions) - voir
+│   │                      docs/13-etape3-etat-et-feuille-de-route.md
 │   └── src/main/resources/public/
 │       ├── index.html   écran animateur (le plus gros fichier)
 │       ├── js/app.js     toute la logique côté client (voir son en-tête pour
@@ -75,6 +78,12 @@ séparé à installer.
 - **"Où sont les règles du jeu (pour un humain, pas pour le code) ?"** →
   `docs/01-le-jeu-et-ses-regles.md` (règles générales) et la documentation
   utilisateur intégrée à l'app (`public/docs/`, distincte de ce dossier-ci).
+- **"Comment fonctionnent les comptes animateurs / la sécurité, et qu'est-ce
+  qu'il manque pour un serveur ouvert sur internet ?"** →
+  `geco-server/.../server/auth/` (`AnimatorService`, `SessionService`,
+  `PasswordHasher`) pour le code ; `docs/13-etape3-etat-et-feuille-de-route.md`
+  (section "Comptes animateurs multi-session et sécurité") pour l'état exact
+  et à jour, ce qui est fait et ce qu'il reste à faire.
 
 ## Philosophie du projet (pourquoi certains choix peuvent surprendre)
 

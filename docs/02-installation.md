@@ -12,9 +12,10 @@ Il y a **deux interfaces disponibles** :
   fonctionnement à l'outil original de jytou. Toujours disponible via l'option
   `--classic` (voir plus bas), pour ceux qui la préfèrent ou veulent comparer.
 
-Il n'existe pas encore d'installeur "tout-en-un" en un clic (c'est justement l'objet
-de l'étape 3 du projet, avec Docker — voir `03-architecture-technique.md`). En
-attendant, un **script de lancement automatisé** est fourni à la racine du projet :
+Il n'existe pas encore d'installeur "tout-en-un" en un clic, ni de paquet Docker
+(objectif encore à faire, voir `docs/13-etape3-etat-et-feuille-de-route.md`,
+section "Reste à faire"). En attendant, un **script de lancement automatisé**
+est fourni à la racine du projet :
 il détecte et installe Java/Maven si nécessaire, compile le projet si besoin, ouvre
 automatiquement votre navigateur, et lance le jeu — **sans qu'aucune commande ne
 soit à taper**.
@@ -285,6 +286,51 @@ manuellement via `java -jar geco-server/target/geco-server.jar`) écoute sur le 
 java -jar geco-server/target/geco-server.jar 8080
 ```
 
+## Premier lancement : compte animateur
+
+Depuis l'introduction des comptes animateurs (multi-session), l'interface web
+demande une connexion avant d'accéder à quoi que ce soit :
+
+1. **Tout premier lancement d'un serveur neuf** (aucun compte en base) :
+   l'écran affiché propose de **créer le premier compte** (identifiant, nom
+   affiché, mot de passe) — ce compte devient automatiquement **ADMIN** et
+   récupère toutes les parties déjà jouées avant l'introduction des comptes,
+   s'il y en a (rien n'est jamais perdu).
+2. **Lancements suivants** : écran de connexion classique (identifiant + mot
+   de passe). Un compte ADMIN peut créer d'autres comptes animateurs depuis
+   Réglages → Comptes animateurs. Un animateur simple ne voit et ne gère que
+   **ses propres parties** ; seul un ADMIN gère les réglages partagés du
+   serveur (catalogues, plugins, langues, comptes).
+3. La **protection par code PIN** par partie (facultative, réglable à la
+   création de chaque partie) reste **distincte** de ce compte animateur :
+   elle protège l'accès à UNE partie précise (utile pour la partager avec
+   d'autres sans exposer les autres parties du serveur), tandis que le
+   compte protège l'accès au serveur dans son ensemble.
+
+👉 Pour le détail technique (rôles, sessions, limites connues d'un tel
+système sur un serveur exposé au-delà d'un réseau local) voir
+`docs/13-etape3-etat-et-feuille-de-route.md`, section "Comptes animateurs
+multi-session et sécurité".
+
+## Accès depuis d'autres appareils (réseau local ou internet)
+
+- **Réseau local** (le cas d'usage principal aujourd'hui, ex. un atelier
+  avec plusieurs joueurs sur smartphone) : voir
+  `docs/05-etape3-connectivite.md` pour partager sa connexion et obtenir
+  l'adresse IP à donner aux joueurs. Un certificat HTTPS auto-signé est
+  généré automatiquement au premier lancement, nécessaire uniquement pour
+  que le scan caméra (achat de cartes par QR) fonctionne hors `localhost` -
+  chaque appareil affichera un avertissement de sécurité à accepter
+  manuellement la première fois (normal, ce certificat n'est reconnu par
+  aucune autorité).
+- **Serveur accessible depuis internet** (au-delà d'un réseau local) : la
+  sécurité applicative nécessaire existe déjà (comptes animateurs, PIN par
+  partie, limitation de débit — voir ci-dessus), mais un déploiement public
+  réel demande encore un vrai certificat TLS (le certificat auto-signé ne
+  convient qu'au réseau local) et un empaquetage dédié — voir
+  `docs/13-etape3-etat-et-feuille-de-route.md`, section "Reste à faire",
+  pour l'état exact et à jour de ce qui manque.
+
 ## En cas de problème
 
 - **`Database may be already in use: "~/geco.h2.mv.db"` pendant la compilation**
@@ -355,3 +401,8 @@ java -jar geco-server/target/geco-server.jar 8080
 - `01-le-jeu-et-ses-regles.md` : comprendre le jeu et les écrans de l'application.
 - `03-architecture-technique.md` : le détail des choix techniques de cette mise à
   jour, si vous souhaitez contribuer au code.
+- `05-etape3-connectivite.md` : partager sa connexion pour que les smartphones
+  des joueurs accèdent au serveur sur le réseau local.
+- `13-etape3-etat-et-feuille-de-route.md` : état exact et à jour des comptes
+  animateurs, de la sécurité, et de ce qui manque pour un hébergement
+  accessible depuis internet.

@@ -1606,6 +1606,76 @@ et les résultats, jamais le raisonnement du premier - a trouvé un bug de
 sécurité réel (le contournement "même valeur" ci-dessus) qu'une simple
 relecture par le même agent n'aurait probablement pas détecté.
 
+### Comptes animateurs multi-session (21/09/2026)
+
+Demande explicite de l'utilisateur : "proposer une version serveur capable
+de gérer le multi session avec plusieurs animateurs qui ont chacuns leur
+profil et leurs parties." Referme directement la faille laissée
+volontairement hors périmètre par la passe de sécurité du 02/09/2026
+ci-dessus ("les routes d'administration GLOBALE du serveur... restent sans
+authentification - une question différente de la protection PAR PARTIE
+traitée ici, qui nécessiterait un vrai concept de compte administrateur").
+
+**Modèle de données** (`Animator`, dans `geco-engine` aux côtés de
+Game/Player - même convention que les autres champs propres au web) : login
+unique, nom affiché, hash de mot de passe, rôle (`ADMIN`/`ANIMATEUR`),
+préférences personnelles (langue, mode de jeu par défaut). `Game.owner`
+rattache chaque partie à l'animateur qui l'a créée. L'app Swing
+(`geco-app`) ne lit ni n'écrit cette table - comportement inchangé.
+
+**Toute la logique vit côté serveur** (`jyt.geconomicus.helper.server.auth`,
+package dédié plutôt que mélangé à `GameService`) :
+- `PasswordHasher` : PBKDF2WithHmacSHA256 natif au JDK (pas de nouvelle
+  dépendance bcrypt/argon2), 210 000 itérations (recommandation OWASP au
+  moment de l'écriture). Choix explicitement **proportionné à l'usage réel
+  du projet** (authentification d'une poignée d'animateurs sur un serveur
+  associatif LAN, pas un système exposé au grand public) - à revisiter si
+  le projet devait un jour accueillir un public large et non maîtrisé.
+- `SessionService` : jeton opaque de 256 bits transmis via l'en-tête
+  `X-Session-Token` (même convention que `X-Game-Pin` déjà en place, jamais
+  un cookie - pas de CSRF/SameSite à gérer en plus). Volontairement **en
+  mémoire, sans expiration ni persistance** - un redémarrage de serveur LAN
+  est rare et bien visible pour l'animateur (reconnexion en un clic) ; ce
+  choix devra être revu pour un serveur public resté allumé longtemps avec
+  de nombreux animateurs (voir `docs/13-etape3-etat-et-feuille-de-route.md`,
+  "Reste à faire").
+- `AnimatorService` : création de compte (le tout premier créé sur un
+  serveur neuf devient automatiquement ADMIN et récupère toutes les parties
+  orphelines déjà jouées avant l'introduction des comptes - jamais
+  d'historique perdu), vérification login/mot de passe (jamais de
+  distinction dans la réponse entre "login inconnu" et "mot de passe
+  incorrect", pour ne pas révéler quels comptes existent), réinitialisation
+  de mot de passe (réservée à ADMIN).
+
+**Câblage côté routes** (`GecoServer`) : `requireAdmin`/`requireAnimator`
+protègent désormais les routes de réglages/catalogues/plugins/comptes
+(ADMIN uniquement) et la création/liste des parties (tout animateur
+connecté, mais un non-ADMIN ne voit que les siennes -
+`GameService.listGamesByOwner`) ; `checkGameOwnership` interdit à un
+animateur non-ADMIN d'agir sur une partie qui ne lui appartient pas, en
+plus - jamais à la place - du PIN par partie déjà en place depuis le
+02/09/2026. Même frein de débit que `/unlock` sur `/api/auth/login` (10
+tentatives/minute/IP) - un mot de passe se devine par force brute
+exactement comme un PIN.
+
+**Phase 4, même session** : préférences personnelles par animateur
+(langue, mode de jeu par défaut) - avant les comptes, ces réglages étaient
+globaux et modifiables par n'importe qui ; réservés à ADMIN depuis la
+Phase 2 (route `/api/settings`), ce qui retirait de facto la main aux
+animateurs simples sur un choix pourtant personnel. Corrigé en distinguant
+clairement réglages d'INSTALLATION (partagés, ADMIN) et préférences
+PERSONNELLES (`PUT /api/animators/me/preferences`, résolues depuis la
+session plutôt que depuis un id dans l'URL - structurellement impossible
+de modifier la préférence de quelqu'un d'autre par cette route).
+
+**Ce que ça n'est PAS encore** : un serveur "prêt pour internet" au sens
+plein. Le certificat HTTPS auto-signé (`SelfSignedCertService`, en place
+depuis l'étape 3 pour l'accès caméra sur réseau local) reste un certificat
+non reconnu par les navigateurs - `docs/13-etape3-etat-et-feuille-de-route.md`
+liste précisément ce qui manque encore (empaquetage Docker + reverse proxy
+Caddy pour un vrai certificat Let's Encrypt, persistance/expiration des
+sessions, proportionnalité du hachage à revisiter selon l'échelle réelle).
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

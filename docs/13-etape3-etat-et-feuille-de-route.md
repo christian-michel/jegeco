@@ -49,6 +49,48 @@ ce dépôt).
   `connexion-joueurs.html`, avec leurs sources `docs/en/markdown/`
   correspondantes) - n'existaient jusqu'ici qu'en français.
 
+### Comptes animateurs multi-session et sécurité (construits le 21/09/2026 — vers un hébergement public)
+
+Demande utilisateur explicite : "proposer une version serveur capable de
+gérer le multi session avec plusieurs animateurs qui ont chacuns leur
+profil et leurs parties." Transversal aux trois systèmes monétaires
+ci-dessus (contrairement aux sections suivantes) - concerne le serveur
+dans son ensemble, pas une mécanique de jeu précise.
+
+- **Comptes animateurs réels** (`Animator`, `AnimatorService`) : identifiant
+  + mot de passe (haché en PBKDF2WithHmacSHA256, 210 000 itérations,
+  recommandation OWASP au moment de l'écriture), deux rôles - `ADMIN` (gère
+  les réglages partagés : catalogues, plugins, langues, comptes) et
+  `ANIMATEUR` (crée/gère seulement ses propres parties). Premier compte créé
+  sur un serveur neuf → automatiquement ADMIN, et rattache à lui toutes les
+  parties déjà jouées avant l'introduction des comptes (jamais orphelines).
+- **Sessions de connexion** (`SessionService`) : jeton opaque transmis dans
+  l'en-tête `X-Session-Token` (même convention que `X-Game-Pin`), jamais un
+  cookie. Volontairement **en mémoire, sans expiration** - proportionné à un
+  serveur associatif sur LAN où un redémarrage est rare et le nombre
+  d'animateurs faible ; **à revoir avant un vrai déploiement public à
+  grande échelle** (voir "Reste à faire" ci-dessous).
+- **Cloisonnement par partie** : un animateur non-ADMIN ne voit et ne peut
+  agir que sur SES PROPRES parties (`Game.owner`, `checkGameOwnership`
+  dans `GecoServer`) - un ADMIN continue de tout voir/gérer, comme avant
+  l'introduction des comptes.
+- **Referme la faille identifiée le 02/09/2026** ("Passe de sécurité", voir
+  `03-architecture-technique.md`) : les routes d'administration globale du
+  serveur (liste/création de parties, réglages, catalogues, langues,
+  plugins) étaient jusque-là accessibles sans aucune authentification -
+  désormais protégées par `requireAdmin`/`requireAnimator`, en plus de la
+  protection par PIN par partie déjà en place.
+- **HTTPS** : un certificat auto-signé est généré automatiquement au
+  premier lancement (`SelfSignedCertService`, Bouncy Castle) pour que le
+  scan caméra (QR d'achat de cartes) fonctionne sur le réseau local - couvre
+  `localhost` et les adresses IP locales détectées. **Ne remplace pas un
+  vrai certificat reconnu** (chaque navigateur affiche un avertissement à
+  accepter manuellement) : suffisant pour un atelier sur réseau local, pas
+  pour une adresse publique sur internet (voir "Reste à faire").
+- L'application Swing (`geco-app`) n'a aucune notion de compte et continue
+  de fonctionner exactement comme avant - rien de ce qui précède ne la
+  concerne.
+
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la
   Monnaie** (`DU = c × masse_monétaire / joueurs_vivants`, avec `c` dépendant
@@ -182,8 +224,29 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    concluant confirmé (voir le code pour les commentaires "[DIAG]" restants
    éventuels — la plupart ont déjà été retirées ou pérennisées via le
    système de journalisation).
-5. **Déploiement Phase 2** : Docker + Caddy (la Phase 1, sécurité applicative,
-   est terminée).
+5. **Déploiement sur un serveur accessible depuis internet** (au-delà d'un
+   réseau local d'atelier) — la sécurité APPLICATIVE nécessaire est posée
+   (PIN par partie, comptes animateurs avec rôles, cloisonnement par
+   partie, isolation WebSocket par partie, limitation de débit sur les
+   points sensibles - voir la section "Comptes animateurs multi-session et
+   sécurité" ci-dessus et `03-architecture-technique.md` pour le détail),
+   mais **rien de ce qui suit n'est encore fait** :
+   - **Empaquetage Docker + reverse proxy Caddy** (obtention automatique
+     d'un vrai certificat TLS via Let's Encrypt) - le certificat auto-signé
+     actuel (`SelfSignedCertService`) ne convient qu'à un réseau local.
+   - **Persistance/expiration des sessions animateur** : actuellement en
+     mémoire, sans expiration (`SessionService`) - un choix assumé pour un
+     serveur LAN à redémarrages rares, à revoir pour un serveur public
+     resté allumé longtemps avec plusieurs animateurs.
+   - **Proportionnalité du hachage de mot de passe** (`PasswordHasher`,
+     PBKDF2 210 000 itérations) : documenté comme "proportionné à une
+     poignée d'animateurs sur un serveur associatif, pas un système exposé
+     au grand public" - à revisiter si le serveur devait accueillir un
+     public large/non maîtrisé.
+   - **Sauvegarde/supervision d'un serveur distant** : la sauvegarde
+     existante (export de la base H2) suppose un accès direct à la
+     machine - pas encore de procédure documentée pour un serveur hébergé
+     à distance (sauvegarde automatisée, monitoring, mise à jour).
 6. **Module Galilée** (convergence vers la moyenne, voir
    https://yyy-vox.gitlab.io/encyyyclopedie/articles/module_galilee.html) —
    idée mentionnée par l'utilisateur pour exploiter les données réelles

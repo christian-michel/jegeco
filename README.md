@@ -34,8 +34,14 @@ d'en comparer concrètement les effets.
   personnalisées depuis l'interface.
 - **Sauvegarde et export** : sauvegarde complète de la base, export d'une
   partie individuelle.
-- **Protection optionnelle par code** : code PIN par partie pour l'animateur,
-  jeton d'accès individuel par joueur — désactivée par défaut.
+- **Comptes animateurs multi-session** : chaque animateur a son propre compte
+  (identifiant + mot de passe) et ne voit/gère que ses propres parties ; un
+  rôle ADMIN gère les réglages partagés du serveur (catalogues, plugins,
+  langues, comptes) — pose les bases d'un serveur partagé par plusieurs
+  animateurs indépendants, au-delà d'un simple poste local.
+- **Protection optionnelle par code** : code PIN par partie pour l'animateur
+  (en plus du compte ci-dessus, pour partager une partie précise sans exposer
+  les autres), jeton d'accès individuel par joueur — désactivée par défaut.
 - **Suite de tests automatisés** sur la logique métier des trois systèmes.
 
 ## Origine de ce projet
@@ -110,9 +116,17 @@ geco-parent/            (pom.xml racine, multi-module)
   et avatars, transactions individuelles entre joueurs (achat par QR en
   dette/libre, échange direct carte-contre-carte en troc), gestion complète
   des crédits en dette, calcul du DU conforme à la Théorie Relative de la
-  Monnaie en libre. Reste à faire : écran animateur dédié pour traiter les
-  demandes de crédit, déploiement Phase 2 (Docker + Caddy), statistiques
-  plus fines (module Galilée) — voir
+  Monnaie en libre. **Comptes animateurs multi-session, PIN par partie,
+  isolation WebSocket par partie et limitation de débit** sont également en
+  place — la sécurité applicative pour un hébergement au-delà d'un simple
+  réseau local d'atelier est posée, mais un vrai déploiement accessible
+  depuis internet demande encore un empaquetage dédié (Docker + reverse
+  proxy Caddy pour un certificat TLS reconnu — le certificat auto-signé
+  actuel ne convient qu'au réseau local) et une relecture des choix faits
+  pour un usage LAN (sessions en mémoire sans expiration, dimensionnement du
+  hachage de mot de passe). Reste aussi à faire : écran animateur dédié pour
+  traiter les demandes de crédit, statistiques plus fines (module Galilée) —
+  voir
   **[docs/13-etape3-etat-et-feuille-de-route.md](docs/13-etape3-etat-et-feuille-de-route.md)**
   pour l'état d'avancement détaillé et à jour.
 
