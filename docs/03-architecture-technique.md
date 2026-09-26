@@ -1676,6 +1676,90 @@ liste précisément ce qui manque encore (empaquetage Docker + reverse proxy
 Caddy pour un vrai certificat Let's Encrypt, persistance/expiration des
 sessions, proportionnalité du hachage à revisiter selon l'échelle réelle).
 
+### Animation "Mort du joueur" (26/09/2026)
+
+Demande utilisateur, avec fichiers de référence fournis (une image de fond
+cimetière/lune, deux mockups du texte "MORT DU JOUEUR", un prototype HTML
+d'animation Tailwind/Google Fonts, et `cartoon-text.js` - un moteur de
+rendu de texte cartoon 3D vectoriel multilingue, avec un exemple d'usage
+pour un futur écran "En prison") : "à l'entre deux tours, lorsque les
+morts sont annoncés... les smartphones des joueurs déclenchent une
+animation."
+
+**Décision de conception soumise à l'utilisateur avant implémentation** :
+le prototype HTML fourni utilise un texte "MORT DU JOUEUR" à gradient
+orange/cyan codé en dur, sur exactement 2 lignes fixes en français -
+incompatible avec l'exigence multilingue du projet (une traduction ne se
+découpe jamais comme le français). `cartoon-text.js`, fourni par
+l'utilisateur dans le même lot mais pour un usage `i18n.t('jail')`
+différent ("En prison"), résout exactement ce problème : rendu 100 %
+vectoriel, retour à la ligne automatique selon la largeur réelle,
+compatible avec n'importe quelle langue du jeu. Question posée
+explicitement (deux options : suivre `cartoon-text.js` avec un style
+légèrement différent du mockup, ou reproduire le gradient exact au prix
+d'un découpage figé en 2 lignes) - réponse de l'utilisateur : suivre
+`cartoon-text.js`. C'est donc le texte multilingue qui prime sur la
+fidélité pixel-perfect au mockup, un choix assumé et documenté plutôt que
+deviné.
+
+**Mécanique reprise du précédent "carré encaissé"** (voir la revue de code
+menée avant implémentation, qui a servi de cartographie complète du
+mécanisme existant) :
+- Diffusion WebSocket `"death"` avec `playerId`, déclenchée côté serveur
+  (`GecoServer`, route `POST /api/games/{id}/events`, juste après
+  `broadcast(id, "event", ...)`) uniquement si `event.getEvt() ==
+  EventType.DEATH` et `event.getPlayer().getStartingCardsJson() != null`
+  - jamais pour `QUIT` (un abandon volontaire n'est pas "une mort"), et
+  jamais pour un joueur non suivi par smartphone (mode classique, aucun
+  écran à animer). Agnostique du système monétaire PAR CONSTRUCTION :
+  aucun test sur `Game.getMoneySystem()`, réutilisable d'emblée par
+  dette/libre/troc, comme demandé explicitement ("pourra être réutilisée
+  dans les parties en monnaie dette avec smartphone et... en troc avec
+  smartphone").
+- Client (`player-view.js`) : `msg.type === "death" && msg.payload.playerId
+  === state.player.id`, avec une file d'attente
+  (`enqueueDeathAnimation`/`drainDeathAnimQueue`) calquée sur
+  `enqueueSquareAnimation`/`drainSquareAnimQueue` - par pure prudence
+  défensive, puisqu'un joueur ne meurt normalement qu'une seule fois par
+  confirmation de l'animateur (contrairement aux carrés, qui peuvent
+  s'enchaîner plusieurs fois de suite).
+- Overlay plein écran (`.death-anim-overlay`, `position: fixed; inset: 0;`)
+  au même niveau que `.square-anim-overlay`, avec un `z-index` légèrement
+  supérieur (3050 contre 3000) - un chevauchement entre une mort et un
+  carré n'est pas attendu en pratique (les cartes du joueur mourant sont
+  remises à zéro), mais autant trancher l'ordre explicitement.
+- Timing : dézoom CSS (`transform: scale()`, transition ~0,72s, origine
+  proche de la lune dans l'image) puis impact du titre façon coup de
+  tampon (~0,45s) - environ 1,2 seconde au total, conforme à la demande
+  ("une animation de 1 seconde"). Reste ensuite affichée jusqu'à 5
+  secondes au total depuis le déclenchement (pas 1+5=6s), puis referme
+  automatiquement et appelle `refreshPlayer()` pour refléter la
+  renaissance (nouvelle main, solde remis à zéro).
+- Son d'impact synthétisé (Web Audio API, aucun fichier externe) -
+  réutilise le même `AudioContext` déjà partagé par
+  `playSynthesizedPlayerWhistle` (nouveau tour) plutôt que d'en créer un
+  second, contrairement au prototype de référence qui en recréait un à
+  chaque appel.
+
+**Vérifié par un vrai test Playwright à deux joueurs** (pas seulement une
+relecture de code, cohérent avec la méthode établie de ce projet) : le
+joueur qui meurt voit bien l'animation complète (dézoom, texte rendu en
+`<svg>` par `cartoon-text.js`, tenue à l'écran), tandis qu'un second
+joueur de la même partie ne voit STRICTEMENT rien sur son propre écran -
+confirme le ciblage par joueur plutôt qu'une diffusion à toute la partie.
+
+**Bug trouvé en testant, pas en relisant le code** : la première version
+pointait l'image de fond (`img/death-background.jpg`) vers le contenu de
+l'image de fond de l'écran de connexion animateur (tâche précédente,
+25/09/2026) - une confusion de chemin de fichier entre deux images
+fournies par l'utilisateur au cours de la même session, jamais détectable
+par une relecture du CSS/HTML (le nom de fichier référencé était le bon,
+seul le contenu réellement copié sous ce nom était faux). Repéré
+uniquement via une capture d'écran Playwright réelle de l'animation avant
+d'être corrigé - encore un exemple de la valeur de "tester réellement"
+plutôt que de faire confiance à une relecture de code, une méthode déjà
+documentée plus haut dans ce journal.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

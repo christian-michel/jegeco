@@ -267,6 +267,32 @@
 		<div class="square-anim-subtitle" id="squareAnimSubtitle"></div>
 	</div>
 
+	<!-- ===== Animation "Mort du joueur" (26/09/2026) =====
+	     Remonté par l'utilisateur : "à l'entre deux tours, lorsque les morts
+	     sont annoncés... les smartphones des joueurs déclenchent une
+	     animation". Réutilisable par les trois systèmes monétaires en mode
+	     smartphone (dette/libre/troc) - voir GecoServer, diffusion
+	     WebSocket "death" déclenchée uniquement pour un joueur réellement
+	     suivi par smartphone (agnostique du système monétaire, comme le
+	     mécanisme du carré ci-dessus). Dézoome depuis la lune jusqu'à la
+	     scène complète (image fournie par l'utilisateur, voir
+	     img/death-background.jpg), puis le titre apparaît façon coup de
+	     tampon - rendu par js/vendor/cartoon-text.js (fourni par
+	     l'utilisateur) plutôt qu'un texte à gradient codé en dur, seul
+	     moyen de rester multilingue (une traduction ne se découpe jamais
+	     comme le français, voir le commentaire en tête de ce fichier
+	     vendorisé). Animation inspirée d'un second code de référence fourni
+	     par l'utilisateur (dézoom + impact tampon), adaptée aux conventions
+	     déjà en place dans cet écran (voir .square-anim-overlay). Se
+	     déclenche automatiquement dès la réception de l'événement
+	     WebSocket "death" (voir connectPlayerWs/playDeathAnimation), dure
+	     environ 1 seconde puis reste affichée 5 secondes au total avant de
+	     refermer automatiquement. -->
+	<div class="death-anim-overlay" id="deathAnimOverlay">
+		<div class="death-anim-zoom" id="deathAnimZoom"></div>
+		<div class="death-anim-title-host" id="deathAnimTitleHost"></div>
+	</div>
+
 	<!-- ===== Onglet "Stats" : classement complet ===== -->
 	<div id="leaderboardScreen" class="main-content hidden">
 		<section class="card leaderboard-card">
@@ -493,6 +519,7 @@
 	     observé. Même raisonnement que pour la police Sora (voir player.css). -->
 	<script src="/js/vendor/qrcode.js"></script>
 	<script src="/js/vendor/jsQR.js"></script>
+	<script src="/js/vendor/cartoon-text.js"></script>
 	<script src="/js/i18n.js"></script>
 	<script src="/js/player-view.js"></script>
 </body>

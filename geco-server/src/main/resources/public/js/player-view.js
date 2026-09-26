@@ -2394,6 +2394,14 @@ function connectPlayerWs() {
 		// déclenche l'animation automatiquement, pour CE joueur uniquement.
 		if ((msg.type === "square") && state.player && (msg.payload.playerId === state.player.id))
 			enqueueSquareAnimation(msg.payload);
+		// Mort du joueur (26/09/2026, voir GecoServer, route POST
+		// /api/games/{id}/events) - remonté par l'utilisateur : "à l'entre
+		// deux tours, lorsque les morts sont annoncés... les smartphones des
+		// joueurs déclenchent une animation". Ciblage PAR JOUEUR, même
+		// principe que le carré ci-dessus - seul le joueur qui vient de
+		// mourir voit l'animation, jamais les autres joueurs de la partie.
+		if ((msg.type === "death") && state.player && (msg.payload.playerId === state.player.id))
+			enqueueDeathAnimation(msg.payload);
 		// Révolution économique (22/09/2026, "rotation des valeurs" - voir
 		// Game.revolutionCount/cardPriceInDuTable) : contrairement au carré
 		// lui-même (animation propre au seul joueur concerné, ci-dessus), une
@@ -2677,6 +2685,146 @@ async function playSquareAnimation(squareDto, pSkippedCount) {
 	overlay.classList.remove("active");
 	renderMyCards();
 	setActiveNav("navBtnCards");
+}
+
+// ============================================================
+// Animation "Mort du joueur" (26/09/2026) - remonté par l'utilisateur : "à
+// l'entre deux tours, lorsque les morts sont annoncés... les smartphones
+// des joueurs déclenchent une animation". Inspirée d'un code de référence
+// fourni par l'utilisateur (dézoom rapide depuis la lune, puis "coup de
+// tampon" du titre) - le texte est rendu par js/vendor/cartoon-text.js
+// (fourni par l'utilisateur) plutôt que le gradient orange/cyan codé en
+// dur du mockup d'origine : seul cet outil vectoriel s'adapte
+// automatiquement à une traduction plus longue ou plus courte que le
+// français (voir le commentaire en tête de ce fichier vendorisé - décision
+// confirmée avec l'utilisateur avant implémentation, "il faut que les
+// textes soient faits en code"). Déclenchée par l'événement WebSocket
+// "death" (voir connectPlayerWs plus haut), diffusé UNIQUEMENT pour un
+// joueur réellement suivi par smartphone, agnostique du système monétaire
+// (dette/libre/troc) - voir GecoServer.
+//
+// File d'attente calquée sur enqueueSquareAnimation/drainSquareAnimQueue
+// ci-dessus, par pure prudence défensive : un joueur ne meurt normalement
+// QU'UNE SEULE FOIS par confirmation de l'animateur (contrairement aux
+// carrés, qui peuvent s'enchaîner plusieurs fois de suite pour le même
+// joueur), donc cette file ne devrait en pratique jamais contenir plus
+// d'un élément à la fois - mais garantit malgré tout qu'un double message
+// WebSocket (rejeu réseau, reconnexion...) ne fasse jamais se chevaucher
+// deux animations en plein milieu.
+let mDeathAnimQueue = [];
+let mDeathAnimRunning = false;
+function enqueueDeathAnimation(deathDto) {
+	mDeathAnimQueue.push(deathDto);
+	if (!mDeathAnimRunning) drainDeathAnimQueue();
+}
+async function drainDeathAnimQueue() {
+	mDeathAnimRunning = true;
+	while (mDeathAnimQueue.length > 0) {
+		mDeathAnimQueue.shift();
+		await playDeathAnimation(); // toujours attendu en entier avant la suivante - jamais deux animations en même temps
+	}
+	mDeathAnimRunning = false;
+}
+
+// Synthèse sonore d'un impact sourd (Web Audio API, aucun fichier externe -
+// même principe que playSynthesizedPlayerWhistle ci-dessus, réutilise le
+// même AudioContext partagé plutôt que d'en recréer un à chaque appel comme
+// le faisait le code de référence fourni). Jamais bloquant : un navigateur
+// qui refuse l'audio (politique d'autoplay, contexte trop restrictif)
+// abandonne silencieusement, l'animation visuelle continue normalement.
+function playDeathImpactSound() {
+	try {
+		if (!mPlayerAudioCtx) mPlayerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		if (mPlayerAudioCtx.state === "suspended") mPlayerAudioCtx.resume();
+		const ctx = mPlayerAudioCtx;
+		const now = ctx.currentTime;
+
+		const osc = ctx.createOscillator();
+		const gain = ctx.createGain();
+		osc.type = "triangle";
+		osc.frequency.setValueAtTime(160, now);
+		osc.frequency.exponentialRampToValueAtTime(25, now + 0.25);
+		gain.gain.setValueAtTime(0.9, now);
+		gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+		osc.connect(gain);
+		gain.connect(ctx.destination);
+		osc.start(now);
+		osc.stop(now + 0.28);
+
+		const bufferSize = Math.floor(ctx.sampleRate * 0.15);
+		const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+		const data = buffer.getChannelData(0);
+		for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2) - 1;
+		const noise = ctx.createBufferSource();
+		noise.buffer = buffer;
+		const filter = ctx.createBiquadFilter();
+		filter.type = "lowpass";
+		filter.frequency.setValueAtTime(400, now);
+		filter.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+		const noiseGain = ctx.createGain();
+		noiseGain.gain.setValueAtTime(0.5, now);
+		noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+		noise.connect(filter);
+		filter.connect(noiseGain);
+		noiseGain.connect(ctx.destination);
+		noise.start(now);
+	} catch (err) {
+		// Ni synthèse audio possible (navigateur très restrictif) : on
+		// abandonne silencieusement, jamais bloquant pour l'animation visuelle.
+	}
+}
+
+// Durées calquées EXACTEMENT sur les transitions/animations CSS
+// correspondantes (.death-anim-zoom / .death-anim-title-host, voir
+// player.css) - à garder synchronisées si l'une des deux change.
+const DEATH_ANIM_ZOOM_START_DELAY_MS = 30; // laisse peindre l'état "zoomed-in" avant de déclencher la transition
+const DEATH_ANIM_DEZOOM_MS = 720;
+const DEATH_ANIM_IMPACT_MS = 450;
+// Demande utilisateur explicite : "une animation de 1 seconde qui reste
+// affichée 5 secondes" - comprise comme "l'ensemble reste visible 5
+// secondes AU TOTAL depuis le déclenchement", pas 1 + 5 = 6 secondes.
+const DEATH_ANIM_TOTAL_DISPLAY_MS = 5000;
+
+// Appelée UNIQUEMENT depuis drainDeathAnimQueue() ci-dessus - jamais
+// directement, pour garantir qu'une seule animation ne joue à la fois.
+async function playDeathAnimation() {
+	const overlay = el("deathAnimOverlay");
+	const zoom = el("deathAnimZoom");
+	const titleHost = el("deathAnimTitleHost");
+
+	zoom.classList.remove("zoomed-out", "shake-impact");
+	zoom.classList.add("zoomed-in");
+	titleHost.classList.remove("stamp-in");
+	titleHost.style.opacity = "0";
+	titleHost.innerHTML = "";
+
+	overlay.classList.add("active");
+	await new Promise((r) => setTimeout(r, DEATH_ANIM_ZOOM_START_DELAY_MS));
+
+	// ÉTAPE 1 : dézoom rapide depuis la lune jusqu'à la scène complète.
+	zoom.classList.remove("zoomed-in");
+	zoom.classList.add("zoomed-out");
+	await new Promise((r) => setTimeout(r, DEATH_ANIM_DEZOOM_MS));
+
+	// ÉTAPE 2 : le titre (multilingue, voir js/vendor/cartoon-text.js)
+	// apparaît façon "coup de tampon", avec tremblement d'écran + son
+	// d'impact synchronisés.
+	titleHost.style.opacity = "";
+	await window.CartoonText.render(titleHost, t("playerView.death_anim_title"), { maxLines: 2 });
+	titleHost.classList.add("stamp-in");
+	zoom.classList.add("shake-impact");
+	playDeathImpactSound();
+	await new Promise((r) => setTimeout(r, DEATH_ANIM_IMPACT_MS));
+	zoom.classList.remove("shake-impact");
+
+	// ÉTAPE 3 : reste affichée jusqu'au total de 5 secondes demandé, puis
+	// referme automatiquement - refreshPlayer() recharge l'état du joueur
+	// (nouvelle main de départ, solde remis à zéro...) pour que l'écran
+	// retrouvé juste après reflète déjà sa renaissance.
+	const elapsed = DEATH_ANIM_ZOOM_START_DELAY_MS + DEATH_ANIM_DEZOOM_MS + DEATH_ANIM_IMPACT_MS;
+	await new Promise((r) => setTimeout(r, Math.max(0, DEATH_ANIM_TOTAL_DISPLAY_MS - elapsed)));
+	overlay.classList.remove("active");
+	refreshPlayer();
 }
 
 if (window.GecoI18n) window.GecoI18n.onChange(startOnce);

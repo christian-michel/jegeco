@@ -1480,6 +1480,23 @@ public class GecoServer
 				mGameService.dealStartingHandsForLibreIfNeeded(id, cardIdsByLevel);
 			}
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
+			// Animation "Mort du joueur" (26/09/2026, demande utilisateur : "à
+			// l'entre deux tours, lorsque les morts sont annoncés... les
+			// smartphones des joueurs déclenchent une animation") : uniquement
+			// une VRAIE mort de vieillesse (jamais QUIT, un abandon volontaire
+			// n'est pas "une mort"), et uniquement pour un joueur RÉELLEMENT
+			// suivi par smartphone (Player.startingCardsJson != null, même
+			// distinguo qu'ailleurs dans ce fichier) - le mode classique n'a
+			// aucun écran joueur à animer. Agnostique du système monétaire
+			// (dette/libre/troc) PAR CONSTRUCTION : ne dépend que du type
+			// d'événement et du suivi smartphone du joueur, jamais d'un test
+			// sur Game.getMoneySystem() - réutilisable d'emblée partout, comme
+			// demandé ("pourra être réutilisée dans les parties en monnaie
+			// dette avec smartphone et... en troc avec smartphone").
+			if ((event.getEvt() == Event.EventType.DEATH) && (event.getPlayer() != null)
+					&& (event.getPlayer().getStartingCardsJson() != null))
+				broadcast(id, "death", //$NON-NLS-1$
+						new Dtos.PlayerDeathAnimationDto(event.getPlayer().getId(), event.getPlayer().getName()));
 			ctx.status(201).json(EventDto.from(event));
 		});
 

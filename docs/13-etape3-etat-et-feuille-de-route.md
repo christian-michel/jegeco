@@ -91,6 +91,44 @@ dans son ensemble, pas une mécanique de jeu précise.
   de fonctionner exactement comme avant - rien de ce qui précède ne la
   concerne.
 
+### Animation "Mort du joueur" (construite le 26/09/2026)
+
+Demande utilisateur : "à l'entre deux tours, lorsque les morts sont
+annoncés... les smartphones des joueurs déclenchent une animation" - une
+mise en scène (dézoom depuis la lune vers une scène de cimetière, puis
+titre en coup de tampon) plutôt qu'une mort silencieuse.
+
+- **Réutilisable d'emblée par les trois systèmes monétaires** (dette,
+  libre, troc) en mode smartphone - agnostique du système par
+  construction (voir `GecoServer`, route `POST /api/games/{id}/events`) :
+  déclenchée uniquement par `EventType.DEATH` + `Player.startingCardsJson
+  != null`, jamais par un test sur `Game.getMoneySystem()`, exactement le
+  même principe que le mécanisme du carré partagé.
+- **Ciblage PAR JOUEUR** (jamais toute la partie) : diffusion WebSocket
+  `"death"` incluant `playerId`, filtrée côté client comme le carré
+  (`msg.payload.playerId === state.player.id`) - vérifié par un vrai test
+  Playwright à deux joueurs : celui qui meurt voit l'animation, l'autre
+  ne voit rien du tout sur son écran.
+- **Texte multilingue rendu en code**, jamais une image figée dans une
+  langue : `js/vendor/cartoon-text.js` (fourni par l'utilisateur, rendu
+  SVG vectoriel avec retour à la ligne automatique) plutôt que le gradient
+  orange/cyan codé en dur du mockup de référence fourni en même temps -
+  décision confirmée avec l'utilisateur avant implémentation (voir
+  `03-architecture-technique.md`, entrée du même jour, pour le
+  raisonnement complet). Un seul nouveau texte à traduire :
+  `playerView.death_anim_title`.
+- Dure ~1,2 seconde (dézoom + impact du tampon), reste affichée 5 secondes
+  au total depuis le déclenchement, puis referme automatiquement et
+  rafraîchit l'état du joueur (nouvelle main de départ après renaissance).
+- Image de fond fournie par l'utilisateur
+  (`img/death-background.jpg`) - **bug trouvé en testant** : une première
+  version pointait par erreur vers l'image de fond de l'écran de
+  connexion (réutilisation involontaire d'un chemin de fichier expiré
+  d'une tâche précédente) - repéré uniquement grâce à une vraie capture
+  d'écran Playwright avant d'être corrigé, jamais par une simple relecture
+  de code (le nom de fichier `death-background.jpg` était pourtant
+  correct, seul son CONTENU était faux).
+
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la
   Monnaie** (`DU = c × masse_monétaire / joueurs_vivants`, avec `c` dépendant

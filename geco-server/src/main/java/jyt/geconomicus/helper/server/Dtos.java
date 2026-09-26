@@ -193,6 +193,18 @@ public class Dtos
 		}
 	}
 
+	/**
+	 * Notification de l'animation "Mort du joueur" (26/09/2026, demande
+	 * utilisateur : "à l'entre deux tours, lorsque les morts sont annoncés...
+	 * les smartphones des joueurs déclenchent une animation") - diffusée via
+	 * WebSocket UNIQUEMENT au joueur concerné (playerId filtré côté client,
+	 * même principe que {@link CardSquareEventDto}), jamais à toute la
+	 * partie. Voir GecoServer, route POST /api/games/{id}/events.
+	 */
+	public record PlayerDeathAnimationDto(Integer playerId, String playerName)
+	{
+	}
+
 	public record GameSummaryDto(Integer id, String description, int moneySystem, int turnNumber,
 			int nbTurnsPlanned, String location, String curdate)
 	{
