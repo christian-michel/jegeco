@@ -113,8 +113,24 @@ body.money-libre .btn-primary { background: var(--accent-libre); }
 .panel-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.4em; }
 
 /* ============ Multi-session serveur, Phase 2 (21/09/2026) : écran de connexion ============ */
-.auth-gate { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--content-bg); padding: 1.5rem; }
-.auth-card { width: 100%; max-width: 380px; }
+/* Image de fond (26/09/2026, demande utilisateur) : "background: cover" pour
+   qu'elle couvre TOUJOURS tout l'écran sur PC, quelle que soit la taille de
+   la fenêtre - jamais répétée ni déformée (background-size: cover, un seul
+   centrage). background-color en repli tant que l'image n'a pas fini de
+   charger (évite un flash blanc), identique à l'ancien fond uni. */
+.auth-gate {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+	padding: 1.5rem;
+	background-color: var(--content-bg);
+	background-image: url("/img/login-background.jpg");
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+}
+.auth-card { width: 100%; max-width: 380px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); }
 .auth-card h2 { font-size: 1.05rem; margin: 0 0 0.6rem; }
 .auth-card form.hidden { display: none; }
 .auth-card .field-label { margin-top: 0.7rem; }
