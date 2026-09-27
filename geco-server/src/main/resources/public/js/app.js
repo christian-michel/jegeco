@@ -436,6 +436,7 @@ const Api = {
 	undo: (gameId) => api(`/api/games/${gameId}/undo`, { method: "POST" }),
 	getSuggestedDeaths: (gameId) => api(`/api/games/${gameId}/suggested-deaths`),
 	getWealthOverTime: (id) => api(`/api/games/${id}/wealth-over-time`),
+	getExchangeStats: (id) => api(`/api/games/${id}/exchange-stats`),
 	getNetworkInfo: () => api(`/api/network-info`),
 	deleteGame: (id) => api(`/api/games/${id}`, { method: "DELETE" }),
 	addPlayer: (gameId, name) => api(`/api/games/${gameId}/players`, { method: "POST", body: JSON.stringify({ name }) }),
@@ -3364,7 +3365,10 @@ async function renderTransactionsPanel(gameId) {
 
 // Charts dédiés à cette vue (instances séparées de celles du tableau de bord, pour
 // pouvoir naviguer entre les deux vues sans conflit sur les mêmes <canvas>).
-const reportCharts = { histogram: null, moneyMass: null, galilee: null, compare: null, bankProfit: null };
+const reportCharts = {
+	histogram: null, moneyMass: null, galilee: null, compare: null, bankProfit: null,
+	exchangeByTurn: null, exchangeByPlayer: null, moneyMassDelta: null, moneyMassPerPlayer: null,
+};
 
 // Remonté par un utilisateur, avec la trace d'erreur exacte de la console
 // ("TypeError: t.startsWith is not a function" dans chart.umd.js, déclenché
@@ -3470,8 +3474,21 @@ async function renderReport(gameId, includeBank = false) {
 	const report = await Api.getReport(gameId, includeBank);
 	const activity = await Api.getActivity(gameId).catch(() => null);
 	const wealthOverTime = await Api.getWealthOverTime(gameId).catch(() => null);
+	const exchangeReport = await Api.getExchangeStats(gameId).catch(() => null);
 	const isDebt = game.moneySystem === 1;
 	const isTroc = game.moneySystem === 2;
+	// BUG TROUVÉ ET CORRIGÉ (27/09/2026, remonté par un utilisateur qui
+	// demandait à compléter l'écran des statistiques) : cette section était
+	// masquée pour TOUTE partie en monnaie libre, avec le commentaire "aucun
+	// événement individuel n'existe pour retracer les échanges entre
+	// joueurs" - vrai pour la libre CLASSIQUE (sans smartphone), mais plus
+	// pour la libre SMARTPHONE depuis l'étape 3 (17-18/09/2026) : chaque
+	// achat/vente y crée une vraie Transaction individuelle (voir
+	// GameService.recordTransaction), exactement comme en dette smartphone.
+	// Le discriminant qui fait foi est donc `hasStartingAllocation` (voir
+	// CLAUDE.md, "jamais AppSettings.gameMode"), pas `moneySystem` seul.
+	const isSmartphoneTracked = game.players.some((p) => p.hasStartingAllocation);
+	const isLibreSmartphone = !isDebt && !isTroc && isSmartphoneTracked;
 	const accent = isDebt ? "#2563eb" : "#16a34a";
 	setMoneyTheme(game.moneySystem);
 
@@ -3528,11 +3545,18 @@ async function renderReport(gameId, includeBank = false) {
 	// Activité par joueur : qui a fait le plus de transactions, le plus emprunté,
 	// brassé le plus de volume - triée par volume brassé décroissant (déjà fait
 	// côté serveur), on met juste en valeur la première ligne (le "plus actif").
-	// Remonté par un utilisateur : en monnaie libre, aucun événement individuel
-	// n'existe pour retracer les échanges entre joueurs - cette section
-	// n'aurait donc jamais rien de significatif à montrer, elle est masquée
-	// entièrement. La colonne "Emprunté" n'a de sens qu'en monnaie dette (ni la
-	// monnaie libre ni le troc n'ont de crédit).
+	// Vérifié le 27/09/2026 (à la demande d'un utilisateur qui soupçonnait cette
+	// section injustement masquée en libre smartphone, voir isLibreSmartphone
+	// plus haut) : computeActivityReport ne rejoue QUE les événements liés au
+	// CRÉDIT (NEW_CREDIT/INTEREST_ONLY/REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON),
+	// jamais les Transaction d'achat/vente de cartes - la monnaie libre n'a
+	// aucun de ces événements, avec ou sans smartphone. La démasquer pour la
+	// libre afficherait donc un tableau à zéro partout, pas un vrai correctif :
+	// le masquage reste juste pour ce système. L'activité d'ÉCHANGE (achat/
+	// vente de cartes) propre à la libre/dette smartphone est couverte par la
+	// nouvelle section "Échanges monétaires" plus bas (voir renderExchangeStats,
+	// basée sur les vraies Transaction). La colonne "Emprunté" n'a de sens
+	// qu'en monnaie dette (ni la monnaie libre ni le troc n'ont de crédit).
 	el("activitySection").classList.toggle("hidden", !isDebt && !isTroc);
 	el("activityBorrowedCol").classList.toggle("hidden", !isDebt);
 	if (activity && (isDebt || isTroc)) {
@@ -3704,6 +3728,134 @@ async function renderReport(gameId, includeBank = false) {
 	} else {
 		bankPanel.classList.add("hidden");
 	}
+
+	renderExchangeStatsSection(exchangeReport, accent);
+}
+
+/**
+ * Section "Échanges monétaires" (dette/libre + smartphone uniquement, voir
+ * StatsService.computeExchangeAndMoneyReport) - demandée par un utilisateur
+ * (27/09/2026) : nombre global d'échanges et sa répartition dans le temps et
+ * parmi les joueurs, valeur des échanges par tour, masse monétaire détaillée
+ * (création/destruction par tour) et "accès à la monnaie" (ratio masse/
+ * joueurs actifs), avec moyennes et médianes partout où c'est demandé.
+ * `exchangeReport` vaut `null` si l'appel a échoué (jeu ancien sans cette
+ * route côté serveur, etc.) et `exchangeReport.applicable` vaut faux pour le
+ * troc ou toute partie sans smartphone - dans les deux cas, la section entière
+ * reste masquée plutôt que de montrer un graphique vide.
+ */
+function renderExchangeStatsSection(exchangeReport, accent) {
+	const t = window.GecoI18n.t;
+	const section = el("exchangeStatsSection");
+	const applicable = exchangeReport && exchangeReport.applicable;
+	section.classList.toggle("hidden", !applicable);
+	if (!applicable) return;
+
+	const stats = exchangeReport.exchangeStats;
+	const massDetail = exchangeReport.moneyMassDetail;
+
+	el("exchangeStatCards").innerHTML = `
+		<div class="stat-card"><span class="stat-icon" data-icon="credit"></span><div><span class="stat-value">${stats.globalCount}</span><span class="stat-label">${t("report.exchange_stat_count")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bank"></span><div><span class="stat-value">${stats.globalValue}</span><span class="stat-label">${t("report.exchange_stat_value")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.averageValuePerExchange}</span><span class="stat-label">${t("report.exchange_stat_avg_value")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.medianValuePerExchange}</span><span class="stat-label">${t("report.exchange_stat_median_value")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.averageCountPerTurn}</span><span class="stat-label">${t("report.exchange_stat_avg_per_turn")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.medianCountPerTurn}</span><span class="stat-label">${t("report.exchange_stat_median_per_turn")}</span></div></div>`;
+	renderIcons(el("exchangeStatCards"));
+
+	el("moneyMassDetailStatCards").innerHTML = `
+		<div class="stat-card"><span class="stat-icon" data-icon="users"></span><div><span class="stat-value">${massDetail.averageMassPerPlayer}</span><span class="stat-label">${t("report.mass_stat_avg_per_player")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="users"></span><div><span class="stat-value">${massDetail.medianMassPerPlayer}</span><span class="stat-label">${t("report.mass_stat_median_per_player")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bank"></span><div><span class="stat-value">${massDetail.averageMassDelta}</span><span class="stat-label">${t("report.mass_stat_avg_delta")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bank"></span><div><span class="stat-value">${massDetail.medianMassDelta}</span><span class="stat-label">${t("report.mass_stat_median_delta")}</span></div></div>`;
+	renderIcons(el("moneyMassDetailStatCards"));
+
+	if (typeof Chart === "undefined") return;
+
+	if (reportCharts.exchangeByTurn) reportCharts.exchangeByTurn.destroy();
+	if (reportCharts.exchangeByPlayer) reportCharts.exchangeByPlayer.destroy();
+	if (reportCharts.moneyMassDelta) reportCharts.moneyMassDelta.destroy();
+	if (reportCharts.moneyMassPerPlayer) reportCharts.moneyMassPerPlayer.destroy();
+
+	// Nombre d'échanges (barres) + valeur des échanges (ligne, second axe) par
+	// tour - deux mesures demandées ensemble par l'utilisateur ("la répartition
+	// de ces échanges dans le temps... la valeur des échanges... à chaque tour").
+	reportCharts.exchangeByTurn = trackChart(el("chartExchangeByTurn"), {
+		data: {
+			labels: stats.byTurn.map((p) => t("game.chart_turn_label", { n: p.turn })),
+			datasets: [
+				{
+					type: "bar", label: t("report.exchange_chart_count_legend"),
+					data: stats.byTurn.map((p) => p.count), backgroundColor: accent, yAxisID: "y", order: 2,
+				},
+				{
+					type: "line", label: t("report.exchange_chart_value_legend"),
+					data: stats.byTurn.map((p) => p.totalValue), borderColor: "#f97316", yAxisID: "y1",
+					tension: 0.3, order: 1,
+				},
+			],
+		},
+		options: {
+			plugins: { legend: { display: true, position: "top", labels: { boxWidth: 20, font: { size: 11 } } } },
+			scales: {
+				y: { beginAtZero: true, position: "left", title: { display: true, text: t("report.exchange_chart_count_axis") } },
+				y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: t("report.exchange_chart_value_axis") } },
+			},
+			maintainAspectRatio: false,
+		},
+	});
+
+	// Répartition des échanges parmi les joueurs (une transaction compte une
+	// fois pour l'acheteur ET une fois pour le vendeur - voir la Javadoc de
+	// StatsService.PlayerExchangeStat).
+	reportCharts.exchangeByPlayer = trackChart(el("chartExchangeByPlayer"), {
+		type: "bar",
+		data: {
+			labels: stats.byPlayer.map((p) => p.playerName),
+			datasets: [{ label: t("report.exchange_chart_count_legend"), data: stats.byPlayer.map((p) => p.count), backgroundColor: accent }],
+		},
+		options: {
+			plugins: { legend: { display: false } },
+			scales: { y: { beginAtZero: true }, x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 45 } } },
+			maintainAspectRatio: false,
+		},
+	});
+
+	// Création/destruction monétaire par tour (variation de la masse depuis le
+	// tour précédent) - barres positives = création nette, négatives =
+	// destruction nette. Demandé explicitement : "la masse monétaire globale
+	// en circulation (création et destruction) au cours de la partie et à
+	// chaque tour".
+	reportCharts.moneyMassDelta = trackChart(el("chartMoneyMassDelta"), {
+		type: "bar",
+		data: {
+			labels: massDetail.points.map((p) => t("game.chart_turn_label", { n: p.turn })),
+			datasets: [{
+				label: t("report.mass_chart_delta_legend"), data: massDetail.points.map((p) => p.massDelta),
+				backgroundColor: massDetail.points.map((p) => (p.massDelta >= 0 ? "#16a34a" : "#dc2626")),
+			}],
+		},
+		options: {
+			plugins: { legend: { display: false } },
+			scales: { y: { title: { display: true, text: t("report.chart_money_mass_axis") } } },
+			maintainAspectRatio: false,
+		},
+	});
+
+	// "Accès à la monnaie" : ratio masse monétaire globale / joueurs actifs à
+	// chaque tour - demandé explicitement par l'utilisateur.
+	reportCharts.moneyMassPerPlayer = trackChart(el("chartMoneyMassPerPlayer"), {
+		type: "line",
+		data: {
+			labels: massDetail.points.map((p) => t("game.chart_turn_label", { n: p.turn })),
+			datasets: [{ data: massDetail.points.map((p) => p.massPerPlayer), borderColor: accent, fill: false, tension: 0.3 }],
+		},
+		options: {
+			plugins: { legend: { display: false } },
+			scales: { y: { beginAtZero: true, title: { display: true, text: t("report.chart_money_mass_axis") } } },
+			maintainAspectRatio: false,
+		},
+	});
 }
 
 // ---------- Minuteur de tour synchronisé (Phase C) ----------

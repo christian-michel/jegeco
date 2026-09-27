@@ -786,6 +786,40 @@
 					</table>
 				</div>
 
+				<!-- Étape 3, mode smartphone (27/09/2026, remonté par un utilisateur) :
+				     échanges monétaires individuels (achat/vente de cartes contre jetons)
+				     - masqué pour le troc (jamais de valeur monétaire) et pour toute
+				     partie sans smartphone (aucune Transaction n'existe alors) - voir
+				     StatsService.ExchangeAndMoneyReport.applicable et
+				     renderExchangeStatsSection dans app.js. -->
+				<div class="panel-card hidden" id="exchangeStatsSection">
+					<h3 class="chart-title" data-i18n="report.exchange_section_title">Échanges monétaires</h3>
+					<div class="stat-cards" id="exchangeStatCards"></div>
+					<div class="charts-row">
+						<div class="panel-card">
+							<h3 class="chart-title" data-i18n="report.exchange_chart_by_turn_title">Échanges par tour (nombre et valeur)</h3>
+							<div class="chart-container"><canvas id="chartExchangeByTurn"></canvas></div>
+						</div>
+						<div class="panel-card">
+							<h3 class="chart-title" data-i18n="report.exchange_chart_by_player_title">Échanges par joueur</h3>
+							<div class="chart-container"><canvas id="chartExchangeByPlayer"></canvas></div>
+						</div>
+					</div>
+					<h3 class="chart-title" data-i18n="report.mass_section_title">Masse monétaire détaillée</h3>
+					<p class="galilee-explainer" data-i18n="report.mass_section_explainer">Valeurs exprimées en unités monétaires (ex. : G1), jamais en nombre de jetons.</p>
+					<div class="stat-cards" id="moneyMassDetailStatCards"></div>
+					<div class="charts-row">
+						<div class="panel-card">
+							<h3 class="chart-title" data-i18n="report.mass_chart_delta_title">Création / destruction monétaire par tour</h3>
+							<div class="chart-container"><canvas id="chartMoneyMassDelta"></canvas></div>
+						</div>
+						<div class="panel-card">
+							<h3 class="chart-title" data-i18n="report.mass_chart_per_player_title">Accès à la monnaie (masse / joueurs actifs)</h3>
+							<div class="chart-container"><canvas id="chartMoneyMassPerPlayer"></canvas></div>
+						</div>
+					</div>
+				</div>
+
 				<div class="panel-card">
 					<div class="panel-header">
 						<h3 class="chart-title" data-i18n="report.galilee_title">Richesse des joueurs dans le temps

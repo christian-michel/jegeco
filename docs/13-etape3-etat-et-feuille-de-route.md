@@ -424,6 +424,30 @@ juste avant).
   usage réel (nécessiterait un verrou explicite ou une transaction DB
   sérialisée sur la paire de joueurs concernée).
 
+- **Écran de statistiques complété : échanges monétaires + masse détaillée**
+  (27/09/2026, demande utilisateur) — réservé à la dette et la libre
+  suivies par smartphone (jamais le troc, jamais une partie classique sans
+  smartphone) : nombre global d'échanges + répartition dans le temps
+  (tours) et parmi les joueurs, valeur des échanges par tour, masse
+  monétaire détaillée (création/destruction par tour, dérivée
+  observationnellement de la masse déjà calculée), ratio masse/joueurs
+  actifs ("accès à la monnaie"), avec moyennes et médianes partout. Nouvel
+  endpoint `GET /api/games/{id}/exchange-stats`
+  (`StatsService.computeExchangeAndMoneyReport`), nouvelle section sur
+  l'écran de rapport (`renderExchangeStatsSection` dans `app.js`, 4
+  nouveaux graphiques Chart.js). Voir `03-architecture-technique.md`,
+  entrée du 27/09/2026, pour le détail complet (dont l'investigation qui a
+  infirmé l'hypothèse d'un bug de masquage sur "Activité par joueur" en
+  libre smartphone — masquage justifié, cette section ne couvre que les
+  événements de crédit, jamais les achats/ventes de cartes). Vérifié par
+  un test unitaire dédié (`StatsServiceExchangeStatsTest`, 3 cas) + capture
+  d'écran manuelle. Campagne de test (3 parties libre+smartphone, 2/4/10
+  joueurs, 12 tours) et double relecture indépendante en cours au moment
+  de cette entrée — voir la suite de ce document/de
+  `03-architecture-technique.md` pour leurs conclusions. Le "certificat du
+  joueur" (points forts/faibles), demandé dans le même message, reste
+  **différé** à la demande explicite de l'utilisateur.
+
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
 Par ordre approximatif de priorité, à ajuster selon les retours de test :

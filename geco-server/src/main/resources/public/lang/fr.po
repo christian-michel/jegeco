@@ -1223,6 +1223,73 @@ msgstr "Valeur relative (moyenne = 1)"
 msgid "report.galilee_explainer"
 msgstr "En valeur relative, chaque compte tend vers 1 (la moyenne) au fil des tours — cliquez sur un nom dans la légende pour isoler/masquer sa courbe et comparer."
 
+# ============ Échanges monétaires + masse détaillée (étape 3, smartphone) ============
+msgid "report.exchange_section_title"
+msgstr "Échanges monétaires"
+
+msgid "report.exchange_chart_by_turn_title"
+msgstr "Échanges par tour (nombre et valeur)"
+
+msgid "report.exchange_chart_by_player_title"
+msgstr "Échanges par joueur"
+
+msgid "report.mass_section_title"
+msgstr "Masse monétaire détaillée"
+
+msgid "report.mass_section_explainer"
+msgstr "Valeurs exprimées en unités monétaires (ex. : G1), jamais en nombre de jetons."
+
+msgid "report.mass_chart_delta_title"
+msgstr "Création / destruction monétaire par tour"
+
+msgid "report.mass_chart_per_player_title"
+msgstr "Accès à la monnaie (masse / joueurs actifs)"
+
+msgid "report.exchange_stat_count"
+msgstr "Échanges au total"
+
+msgid "report.exchange_stat_value"
+msgstr "Valeur totale échangée"
+
+msgid "report.exchange_stat_avg_value"
+msgstr "Valeur moyenne / échange"
+
+msgid "report.exchange_stat_median_value"
+msgstr "Valeur médiane / échange"
+
+msgid "report.exchange_stat_avg_per_turn"
+msgstr "Échanges moyens / tour"
+
+msgid "report.exchange_stat_median_per_turn"
+msgstr "Échanges médians / tour"
+
+msgid "report.mass_stat_avg_per_player"
+msgstr "Masse moyenne / joueur actif"
+
+msgid "report.mass_stat_median_per_player"
+msgstr "Masse médiane / joueur actif"
+
+msgid "report.mass_stat_avg_delta"
+msgstr "Variation moyenne / tour"
+
+msgid "report.mass_stat_median_delta"
+msgstr "Variation médiane / tour"
+
+msgid "report.exchange_chart_count_legend"
+msgstr "Nombre d'échanges"
+
+msgid "report.exchange_chart_value_legend"
+msgstr "Valeur échangée"
+
+msgid "report.exchange_chart_count_axis"
+msgstr "Nombre d'échanges"
+
+msgid "report.exchange_chart_value_axis"
+msgstr "Unités monétaires"
+
+msgid "report.mass_chart_delta_legend"
+msgstr "Variation de la masse monétaire"
+
 # ============ "Toutes les parties" et "Comparer des parties" ============
 msgid "games.all_title"
 msgstr "Toutes les parties"

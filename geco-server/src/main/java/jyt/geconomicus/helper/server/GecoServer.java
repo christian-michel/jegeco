@@ -1134,6 +1134,25 @@ public class GecoServer
 			ctx.json(mStatsService.computeWealthOverTime(game));
 		});
 
+		// Étape 3, mode smartphone (27/09/2026, remonté par un utilisateur) :
+		// échanges individuels (nombre, valeur, répartition tours/joueurs) et
+		// masse monétaire détaillée (création/destruction par tour, ratio
+		// masse/joueurs) - voir StatsService.computeExchangeAndMoneyReport,
+		// applicable uniquement en dette/libre suivies par smartphone
+		// (ExchangeAndMoneyReport.applicable=false sinon, jamais une erreur).
+		pApp.get("/api/games/{id}/exchange-stats", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final List<Transaction> transactions = mGameService.listTransactions(id);
+			ctx.json(mStatsService.computeExchangeAndMoneyReport(game, transactions));
+		});
+
 		// --- Connectivité (étape 3, Phase A) ---
 		// Liste les adresses IP locales de la machine, pour construire les QR codes
 		// et URLs que les smartphones utiliseront pour rejoindre la partie. Voir

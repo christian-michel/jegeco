@@ -2505,6 +2505,113 @@ image, pas une nouvelle référence.
 Verdict final des deux agents : travail prêt à rapporter à l'utilisateur
 tel quel, aucun correctif supplémentaire nécessaire.
 
+## 27/09/2026 — Écran de statistiques complété : échanges monétaires et masse détaillée (dette/libre + smartphone)
+
+Demande utilisateur : compléter l'écran de statistiques pour les parties
+en monnaie dette et libre suivies par smartphone, avec quatre besoins
+précis - (1) nombre global d'échanges et sa répartition dans le temps
+(tours) et parmi les joueurs, (2) masse monétaire globale (création ET
+destruction) au cours de la partie et à chaque tour, (3) valeur des
+échanges en unités monétaires à chaque tour, (4) "accès à la monnaie"
+(ratio masse monétaire / nombre de joueurs) à chaque tour - avec moyennes
+et médianes partout, tableaux/histogrammes/diagrammes. Le "certificat du
+joueur" (points forts/faibles), demandé dans le même message, a été
+explicitement **différé par l'utilisateur** ("le traiter séparément, plus
+tard") : aucune décision de conception n'a été prise à son sujet.
+
+**Nouveau endpoint** `GET /api/games/{id}/exchange-stats`
+(`StatsService.computeExchangeAndMoneyReport`, `GecoServer.java`) :
+combine deux nouveaux rapports dans une seule réponse, `ExchangeStats`
+(échanges) et `MoneyMassDetailReport` (masse détaillée), plus un booléen
+`applicable`. **Réservé à la dette et la libre suivies par smartphone**
+(`isSmartphoneTrackedGame`, vérifie `Player.startingCardsJson != null`
+sur TOUS les joueurs, actifs ou non - contrairement au discriminant privé
+équivalent d'`Event.java`, qui ne regarde que les joueurs actifs : un
+rapport de fin de partie n'a en général plus aucun joueur actif) - jamais
+pour le troc (aucune valeur monétaire, voir docs/10-etape-plugins-troc.md,
+règle 6) ni pour une partie classique sans smartphone (aucune
+`Transaction` n'existe alors). `applicable=false` renvoie des rapports
+`null` plutôt que des rapports vides trompeurs.
+
+**Décisions de conception :**
+- **Échanges** (`computeExchangeStats`) : rejoue la liste des
+  `Transaction` individuelles (déjà horodatées par tour via
+  `Transaction.turnNumber`, pas de recorrélation par timestamp
+  nécessaire), en excluant les échanges troc+smartphone
+  (`isCardSwap()`/`isGoodsTrade()`) - cette statistique n'a de sens qu'en
+  monnaie dette/libre. Valeur nette par transaction lue directement via
+  `Transaction.totalCoinsValue()` (déjà net de tout rendu de monnaie,
+  aucune formule dupliquée). Chaque tour DÉJÀ JOUÉ apparaît dans
+  `byTurn`, même à zéro échange (continuité temporelle du graphique).
+  Chaque transaction est comptée **deux fois** dans `byPlayer` (une fois
+  pour l'acheteur, une fois pour le vendeur) - `PlayerExchangeStat`
+  documente explicitement que la somme de ses valeurs vaut donc 2×
+  `globalValue`, pas une erreur d'arrondi.
+- **Masse monétaire détaillée** (`computeMoneyMassDetailHistory`) : la
+  variation par tour (`massDelta`, création si positive/destruction si
+  négative) est dérivée **OBSERVATIONNELLEMENT** comme la différence
+  entre deux points de masse consécutifs (même mécanisme que
+  `computeMoneyMassHistory`, `Game.recomputeAll` + callback sur
+  `EventType.TURN`), plutôt que recalculée depuis les multiples chemins
+  de mutation de la masse dans `Event.applyEvent()` (TURN/DEATH/
+  NEW_CREDIT/REIMB_CREDIT, qui diffèrent entre dette et libre, et entre
+  mode strict TRM smartphone et mode classique) - choix délibéré pour
+  ne jamais risquer une dérive entre deux calculs séparés de la même
+  grandeur : la masse elle-même (déjà calculée ailleurs, seule source de
+  vérité) suffit à en déduire la variation par simple soustraction.
+- Moyennes et médianes calculées partout où demandé (valeur/échange,
+  échanges/tour, masse/joueur, variation/tour), en réutilisant
+  `computeMedian` existant (ajout d'un `computeMedianDouble` pour les
+  séries de type `double`, ex. le ratio masse/joueurs).
+
+**Investigation "bug" sur l'activité par joueur** (piste identifiée avant
+implémentation, dans une session précédente compactée) : l'hypothèse
+était que la section "Activité par joueur" du rapport de fin de partie
+était masquée à tort pour la libre smartphone, alors qu'elle a
+désormais de vraies `Transaction`. **Vérifié et infirmé** :
+`computeActivityReport` ne rejoue QUE les événements liés au crédit
+(`NEW_CREDIT`/`INTEREST_ONLY`/`REIMB_CREDIT`/`CANNOT_PAY`/`BANKRUPT`/
+`PRISON`), jamais les `Transaction` d'achat/vente de cartes, et la
+monnaie libre n'a par nature aucun de ces événements (pas de crédit).
+Démasquer cette section pour la libre aurait donc affiché un tableau à
+zéro partout, pas un vrai correctif - le masquage reste donc justifié
+pour ce système. L'activité d'ÉCHANGE (achat/vente de cartes) propre à la
+libre/dette smartphone est désormais couverte par la nouvelle section
+"Échanges monétaires" ci-dessus, basée sur les vraies `Transaction` - pas
+besoin de toucher `computeActivityReport`.
+
+**Front-end** (`app.js`, `index.html`) : nouvelle section "Échanges
+monétaires" + "Masse monétaire détaillée" sur l'écran de rapport
+(`renderExchangeStatsSection`), entre "Activité par joueur" et "Richesse
+des joueurs dans le temps" - masquée entièrement quand
+`exchangeReport.applicable` est faux. Quatre nouveaux graphiques
+(`chartExchangeByTurn` : barres+ligne double axe nombre/valeur par tour,
+`chartExchangeByPlayer` : barres par joueur, `chartMoneyMassDelta` :
+barres vert/rouge création/destruction par tour, `chartMoneyMassPerPlayer` :
+courbe masse/joueurs actifs), tous via `trackChart` (convention zoom/
+pinch existante). Toutes les nouvelles chaînes passent par `data-i18n`/
+`t("...")`, ajoutées à `lang/fr.po` ET `lang/en.po` (vérifié par le
+script de cohérence i18n de CLAUDE.md - 0 clé manquante).
+
+**Vérification** : nouveau test unitaire dédié,
+`StatsServiceExchangeStatsTest` (`geco-server`, 3 cas) - un scénario
+déterministe (partie libre + smartphone, 3 joueurs, transactions
+explicites sur 2 tours puis un tour sans échange) dont la vérité terrain
+est calculée INDÉPENDAMMENT dans le test à partir des vraies
+`Transaction` persistées (jamais des valeurs devinées à l'avance : en
+monnaie libre, le prix réel d'une carte dépend du DU courant, pas des
+`weakCoins` envoyés au serveur - piège rencontré en écrivant ce test,
+voir le commentaire de `boostAllBalances` : un solde boosté à un montant
+FIXE se retrouve réinjecté dans la masse au tour suivant en mode strict
+TRM, avec un DU qui grandit d'autant jusqu'à dépasser ce même solde fixe
+- corrigé en mesurant le DU courant à chaque tour et en boostant à un
+multiple large de cette valeur, jamais une constante devinée à l'avance),
+plus deux cas de non-applicabilité (troc, libre classique sans
+smartphone). Suite complète (`mvn test`) verte après ajout. Vérifié
+manuellement en conditions réelles (serveur démarré, partie dette +
+smartphone à 4 joueurs, capture d'écran de la section rendue - voir
+`docs/13-etape3-etat-et-feuille-de-route.md`).
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

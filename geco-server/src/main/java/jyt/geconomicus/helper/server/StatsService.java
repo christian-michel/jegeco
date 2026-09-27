@@ -13,6 +13,7 @@ import jyt.geconomicus.helper.Event;
 import jyt.geconomicus.helper.Event.EventType;
 import jyt.geconomicus.helper.Game;
 import jyt.geconomicus.helper.Player;
+import jyt.geconomicus.helper.Transaction;
 
 /**
  * Calcule les statistiques de partie utilisées par les graphiques du tableau de bord
@@ -87,6 +88,95 @@ public class StatsService
 	/** Statistiques globales d'activité de la partie (toutes couleurs de monnaie confondues). */
 	public record ActivityReport(int globalTransactionCount, int globalVolumeMoved,
 			List<PlayerActivity> byPlayer)
+	{
+	}
+
+	/**
+	 * Échanges carte-contre-jetons (dette/libre, mode smartphone - voir
+	 * {@link Transaction}) survenus PENDANT le tour donné : nombre d'échanges
+	 * et leur valeur totale en unités monétaires (voir
+	 * {@code Transaction.totalCoinsValue()}, déjà net de tout rendu de
+	 * monnaie).
+	 */
+	public record ExchangeTurnPoint(int turn, int count, int totalValue)
+	{
+	}
+
+	/**
+	 * Activité d'échange d'un joueur, tous rôles confondus (acheteur ET
+	 * vendeur) : {@code count} est le nombre de transactions où ce joueur
+	 * apparaît d'un côté ou de l'autre, {@code totalValue} la somme des
+	 * valeurs de ces mêmes transactions - une transaction compte donc une
+	 * fois pour l'acheteur ET une fois pour le vendeur (deux participants
+	 * distincts), contrairement à {@code globalCount}/{@code globalValue} de
+	 * {@link ExchangeStats} qui ne comptent chaque transaction qu'une seule
+	 * fois.
+	 */
+	public record PlayerExchangeStat(String playerName, int count, int totalValue)
+	{
+	}
+
+	/**
+	 * Statistiques des échanges monétaires individuels carte-contre-jetons
+	 * (dette/libre, mode smartphone uniquement - voir {@link Transaction}).
+	 * Répond à la demande d'un utilisateur (27/09/2026) : "connaître le
+	 * nombre global d'échanges au cours de la partie... et la répartition de
+	 * ces échanges (dans le temps au cours des tours - et parmi les
+	 * joueurs)... la valeur des échanges en unités monétaires à chaque
+	 * tour". Exclut volontairement les échanges troc (carte contre carte,
+	 * jamais de valeur monétaire - voir {@code Transaction.isCardSwap()}/
+	 * {@code isGoodsTrade()}) : cette statistique n'a de sens qu'en monnaie
+	 * dette/libre.
+	 */
+	public record ExchangeStats(int globalCount, int globalValue, double averageValuePerExchange,
+			double medianValuePerExchange, double averageCountPerTurn, double medianCountPerTurn,
+			List<ExchangeTurnPoint> byTurn, List<PlayerExchangeStat> byPlayer)
+	{
+	}
+
+	/**
+	 * Masse monétaire à la fin d'un tour, complétée de sa VARIATION depuis le
+	 * tour précédent ({@code massDelta}, positif = création nette, négatif =
+	 * destruction nette - voir CLAUDE.md, "Le calcul du DU") et du ratio
+	 * masse/joueurs actifs ({@code massPerPlayer}, "l'accès à la monnaie"
+	 * demandé par un utilisateur). {@code massDelta} est dérivé
+	 * OBSERVATIONNELLEMENT (différence entre deux {@link MoneyMassPoint}
+	 * consécutifs) plutôt que recalculé depuis les multiples chemins de
+	 * mutation de la masse dans {@code Event.applyEvent()} (TURN/DEATH/
+	 * NEW_CREDIT/REIMB_CREDIT, qui diffèrent selon le système monétaire et le
+	 * mode strict TRM) : la masse elle-même reste la seule source de vérité,
+	 * jamais recalculée séparément par une seconde formule qui pourrait
+	 * diverger.
+	 */
+	public record MoneyMassDetailPoint(int turn, int moneyMass, int massDelta, int activePlayers,
+			double massPerPlayer)
+	{
+	}
+
+	/**
+	 * Historique détaillé de la masse monétaire (voir {@link MoneyMassDetailPoint}),
+	 * avec moyenne et médiane du ratio masse/joueurs et de la variation par
+	 * tour - demandé explicitement par un utilisateur ("Montre les moyennes,
+	 * et les médianes").
+	 */
+	public record MoneyMassDetailReport(List<MoneyMassDetailPoint> points, double averageMassPerPlayer,
+			double medianMassPerPlayer, double averageMassDelta, double medianMassDelta)
+	{
+	}
+
+	/**
+	 * Rapport combiné échanges + masse monétaire détaillée, réservé aux
+	 * parties en monnaie dette OU libre suivies par smartphone (seules à
+	 * avoir de vraies {@link Transaction} individuelles - voir
+	 * {@link #isSmartphoneTrackedGame}) : {@code applicable} vaut faux pour
+	 * le troc (pas de valeur monétaire, voir docs/10-etape-plugins-troc.md,
+	 * règle 6) et pour toute partie classique sans smartphone (aucune
+	 * Transaction n'existe alors) - dans ces deux cas, {@code exchangeStats}
+	 * et {@code moneyMassDetail} valent {@code null} plutôt que des rapports
+	 * vides trompeurs.
+	 */
+	public record ExchangeAndMoneyReport(boolean applicable, ExchangeStats exchangeStats,
+			MoneyMassDetailReport moneyMassDetail)
 	{
 	}
 
@@ -518,7 +608,164 @@ public class StatsService
 		return new ActivityReport(globalCount, globalVolume, byPlayer);
 	}
 
+	/**
+	 * Vrai si au moins un joueur de la partie a une dotation de départ posée
+	 * en jetons ({@code Player.startingCardsJson != null}, voir
+	 * {@code GameService.dealStartingHandsForLibreIfNeeded}) - c'est-à-dire
+	 * une partie dette ou libre jouée en mode smartphone, seule à produire de
+	 * vraies {@link Transaction} individuelles exploitables ici.
+	 * <p>
+	 * Portage volontairement DISTINCT du {@code Event.isSmartphoneTrackedGame}
+	 * privé du moteur : celui-ci ne regarde que les joueurs encore ACTIFS
+	 * (pertinent en direct, pour savoir comment traiter l'événement courant),
+	 * alors qu'un rapport de fin de partie n'a en général plus AUCUN joueur
+	 * actif (tous morts/sortis) - on regarde donc ici TOUS les joueurs, actifs
+	 * ou non, `startingCardsJson` n'étant jamais remis à `null` après coup
+	 * (voir GameService, seul un JSON vide `"{}"` peut lui succéder, jamais
+	 * `null`).
+	 */
+	private boolean isSmartphoneTrackedGame(final Game pGame)
+	{
+		for (final Player p : pGame.getPlayers())
+			if (p.getStartingCardsJson() != null)
+				return true;
+		return false;
+	}
+
+	/**
+	 * Point d'entrée du rapport combiné échanges + masse monétaire détaillée
+	 * (voir {@link ExchangeAndMoneyReport}) - {@code pTransactions} doit être
+	 * la liste complète des transactions de la partie (voir
+	 * {@code GameService.listTransactions}), fournie par l'appelant : ce
+	 * service reste volontairement sans accès direct à l'EntityManager (voir
+	 * la Javadoc de classe), {@link Game} n'ayant lui-même aucune relation
+	 * JPA vers {@link Transaction}.
+	 */
+	public ExchangeAndMoneyReport computeExchangeAndMoneyReport(final Game pGame,
+			final List<Transaction> pTransactions)
+	{
+		final boolean applicable = ((pGame.getMoneySystem() == Game.MONEY_DEBT)
+				|| (pGame.getMoneySystem() == Game.MONEY_LIBRE)) && isSmartphoneTrackedGame(pGame);
+		if (!applicable)
+			return new ExchangeAndMoneyReport(false, null, null);
+		return new ExchangeAndMoneyReport(true, computeExchangeStats(pGame, pTransactions),
+				computeMoneyMassDetailHistory(pGame));
+	}
+
+	/**
+	 * Calcule {@link ExchangeStats} en rejouant la liste des transactions
+	 * individuelles (déjà horodatées par tour, voir
+	 * {@code Transaction.turnNumber}, pas besoin de recorréler par
+	 * timestamp). Exclut les échanges troc (voir {@link ExchangeStats}).
+	 */
+	private ExchangeStats computeExchangeStats(final Game pGame, final List<Transaction> pTransactions)
+	{
+		final List<Transaction> monetary = pTransactions.stream()
+				.filter(t -> !t.isCardSwap() && !t.isGoodsTrade()).toList();
+
+		final int globalCount = monetary.size();
+		final List<Integer> sortedValues = monetary.stream().map(Transaction::totalCoinsValue).sorted().toList();
+		final int globalValue = sortedValues.stream().mapToInt(Integer::intValue).sum();
+		final double averageValuePerExchange = globalCount == 0 ? 0 : (double) globalValue / globalCount;
+		final double medianValuePerExchange = computeMedian(sortedValues);
+
+		// Un point par tour DÉJÀ JOUÉ (1..tour courant), même sans aucun
+		// échange (compte à 0) - pour que le graphique montre une vraie
+		// continuité temporelle plutôt que de ne représenter que les tours
+		// où quelque chose s'est produit.
+		final Map<Integer, int[]> byTurnMap = new TreeMap<>();
+		for (int turn = 1; turn <= Math.max(pGame.getTurnNumber(), 0); turn++)
+			byTurnMap.put(turn, new int[2]);
+		for (final Transaction t : monetary)
+		{
+			final int[] bucket = byTurnMap.computeIfAbsent(t.getTurnNumber(), k -> new int[2]);
+			bucket[0]++;
+			bucket[1] += t.totalCoinsValue();
+		}
+		final List<ExchangeTurnPoint> byTurn = byTurnMap.entrySet().stream()
+				.map(e -> new ExchangeTurnPoint(e.getKey(), e.getValue()[0], e.getValue()[1])).toList();
+		final List<Integer> sortedCountsPerTurn = byTurn.stream().map(ExchangeTurnPoint::count).sorted().toList();
+		final double averageCountPerTurn = sortedCountsPerTurn.isEmpty() ? 0
+				: sortedCountsPerTurn.stream().mapToInt(Integer::intValue).average().orElse(0);
+		final double medianCountPerTurn = computeMedian(sortedCountsPerTurn);
+
+		// Chaque transaction implique deux participants (acheteur + vendeur) :
+		// comptée une fois pour chacun (voir Javadoc de PlayerExchangeStat).
+		final Map<String, int[]> byPlayerMap = new java.util.LinkedHashMap<>();
+		for (final Player p : pGame.getPlayers())
+			byPlayerMap.put(p.getName(), new int[2]);
+		for (final Transaction t : monetary)
+		{
+			final int value = t.totalCoinsValue();
+			if (t.getBuyer() != null)
+			{
+				final int[] b = byPlayerMap.computeIfAbsent(t.getBuyer().getName(), k -> new int[2]);
+				b[0]++;
+				b[1] += value;
+			}
+			if (t.getSeller() != null)
+			{
+				final int[] s = byPlayerMap.computeIfAbsent(t.getSeller().getName(), k -> new int[2]);
+				s[0]++;
+				s[1] += value;
+			}
+		}
+		final List<PlayerExchangeStat> byPlayer = byPlayerMap.entrySet().stream()
+				.map(e -> new PlayerExchangeStat(e.getKey(), e.getValue()[0], e.getValue()[1]))
+				.sorted(Comparator.comparingInt(PlayerExchangeStat::count).reversed()).toList();
+
+		return new ExchangeStats(globalCount, globalValue, round1(averageValuePerExchange),
+				round1(medianValuePerExchange), round1(averageCountPerTurn), round1(medianCountPerTurn), byTurn,
+				byPlayer);
+	}
+
+	/**
+	 * Calcule {@link MoneyMassDetailReport} en rejouant l'historique complet
+	 * de la partie (même mécanisme que {@link #computeMoneyMassHistory}) :
+	 * capture, à chaque tour, la masse monétaire, sa VARIATION depuis le tour
+	 * précédent (création si positive, destruction si négative), le nombre de
+	 * joueurs actifs et le ratio masse/joueurs actifs ("l'accès à la
+	 * monnaie").
+	 */
+	private MoneyMassDetailReport computeMoneyMassDetailHistory(final Game pGame)
+	{
+		final List<MoneyMassDetailPoint> points = new ArrayList<>();
+		final int[] previousMass = { 0 };
+		pGame.recomputeAll(event -> {
+			if (event.getEvt() == EventType.TURN)
+			{
+				final int mass = pGame.getMoneyMass();
+				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
+				final double massPerPlayer = activeCount == 0 ? 0 : (double) mass / activeCount;
+				points.add(new MoneyMassDetailPoint(pGame.getTurnNumber(), mass, mass - previousMass[0],
+						(int) activeCount, round1(massPerPlayer)));
+				previousMass[0] = mass;
+			}
+		});
+
+		final List<Integer> sortedDeltas = points.stream().map(MoneyMassDetailPoint::massDelta).sorted().toList();
+		final List<Double> sortedMassPerPlayer = points.stream().map(MoneyMassDetailPoint::massPerPlayer).sorted()
+				.toList();
+		final double averageMassDelta = sortedDeltas.isEmpty() ? 0
+				: sortedDeltas.stream().mapToInt(Integer::intValue).average().orElse(0);
+		final double averageMassPerPlayer = sortedMassPerPlayer.isEmpty() ? 0
+				: sortedMassPerPlayer.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+
+		return new MoneyMassDetailReport(points, round1(averageMassPerPlayer), round1(computeMedianDouble(sortedMassPerPlayer)),
+				round1(averageMassDelta), round1(computeMedian(sortedDeltas)));
+	}
+
 	private double computeMedian(final List<Integer> pSortedValues)
+	{
+		if (pSortedValues.isEmpty())
+			return 0;
+		final int n = pSortedValues.size();
+		return n % 2 == 1 ? pSortedValues.get(n / 2)
+				: (pSortedValues.get(n / 2 - 1) + pSortedValues.get(n / 2)) / 2.0;
+	}
+
+	/** Même principe que {@link #computeMedian(List)}, pour une liste de {@code double} déjà triée. */
+	private double computeMedianDouble(final List<Double> pSortedValues)
 	{
 		if (pSortedValues.isEmpty())
 			return 0;
