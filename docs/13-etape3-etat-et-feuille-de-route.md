@@ -374,14 +374,35 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    l'animateur peut toujours accorder un crédit manuellement via l'étape
    "Nouveaux crédits" de l'assistant en attendant, mais sans visibilité sur
    les demandes explicitement faites par les joueurs depuis leur téléphone.
-3. **Verrou de concurrence sur les échanges smartphone (troc, dette, libre)**
-   : `recordTransaction`/`recordCardSwap` valident (solde, réciprocité...)
-   puis persistent sans verrou base de données explicite - deux échanges
-   distincts portant sur la même ressource rare, rédimés quasi
-   simultanément, pourraient théoriquement passer tous les deux. Schéma
-   présent depuis le début pour dette/libre, identifié explicitement le
-   18/09/2026 en revue croisée du troc+smartphone - à corriger si confirmé
-   gênant en usage réel.
+3. ~~**Verrou de concurrence sur les échanges smartphone**~~ **Fait le
+   27/09/2026** : `GameService.withGameLock`, un verrou en mémoire par
+   partie - confirmé en usage réel (jusqu'à +31073 unités monétaires
+   créées de rien mesuré en HTTP réel avant correctif), voir
+   `03-architecture-technique.md`, entrée du 27/09/2026.
+3bis. **Décisions de règle en attente de réponse utilisateur** (campagne
+   de test 27/09/2026, voir `03-architecture-technique.md` pour le détail
+   complet des mesures) :
+   - Grossir la pioche des parties à peu de joueurs (option "N+2 modèles"
+     par niveau au lieu de "N+1") pour réduire la fréquence des carrés qui
+     ne peuvent plus rien promouvoir (mesuré : ferait passer le taux de
+     44/100 à 13/100 sur une partie 2 joueurs simulée, au prix d'un peu
+     moins de variété par carré) ?
+   - Un carré "tresforte" qui boucle vers "faible" alors que le joueur
+     détient déjà tout le stock d'un niveau (monopole) déclenche quand
+     même une VRAIE révolution (rotation des prix) et une carte gratuite à
+     chaque fois - à documenter comme un comportement voulu, ou à limiter
+     dans ce cas précis ?
+4bis. **Redesign du rejeu d'événements (undo/delete/edit) pour ne plus
+   perdre d'argent** (identifié le 27/09/2026, campagne de test) : un
+   achat/vente smartphone n'est pas un événement, donc n'est jamais rejoué
+   - annuler un événement sans rapport peut remettre les jetons d'un
+   joueur à leur valeur d'avant un achat déjà effectué (carte transférée,
+   paiement effacé), et en dette+smartphone chaque rejeu réapplique aussi
+   les crédits (jetons multipliés à chaque "Annuler" successif). Piste
+   envisagée non appliquée : ajuster les jetons ACTUELS par la différence
+   entre rejouer avec/sans l'événement retiré. Bug mineur lié : le
+   graphique "masse monétaire" affiche pour "Tour 1" la masse finale de la
+   partie au lieu de la masse réelle à ce tour.
 4. **Retirer les traces de diagnostic temporaires** une fois un test
    concluant confirmé (voir le code pour les commentaires "[DIAG]" restants
    éventuels — la plupart ont déjà été retirées ou pérennisées via le

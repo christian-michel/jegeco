@@ -287,13 +287,29 @@ ajoutes, pas seulement via ce script.
   reconnexion WebSocket...) peuvent se déclencher presque simultanément —
   un garde-fou "déjà en cours" simple protège contre ça, quelle que soit
   la cause exacte du déclenchement multiple.
-- **Connu, non corrigé** (identifié le 18/09/2026 en seconde relecture
-  indépendante du troc+smartphone) : les échanges smartphone
-  (`GameService.recordTransaction`/`recordCardSwap`) valident (solde,
-  réciprocité...) puis persistent SANS verrou base de données explicite —
-  deux échanges distincts portant sur la même ressource rare, rédimés
-  quasi simultanément, pourraient théoriquement passer tous les deux.
-  Présent depuis le début pour dette/libre, pas une régression du
-  18/09/2026 — à corriger si confirmé gênant en usage réel (verrou
-  explicite ou transaction DB sérialisée sur la paire de joueurs
-  concernée).
+- **Corrigé le 27/09/2026** (identifié le 18/09/2026 en seconde relecture
+  indépendante du troc+smartphone, confirmé en usage réel le 27/09/2026
+  suite à un retour utilisateur — voir `docs/03-architecture-technique.md`,
+  entrée du 27/09/2026, pour le détail complet) : les échanges smartphone
+  validaient (solde, réciprocité...) puis persistaient SANS verrou base de
+  données explicite — deux échanges distincts portant sur la même
+  ressource rare, rédimés quasi simultanément, pouvaient effectivement
+  tous les deux passer (jusqu'à +31073 unités monétaires créées de rien,
+  mesuré en HTTP réel). Corrigé par `GameService.withGameLock` (verrou en
+  mémoire par partie, voir son commentaire pour le détail).
+- **Connu, non corrigé** (identifié le 27/09/2026, campagne de test 2/4/10
+  joueurs) : "Annuler"/supprimer/éditer un événement rejoue l'historique
+  et écrase les jetons du joueur via un point de contrôle de richesse —
+  mais un achat/vente smartphone n'est PAS un événement. Annuler un
+  événement sans rapport peut donc remettre les jetons d'un joueur à leur
+  valeur d'avant un achat déjà effectué, sans annuler le transfert de
+  carte associé (l'acheteur obtient la carte gratuitement). Plus grave en
+  dette+smartphone : chaque rejeu réapplique aussi les crédits
+  (NEW_CREDIT), qui rajoutent leur principal aux jetons à CHAQUE rejeu —
+  mesuré : 3 "Annuler" après un crédit de 10 unités font passer les
+  jetons de 10 à 40. Nécessite un redesign du rejeu (piste envisagée, non
+  appliquée : ajuster les jetons ACTUELS par la différence entre rejouer
+  avec/sans l'événement retiré, plutôt que de laisser le rejeu écraser
+  leur valeur) — décision utilisateur en attente. Bug mineur lié : le
+  graphique "masse monétaire" affiche pour "Tour 1" la masse FINALE de la
+  partie au lieu de la masse réelle à ce tour (même mécanisme de rejeu).

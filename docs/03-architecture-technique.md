@@ -2145,6 +2145,156 @@ correctif complétée après coup (l'audit du second agent a relevé que ce
 fichier ne mentionnait pas encore `renderAnimTitle()` ni le préchargement
 de police au moment de sa relecture).
 
+### Campagne de test 2/4/10 joueurs, verrou par partie, carrés fantômes (27/09/2026)
+
+Retour utilisateur sur une vraie partie test (libre + smartphone, 2
+joueurs, 8 tours de 3 min) : "Montre mécanique x4" jamais encaissée en
+carré, trois modèles "Très forte" à x5. Question posée : "Est-ce que la
+révolution industrielle a eu lieue ?" - réponse : non, "Rupture
+technologique" (voir plus haut, entrée initiale sur ce mécanisme) ne
+change jamais le nombre de cartes requis pour un carré (toujours 4) ni
+rien à la pioche - c'est un simple indicateur statistique (facteur de
+richesse ×2), déclenché une seule fois par partie. Sa présence dans le
+journal de CETTE partie prouvait au contraire qu'un carré avait
+fonctionné au moins une fois, orientant l'enquête vers un défaut
+intermittent plutôt qu'une panne totale.
+
+Demande complémentaire : revue complète du code, campagne de 3 parties
+réelles (2/4/10 joueurs + animateur, 12 tours de 5 min), vérification de
+la cohérence des affichages (cartes/jetons/DU) entre smartphones et
+tableau de bord animateur, attention à la pioche et aux morts, et surtout
+que les échanges restent fluides et jamais bloqués - avec, si un blocage
+est trouvé, l'obligation d'en identifier la cause et de proposer une
+solution plutôt que de deviner. Mandat des deux agents de contrôle élargi
+en conséquence, avec autorité de renvoyer le travail à refaire si le
+résultat n'est pas bon (jamais utilisée cette fois : le second agent a
+confirmé le fond du travail, seulement demandé deux corrections de
+formulation/complétude avant le retour à l'utilisateur, détaillées
+ci-dessous).
+
+**Deux causes distinctes trouvées au symptôme exact de l'utilisateur** :
+
+1. **Épuisement des petites pioches (décision de règle, pas un bug)** -
+   à 2 joueurs, seuls 3 modèles × 5 exemplaires sont en jeu par niveau
+   (règle "N+1 modèles" du 06/09/2026) ; un carré rend puis repioche dans
+   la MÊME pioche, qui peut donc ne plus rien avoir de nouveau à offrir.
+   Reproduit dans 44 à 52 parties simulées sur 100 (2 joueurs), 32/40 (4
+   joueurs), 1/15 (10 joueurs, rare car plus de joueurs = plus de
+   modèles). Question soumise à l'utilisateur (voir le retour final) :
+   grossir la pioche (option "N+2 modèles", mesurée : fait tomber le taux
+   à 13/100 pour 2 joueurs, au prix d'un peu moins de variété par carré)
+   ou laisser en l'état.
+
+2. **Vrai bug de concurrence, confirmé et corrigé** - le risque documenté
+   dans CLAUDE.md ("Connu, non corrigé" : validation puis écriture sans
+   verrou explicite) était jusqu'ici jamais observé en usage réel. Prouvé
+   en HTTP réel (rachats simultanés) : jusqu'à +31073 unités monétaires
+   créées de rien, jusqu'à 22 exemplaires d'un modèle qui n'en compte que
+   5. Corrigé par `GameService.withGameLock` - un verrou en mémoire par
+   partie (`ReentrantLock`, `ConcurrentHashMap<gameId, lock>`) sérialisant
+   toute opération qui lit puis réécrit l'état partagé d'une partie
+   (transactions, carrés, jetons de départ, mise en place de la pioche,
+   undo/edit/delete d'événement...). Sûr vis-à-vis du cache EclipseLink
+   (aucun réglage de cache dans persistence.xml, aucune écriture SQL
+   native hors sauvegarde - le détenteur suivant voit toujours l'état
+   validé par le précédent). Sans impact mesurable sur la fluidité
+   (latence de rachat : +40ms au 95e percentile sous charge concurrente
+   réelle, toujours sous 0,3s). Deux bugs de la même famille trouvés en
+   creusant `recordTransaction` (jamais concernée par le correctif
+   équivalent du 18/09/2026 sur `recordCardSwap`) : un vendeur pouvait
+   présenter plusieurs QR pour le même exemplaire et se faire racheter la
+   même carte deux fois ; le niveau (donc le prix en monnaie libre)
+   déclaré par le client n'était jamais revérifié. Les deux corrigés en
+   dérivant le niveau depuis la pioche de la partie et en revérifiant que
+   le vendeur détient bien la carte, sous le même verrou. Commit `9c3e49e`.
+
+**Trois défauts supplémentaires trouvés par la campagne de 12 tours,
+corrigés** :
+- `isTradingAllowed` comparait `turnNumber >= nbTurnsPlanned` au lieu de
+  `>` - bloquait TOUS les échanges pendant l'intégralité du DERNIER tour
+  prévu (mesuré : 0 échange possible en tour 12/12). Une partie
+  explicitement terminée par l'animateur (événement END) bloque
+  désormais aussi les échanges, plus fiable que la seule expiration du
+  chrono.
+- Le bouton "+30s" du minuteur RECULAIT `turnStartedAt` au lieu de
+  l'avancer, RACCOURCISSANT le tour de 30s au lieu de l'allonger -
+  présent depuis l'import initial du projet, jamais remarqué jusqu'ici.
+- **Trouvé par le second agent de contrôle** (audit du premier correctif
+  ci-dessus) : le correctif sur `isTradingAllowed` rouvrait, sans le
+  vouloir, une fenêtre où un joueur déjà SORTI de la partie (QUIT via
+  l'assistant de fin de partie, ou mort sans renaissance) pouvait quand
+  même continuer à acheter/vendre - AVANT ce correctif, le dernier tour
+  bloquait tout, masquant ce trou par accident. Reproduit en HTTP réel :
+  un joueur rendu inactif achetait quand même une carte, ses jetons
+  changeant après que son solde de sortie avait déjà été enregistré.
+  Corrigé : `recordTransaction`/`recordCardSwap` refusent désormais tout
+  échange impliquant un joueur inactif. Commit `90074c8`.
+
+**Carrés fantômes, trouvés par le second agent de contrôle, corrigés** :
+un carré qui ne fait progresser le joueur à AUCUN niveau supérieur
+(pioche cible épuisée - conséquence directe du point 1 ci-dessus) était
+quand même diffusé comme un VRAI carré : une animation "carré" se
+rejouait sur le téléphone à chaque transaction suivante, pour un
+résultat strictement nul, tant que le joueur concentrait tout le stock
+d'un niveau. Corrigé en persistant TOUJOURS l'événement (conservation des
+cartes inchangée - `computePlayerCardInventory` rejoue l'historique des
+`CardSquareEvent` pour reconstituer un inventaire ; une première
+tentative de ne plus le persister DU TOUT a cassé la conservation,
+détectée par `GameServiceFullGameSimulationTest`), mais en ne le
+retournant/diffusant plus jamais quand la pioche cible est épuisée -
+généralisé de "carte rendue strictement identique" à "toute pioche cible
+épuisée" après avoir découvert, en fiabilisant le test associé, que DEUX
+modèles distincts d'un même niveau peuvent s'échanger ce rôle de "faux
+carré" indéfiniment et consommer les 50 itérations du filet de sécurité
+sans jamais atteindre un autre carré pourtant éligible. Question soumise
+à l'utilisateur (voir le retour final) : un carré "tresforte" qui boucle
+vers "faible" alors que le joueur détient déjà tout le stock du niveau
+déclenche quand même une VRAIE révolution (rotation des prix) et donne 1
+carte gratuite à chaque fois - un comportement de règle, pas un bug, mais
+potentiellement disruptif en cas de monopole d'un niveau.
+
+**Deux bugs de perte d'argent identifiés, non corrigés (redesign
+nécessaire, décision utilisateur)** :
+- "Annuler"/supprimer/éditer un événement (undo/delete/editEvent) rejoue
+  l'historique, et un point de contrôle de richesse écrase les jetons du
+  joueur - mais un achat/vente smartphone n'est PAS un événement.
+  Résultat : annuler un événement SANS RAPPORT avec un achat smartphone
+  peut remettre les jetons du joueur à leur valeur d'AVANT cet achat,
+  alors que la carte, elle, reste transférée - l'acheteur obtient la
+  carte gratuitement.
+- Même cause racine, plus grave en dette+smartphone : chaque
+  "Annuler"/suppression REJOUE aussi les crédits (NEW_CREDIT), qui
+  RAJOUTENT leur principal aux jetons à chaque rejeu - mesuré : 3
+  "Annuler" successifs après un crédit de 10 unités font passer les
+  jetons du joueur de 10 à 40, sans que la dette n'augmente d'autant.
+  Présent AVANT ce correctif aussi (pas une régression de cette
+  campagne).
+- Piste de correctif possible, non appliquée (nécessite sa propre revue
+  et ses propres tests) : dans undo/delete/editEvent uniquement, ajuster
+  les jetons ACTUELS du joueur par la DIFFÉRENCE entre rejouer avec et
+  sans l'événement retiré, plutôt que de laisser le rejeu écraser purement
+  et simplement leur valeur.
+- Bug mineur lié : le graphique "masse monétaire" affiche, pour le point
+  "Tour 1", la masse FINALE de la partie au lieu de la masse réelle à ce
+  tour-là (même mécanisme de rejeu).
+
+**Nettoyage** : suppression de 1836 fichiers (27 Mo, jsdom/undici,
+dépendances de test Node) commités par erreur dans le dossier PUBLIC du
+serveur depuis le commit `486a029` - aucun `package.json` du dépôt n'en
+dépend, aucune page ne les charge, mais ils étaient servis sans
+authentification et embarqués dans le jar.
+
+**Bruit de console navigateur** (signalé par l'utilisateur,
+`MaxListenersExceededWarning`/`ObjectMultiplex - orphaned data`, tagué
+`contentscript.js`) : confirmé comme du bruit d'extension NAVIGATEUR
+(type MetaMask), aucune trace de `EventEmitter`/`ObjectMultiplex` dans le
+code de l'application ni dans le dépôt.
+
+**Test sur un vrai téléphone iOS/Android : toujours impossible dans cet
+environnement** - seul Chromium headless (Playwright), jamais un
+appareil physique, répété pour mémoire dans cette entrée comme dans
+toutes les précédentes de cette session.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.
