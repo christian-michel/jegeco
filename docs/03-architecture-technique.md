@@ -1985,6 +1985,64 @@ pour "Mort du joueur") : aucun test sur un vrai appareil iOS/Android
 très large/court (paysage) - jamais par-dessus l'anneau doré, juste pas
 parfaitement centré - jugé cosmétique et non prioritaire.
 
+### Timing mort+renaissance ajusté à 2s+3s, vérification en partie réaliste (27/09/2026)
+
+Demande utilisateur, après la mise en place de "Renaissance !" ci-dessus :
+"Peux-tu tester sur un vrai téléphone ? iOS Android ? Peux-tu t'assurer
+dans une partie test que les écrans ne restent pas mais qu'il se déclenche
+bien au bon moment ? Peux-tu modifier les timing puisque les écrans
+d'animation de la mort et de la Renaissance s'enchaînent automatiquement
+l'un l'autre, je souhaiterais que l'écran de la mort dure 2 secondes et
+que celui de la Renaissance dure 3 secondes, ce qui fait un total de 5
+secondes."
+
+**Test sur un vrai téléphone (iOS/Android) : impossible dans cet
+environnement.** À dire clairement, sans contourner la question : cette
+session tourne dans un environnement cloud isolé, sans accès à un
+appareil physique - seul Chromium headless (via Playwright) est
+disponible. Toutes les vérifications ci-dessous (comme celles des deux
+animations elles-mêmes) sont donc faites par ce biais, jamais sur un vrai
+téléphone. Signalé explicitement à l'utilisateur dans le retour final,
+pas seulement ici.
+
+**Changement de timing** : `DEATH_ANIM_TOTAL_DISPLAY_MS` 5000 → 2000,
+`REBIRTH_ANIM_TOTAL_DISPLAY_MS` 5000 → 3000 (`player-view.js`) - remplace
+l'ancien couple 5s+5s=10s par 2s+3s=5s, exactement la demande. Vérifié que
+la chorégraphie interne de chaque animation (dézoom 720ms + impact 450ms,
+~1,2s) tient toujours largement dans ces budgets réduits (reste ~0,8s
+d'affichage fixe pour la mort, ~1,8s pour la renaissance, contre ~3,8s
+avant) - aucune étape visuelle n'est tronquée par ce changement, aucun
+autre code (choix de couleurs, `cartoon-text.js`, sons synthétisés) n'a dû
+être modifié.
+
+**Vérification en "partie test" plus réaliste**, délibérément différente
+des tests isolés à déclenchement unique utilisés pour les deux animations
+elles-mêmes (répond directement à "dans une partie test que les écrans ne
+restent pas mais qu'il se déclenche bien au bon moment") : partie à 3
+joueurs, plusieurs tours de jeu normal (`"T"`) intercalés AVANT et ENTRE
+deux morts distinctes touchant deux joueurs différents à des moments
+différents de la session, avec deux onglets Playwright ouverts
+simultanément (le joueur qui meurt et un joueur témoin). Résultats (9/9
+contrôles passés) :
+- Déclenchement de l'animation de mort en <300ms après l'événement
+  serveur (jamais un délai perceptible côté joueur).
+- Écran de mort refermé à ~2,0s (mesuré : 2047ms et 1961ms sur les deux
+  cycles), jamais l'ancien ~5s.
+- Renaissance enchaînée immédiatement (début mesuré à moins de 150ms
+  après la fin de la mort les deux fois), refermée à ~5,0s au total
+  (mesuré : 5048ms et 5058ms) - exactement la demande "un total de 5
+  secondes".
+- Le joueur témoin (non ciblé par l'événement) ne voit JAMAIS l'overlay
+  s'activer, sur toute la durée de l'observation - confirme que le
+  ciblage côté client (comparaison de `playerId`) reste correct.
+- Dans les deux cas, plus aucun overlay actif 2s après la fin mesurée du
+  cycle (marge de sécurité) - aucun écran ne reste bloqué affiché, sur le
+  premier cycle comme sur le second, plus tard dans la même session.
+
+Suite de tests automatisés (geco-engine + geco-server) toujours 100%
+verte après le changement de timing (seul du JS pur, aucun code serveur
+modifié).
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

@@ -207,6 +207,35 @@ comme pour l'exemple précédent."
   `03-architecture-technique.md`, entrées du 27/09/2026, pour le détail
   complet.
 
+### Timing mort+renaissance réduit à 2s+3s=5s, revérifié en partie test (27/09/2026)
+
+Suite à la construction de "Renaissance !" ci-dessus, demande utilisateur :
+timing raccourci ("l'écran de la mort dure 2 secondes... celui de la
+Renaissance dure 3 secondes, ce qui fait un total de 5 secondes", contre
+5s+5s=10s auparavant), plus une vérification en "partie test" que les
+écrans ne restent jamais bloqués et se déclenchent au bon moment, plus un
+troisième tour de relecture indépendante à deux agents (voir plus bas pour
+son verdict une fois disponible).
+
+- **Test sur un vrai téléphone iOS/Android : non disponible dans cet
+  environnement** - disclosure honnête faite à l'utilisateur, aucune
+  affirmation contraire. Seul Chromium headless (Playwright) est
+  accessible dans cette session cloud isolée.
+- `DEATH_ANIM_TOTAL_DISPLAY_MS` 5000→2000, `REBIRTH_ANIM_TOTAL_DISPLAY_MS`
+  5000→3000 (`player-view.js`, seul fichier modifié) - chorégraphie interne
+  (~1,2s par animation) toujours largement dans le budget.
+- Revérifié dans une partie test à 3 joueurs, plusieurs tours normaux
+  intercalés, deux morts/renaissances distinctes à des moments différents
+  de la partie, deux onglets simultanés (joueur ciblé + joueur témoin) :
+  déclenchement en <300ms, mort refermée à ~2,0s, renaissance enchaînée
+  aussitôt et refermée à ~5,0s au total, joueur témoin jamais affecté,
+  aucun écran bloqué après coup - vérifié identique sur les deux cycles,
+  à deux moments différents de la même session (9/9 contrôles passés).
+- Suite de tests automatisés toujours 100% verte (aucun code serveur
+  modifié).
+- Voir `03-architecture-technique.md`, entrée du 27/09/2026, pour le
+  détail complet des mesures.
+
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la
   Monnaie** (`DU = c × masse_monétaire / joueurs_vivants`, avec `c` dépendant
