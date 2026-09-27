@@ -2841,6 +2841,48 @@ const DEATH_ANIM_IMPACT_MS = 450;
 // avant) - vérifié qu'aucune étape n'est tronquée.
 const DEATH_ANIM_TOTAL_DISPLAY_MS = 2000;
 
+// Correctif (27/09/2026, relecture indépendante du timing 2s+3s) : le
+// try/finally de playDeathAnimation/playRebirthAnimation ne protège que d'une
+// EXCEPTION, pas d'une attente qui ne se termine jamais - or
+// CartoonText.render attend document.fonts.load(), et la police "Sora" en
+// graisse forte n'est utilisée nulle part ailleurs dans cet écran : elle
+// n'était téléchargée qu'au moment même de la PREMIÈRE mort, au beau milieu
+// de l'animation. Vérifié dans le navigateur en retenant cette seule requête
+// : écran de mort resté plein écran (pointer-events: auto, téléphone
+// bloqué) et file d'attente figée tant que la requête ne répondait pas (12 s
+// observées, sans limite en soi). Double correctif : (1) police préchargée dès
+// la fin du chargement de la page (ci-dessous - la même requête "900" que
+// cartoon-text.js, résolue vers la graisse 800 vendorisée), pour ne plus
+// dépendre du réseau pendant l'animation ; (2) attente du rendu du titre
+// plafonnée (renderAnimTitle) - au-delà, la séquence continue sans attendre
+// (journalisé via pushDebugLog, jamais silencieux), l'écran se referme donc
+// toujours. Le plafond reste très au-dessus d'un rendu normal (mesuré : 7 à
+// ~190 ms, y compris processeur ralenti x6 et police à télécharger).
+const ANIM_TITLE_FONT_FAMILY = "'Sora','Luckiest Guy','Rubik',sans-serif";
+const ANIM_TITLE_RENDER_TIMEOUT_MS = 1500;
+// Lancé APRÈS l'événement "load" : un chargement de police en cours retarde
+// sinon cet événement (vérifié : police bloquée = page jamais "chargée").
+window.addEventListener("load", () => {
+	if (document.fonts && document.fonts.load) {
+		document.fonts.load("900 1em Sora").catch((err) =>
+			pushDebugLog("ERREUR", "Préchargement de la police des animations mort/renaissance impossible :", err));
+	}
+});
+async function renderAnimTitle(host, text) {
+	let timer = null;
+	const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve("timeout"), ANIM_TITLE_RENDER_TIMEOUT_MS); });
+	try {
+		const outcome = await Promise.race([
+			window.CartoonText.render(host, text, { maxLines: 2, fontFamily: ANIM_TITLE_FONT_FAMILY }),
+			timeout,
+		]);
+		if (outcome === "timeout")
+			pushDebugLog("ERREUR", `Rendu du titre d'animation trop lent (> ${ANIM_TITLE_RENDER_TIMEOUT_MS} ms), animation poursuivie sans l'attendre :`, text);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 // Appelée UNIQUEMENT depuis drainDeathAnimQueue() ci-dessus - jamais
 // directement, pour garantir qu'une seule animation ne joue à la fois.
 async function playDeathAnimation() {
@@ -2905,16 +2947,16 @@ async function playDeathAnimation() {
 		// vendorisée dans ce projet (pas de CDN, voir CLAUDE.md) - sans cette
 		// option, le rendu retombait sur la police système générique. "Sora"
 		// est déjà vendorisée (voir --font-display, player.css) : réutilisée
-		// ici en priorité plutôt que d'ajouter un nouveau fichier de police.
-		await window.CartoonText.render(titleHost, t("playerView.death_anim_title"),
-			{ maxLines: 2, fontFamily: "'Sora','Luckiest Guy','Rubik',sans-serif" });
+		// ici en priorité plutôt que d'ajouter un nouveau fichier de police
+		// (voir ANIM_TITLE_FONT_FAMILY/renderAnimTitle ci-dessus).
+		await renderAnimTitle(titleHost, t("playerView.death_anim_title"));
 		titleHost.classList.add("stamp-in");
 		zoom.classList.add("shake-impact");
 		playDeathImpactSound();
 		await new Promise((r) => setTimeout(r, DEATH_ANIM_IMPACT_MS));
 		zoom.classList.remove("shake-impact");
 
-		// ÉTAPE 3 : reste affichée jusqu'au total de 5 secondes demandé, puis
+		// ÉTAPE 3 : reste affichée jusqu'au total demandé (DEATH_ANIM_TOTAL_DISPLAY_MS), puis
 		// referme automatiquement - refreshPlayer() recharge l'état du joueur
 		// (nouvelle main de départ, solde remis à zéro...) pour que l'écran
 		// retrouvé juste après reflète déjà sa renaissance.
@@ -3011,8 +3053,7 @@ async function playRebirthAnimation() {
 		// tremblement d'écran + son synchronisés - les deux ensemble, comme
 		// sur le modèle fourni.
 		titleHost.style.opacity = "";
-		await window.CartoonText.render(titleHost, t("playerView.rebirth_anim_title"),
-			{ maxLines: 2, fontFamily: "'Sora','Luckiest Guy','Rubik',sans-serif" });
+		await renderAnimTitle(titleHost, t("playerView.rebirth_anim_title"));
 		titleHost.classList.add("stamp-in");
 		// Correctif (27/09/2026, relecture indépendante) : retirer l'opacité
 		// "0" posée EN LIGNE plus haut, exactement comme pour titleHost juste
@@ -3029,8 +3070,8 @@ async function playRebirthAnimation() {
 		await new Promise((r) => setTimeout(r, REBIRTH_ANIM_IMPACT_MS));
 		zoom.classList.remove("shake-impact");
 
-		// ÉTAPE 3 : reste affichée jusqu'au total de 5 secondes demandé, puis
-		// referme automatiquement.
+		// ÉTAPE 3 : reste affichée jusqu'au total demandé
+		// (REBIRTH_ANIM_TOTAL_DISPLAY_MS), puis referme automatiquement.
 		const elapsed = REBIRTH_ANIM_ZOOM_START_DELAY_MS + REBIRTH_ANIM_DEZOOM_MS + REBIRTH_ANIM_IMPACT_MS;
 		await new Promise((r) => setTimeout(r, Math.max(0, REBIRTH_ANIM_TOTAL_DISPLAY_MS - elapsed)));
 	} catch (err) {
