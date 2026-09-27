@@ -1812,6 +1812,27 @@ la lune dans l'image, contre `50% 40%` estimé initialement à l'œil).
 Suite de tests automatisés rejouée après ces corrections : toujours 100%
 verte (geco-engine + geco-server), aucune régression.
 
+**Troisième relecture (audit de la seconde relecture, demandée
+explicitement par l'utilisateur : "un agent qui contrôle que l'agent de
+contrôle a bien fait son travail")** : un troisième agent, indépendant des
+deux précédents, a rejoué ses propres scénarios plutôt que de faire
+confiance aux rapports fournis - a confirmé chacune des mesures précises
+de la seconde relecture (facteur de zoom, timings, absence d'erreur
+console) en les remesurant lui-même sur un serveur isolé, y compris en
+rechargeant délibérément l'ANCIEN code (`54b4d7f`) pour vérifier que ses
+propres scripts reproduisaient bien les bugs d'origine avant de les tester
+sur le code corrigé. Verdict : la fonctionnalité est prête, aucun défaut
+bloquant.
+
+**Une dernière lacune de robustesse trouvée** (le `try/finally` de
+`playDeathAnimation` ne protège que sa propre séquence - une exception
+levée AVANT lui, ou dans la boucle englobante de `drainDeathAnimQueue`
+elle-même, laisserait `mDeathAnimRunning` bloqué à `true` indéfiniment,
+plus aucune animation de mort suivante ne se déclenchant jamais) : un
+scénario peu probable en usage réel (nécessite une page HTML désynchronisée
+de son propre JS), mais corrigé par prudence avec un second `try/finally`
+englobant, au niveau de `drainDeathAnimQueue` elle-même.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

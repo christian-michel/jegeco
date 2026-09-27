@@ -2719,11 +2719,21 @@ function enqueueDeathAnimation(deathDto) {
 }
 async function drainDeathAnimQueue() {
 	mDeathAnimRunning = true;
-	while (mDeathAnimQueue.length > 0) {
-		mDeathAnimQueue.shift();
-		await playDeathAnimation(); // toujours attendu en entier avant la suivante - jamais deux animations en même temps
+	// Correctif (26/09/2026, seconde relecture indépendante d'une première
+	// relecture) : le try/finally À L'INTÉRIEUR de playDeathAnimation ne
+	// couvre que sa propre séquence d'animation - une exception levée AVANT
+	// (ex. el("deathAnimZoom") introuvable, page HTML désynchronisée du JS)
+	// laisserait mDeathAnimRunning bloqué à `true` pour toujours, sans jamais
+	// rejouer aucune animation suivante. Ce filet de sécurité englobant
+	// garantit que le drapeau est TOUJOURS remis à `false`, quoi qu'il arrive.
+	try {
+		while (mDeathAnimQueue.length > 0) {
+			mDeathAnimQueue.shift();
+			await playDeathAnimation(); // toujours attendu en entier avant la suivante - jamais deux animations en même temps
+		}
+	} finally {
+		mDeathAnimRunning = false;
 	}
-	mDeathAnimRunning = false;
 }
 
 // Synthèse sonore d'un impact sourd (Web Audio API, aucun fichier externe -

@@ -138,6 +138,18 @@ titre en coup de tampon) plutôt qu'une mort silencieuse.
   titre échouait (aucun `try/finally`). Les trois corrigés le jour même -
   voir `03-architecture-technique.md`, entrée du 26/09/2026, pour le
   détail complet.
+- **Troisième relecture** (audit de la seconde, également demandée
+  explicitement) : a confirmé chaque mesure de la seconde relecture en la
+  remesurant elle-même, et trouvé une dernière lacune de robustesse (le
+  `try/finally` ne protégeait pas la boucle englobante de la file
+  d'attente) - corrigée par un second `try/finally` de sécurité. Verdict
+  final : fonctionnalité prête, aucun défaut bloquant.
+- **Limites connues, non bloquantes** : un téléphone hors-ligne ou
+  verrouillé au moment précis de la mort ne voit jamais l'animation
+  ensuite (même limite déjà assumée pour l'animation du carré) ; ni le
+  parcours réel de l'assistant de fin de tour (clic par clic) ni un vrai
+  appareil iOS/Android n'ont été testés par les agents de relecture -
+  seulement le même appel HTTP que l'assistant envoie.
 
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la
