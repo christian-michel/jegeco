@@ -2978,7 +2978,19 @@ async function playDeathAnimation() {
 			impactFlash.classList.add("flash-red", "active");
 			void impactFlash.offsetWidth;
 			impactFlash.style.transition = "";
-			setTimeout(() => impactFlash.classList.remove("active"), 120);
+			// Correctif (27/09/2026, relecture indépendante du timing dynamique) :
+			// ce minuteur détaché ne retire "active" QUE si l'élément partagé est
+			// encore en mode rouge. Sans cette garde, si "Mort du joueur" était
+			// interrompue par une exception juste après l'impact (moins de 120 ms),
+			// playRebirthAnimation démarrait aussitôt et reprenait l'élément en
+			// flash blanc - ce minuteur retirait alors "active" au flash BLANC
+			// (mesuré par injection de panne : blanc tenu 114 ms au lieu de 150,
+			// fondu démarré 37 ms avant le dézoom). Le flash blanc, une fois posé,
+			// appartient entièrement à playRebirthAnimation (retrait normal ou
+			// filet de sécurité de son "finally") - aucun risque de flash bloqué.
+			setTimeout(() => {
+				if (impactFlash.classList.contains("flash-red")) impactFlash.classList.remove("active");
+			}, 120);
 		}
 		await new Promise((r) => setTimeout(r, DEATH_ANIM_IMPACT_MS));
 		zoom.classList.remove("shake-impact");
