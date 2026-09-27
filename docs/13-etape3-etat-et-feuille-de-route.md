@@ -253,6 +253,73 @@ explicite de corriger directement).
 - Voir `03-architecture-technique.md`, entrée du 27/09/2026, pour le
   détail complet des mesures et du correctif.
 
+### Timing mort+renaissance encore raccourci et rendu plus dynamique (27/09/2026, second changement le même jour)
+
+Nouveau retour utilisateur, avec un second fichier de référence fourni
+("test1.html", une démo dessinée en CSS/JS) : "il faudrait lui donner un
+autre timing afin de la rendre plus dynamique quand on joue" - les
+visuels (fonds réels, texte multilingue via cartoon-text.js) sont
+explicitement CONSERVÉS, seul le RYTHME s'inspire du fichier fourni.
+Question posée à l'utilisateur pour trancher la durée totale cible
+("aussi rapide que la référence" vs "garder 2s+3s=5s") - réponse : aussi
+rapide que la référence, soit ~1,5s + ~1,5s ≈ 3s au total (contre 5s
+juste avant).
+
+- Dézoom raccourci une seconde fois (720ms→550ms) avec la courbe du
+  fichier de référence (`cubic-bezier(0.16,1,0.3,1)`).
+- Nouveau flash plein écran partagé (`.anim-flash-overlay`) : rouge à
+  l'impact de "Mort du joueur" (fire-and-forget), blanc masquant
+  l'enchaînement vers "Renaissance !" (affiché instantanément pendant que
+  la scène suivante se met en place en dessous, puis s'estompe PENDANT le
+  début du dézoom plutôt qu'avant ou après).
+- `DEATH_ANIM_TOTAL_DISPLAY_MS` 2000→1500, `REBIRTH_ANIM_TOTAL_DISPLAY_MS`
+  3000→1500.
+- **Bug réel trouvé et corrigé par le premier agent de contrôle,
+  confirmé par le second, mais avec une précision importante apportée
+  par le second** : le minuteur détaché qui referme le flash rouge (120ms
+  après l'impact) pouvait, dans un cas précis, refermer le flash BLANC à
+  sa place (élément DOM partagé entre les deux couleurs) si une exception
+  interrompait "Mort du joueur" moins de 120ms après l'impact - mesuré :
+  flash blanc tenu 114ms au lieu de 150ms. Corrigé en ne retirant le flash
+  que s'il est encore en mode rouge à cet instant. **Correction du second
+  agent, à noter ici pour ne pas propager une inexactitude** : le premier
+  agent (et le message du commit du correctif) citait "un rendu du titre
+  qui échoue" comme exemple concret de déclencheur - le second agent a
+  démontré que ce cas précis NE PEUT PAS déclencher le bug (le rendu du
+  titre se termine, avec ou sans erreur, AVANT que le flash rouge ne soit
+  posé) : dans la pratique du jeu réel, ce bug n'est donc accessible que
+  par injection de panne artificielle, jamais par un scénario de jeu
+  normal identifié à ce jour - un filet de sécurité valable à garder,
+  mais pas un bug utilisateur confirmé comme le message de commit
+  `f7fa455` le laisse entendre à tort. Le second agent a aussi vérifié
+  explicitement qu'un minuteur de flash rouge "périmé" (mort interrompue
+  par une exception) ne peut jamais interférer avec le flash rouge d'un
+  cycle ULTÉRIEUR (deux flashs rouges sont nécessairement séparés d'au
+  moins 600ms, largement au-delà des 120ms du minuteur) - aucun souci de
+  ce côté.
+- **Deux points relevés par le second agent, laissés en décision
+  utilisateur, non appliqués** :
+  1. Le plafond de rendu du titre (`ANIM_TITLE_RENDER_TIMEOUT_MS`,
+     1500ms, posé le même jour pour un souci différent - voir plus haut)
+     équivaut maintenant à la DURÉE ENTIÈRE d'un écran (1,5s) - un rendu
+     pathologiquement lent (jamais observé en usage normal, mesuré à
+     seulement 40-105ms) pourrait donc, dans le pire des cas, faire
+     grimper le total à 6s - plus lent que les 5s que l'utilisateur vient
+     justement de juger trop lentes. Piste proposée, non appliquée :
+     abaisser ce plafond à 500-600ms (encore 2,5 à 3× le pire rendu normal
+     mesuré).
+  2. En mode "animations réduites" (`prefers-reduced-motion`), les deux
+     flashs restent affichés mais sans fondu (apparition/disparition
+     instantanées) - conforme aux recommandations d'accessibilité sur les
+     flashs (bien en dessous de 3 par seconde), mais l'utilisateur pourrait
+     préférer les désactiver entièrement pour ce mode.
+- Suite de tests automatisés toujours 100% verte (aucun code serveur
+  modifié), vérification mémoire (fuite DOM/minuteurs) négative sur des
+  sessions de 17 à 24 cycles mort/renaissance consécutifs par les deux
+  agents indépendamment.
+- Voir `03-architecture-technique.md`, entrée du 27/09/2026 ("timing plus
+  dynamique"), pour le détail complet des mesures.
+
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la
   Monnaie** (`DU = c × masse_monétaire / joueurs_vivants`, avec `c` dépendant

@@ -2295,6 +2295,145 @@ environnement** - seul Chromium headless (Playwright), jamais un
 appareil physique, répété pour mémoire dans cette entrée comme dans
 toutes les précédentes de cette session.
 
+### Timing plus dynamique pour mort/renaissance, inspiré d'un fichier de référence (27/09/2026, second changement le même jour)
+
+Nouveau retour utilisateur, après le raccourcissement à 2s+3s ci-dessus :
+"Concernant l'animation pour les morts/renaissance, les visuels (fonds.png
+et textes éditables en html) sont très biens ! On les garde. En revanche,
+il faudrait lui donner un autre timing afin de la rendre plus dynamique
+quand on joue." - avec un fichier de référence fourni ("test1.html", une
+démo autonome dessinant ses propres décors en CSS/JS, jamais utilisée
+pour ses visuels, uniquement pour sa CHORÉGRAPHIE : dézoom plus rapide,
+flash rouge à l'impact, flash blanc masquant l'enchaînement, durée totale
+beaucoup plus courte).
+
+**Question posée avant implémentation** (la durée totale cible n'était
+pas déductible du fichier fourni, une simple démo sans fermeture
+automatique) : "aussi rapide que la référence" (~1,5s+1,5s≈3s) ou "garder
+2s+3s=5s (déjà validé la dernière fois)" - réponse : aussi rapide que la
+référence.
+
+**Implémentation** (`player-view.js`, `player.css`, `player-view.html`) :
+- `.death-anim-zoom`/`.rebirth-anim-zoom` : transition 0,72s→0,55s, courbe
+  reprise du fichier de référence (`cubic-bezier(0.16,1,0.3,1)` au lieu de
+  `cubic-bezier(0.15,0.85,0.35,1)`).
+- Nouveau `#animFlashOverlay`, un SEUL élément DOM partagé par les deux
+  animations (jamais actives simultanément) : `.flash-red`/`.flash-white`
+  + `.active`, transition d'opacité 150ms, désactivée sous
+  `prefers-reduced-motion`.
+  - Rouge à l'impact de "Mort du joueur" : posé instantanément (même
+    technique `transition:none`+reflow que l'état "zoomed-in"), jamais
+    attendu (fire-and-forget comme le tremblement d'écran/le son juste
+    à côté), retiré 120ms plus tard par un minuteur détaché.
+  - Blanc au tout début de "Renaissance !" : posé instantanément pendant
+    que la scène suivante (déjà zoomée sur le cercle doré) se met en
+    place EN DESSOUS, invisible sous le flash ; retiré exactement au
+    moment où le dézoom démarre (pas avant, pas après) - la scène se
+    révèle donc PROGRESSIVEMENT pendant que le flash s'estompe, plutôt
+    que d'apparaître d'un coup une fois le flash retiré. Filet de
+    sécurité dans le `finally` de `playRebirthAnimation` : retire le
+    flash inconditionnellement si une exception interrompt la séquence
+    avant son retrait normal.
+- `DEATH_ANIM_ZOOM_START_DELAY_MS` 30→50, `DEATH_ANIM_DEZOOM_MS` 720→550,
+  `DEATH_ANIM_TOTAL_DISPLAY_MS` 2000→1500. `REBIRTH_ANIM_ZOOM_START_DELAY_MS`
+  30→150 (réutilisé comme durée de tenue du flash blanc),
+  `REBIRTH_ANIM_DEZOOM_MS` 720→550, `REBIRTH_ANIM_TOTAL_DISPLAY_MS`
+  3000→1500. `*_IMPACT_MS` inchangés (450ms) volontairement : synchronisés
+  avec la durée du tremblement d'écran CSS déjà en place, le fichier de
+  référence utilise une valeur très proche (400ms) pour son propre
+  tremblement.
+
+**Vérifié par le premier agent de contrôle** (mandat : code/exécution/
+fluidité, comme les tours précédents) : mesuré indépendamment sur 30+
+cycles - mort affichée 1511-1565ms, renaissance enchaînée 2-22ms après et
+affichée 1508-1551ms, total 3025-3133ms (3127-3133ms sous ralentissement
+CPU ×4) - conforme à la cible. Courbe de zoom réellement appliquée par le
+navigateur (vérifié via `getComputedStyle`, pas seulement la déclaration
+CSS) : erreur moyenne 0,004-0,008 contre la nouvelle courbe (contre 0,27
+pour l'ancienne à 0,72s - preuve que le navigateur applique bien la
+nouvelle valeur, pas une valeur mise en cache). Flash rouge synchronisé à
+moins de 0,5ms du tampon/tremblement, flash blanc synchronisé à moins de
+1ms du début du dézoom des deux côtés. 24 cycles mort/renaissance
+consécutifs (y compris morts simultanées à deux joueurs, une mort
+survenant PENDANT l'animation d'une autre) : nombre de nœuds DOM stable
+(796), zéro minuteur en attente après coup, tas JS plat après garbage
+collection forcé - aucune fuite mémoire. Comparaison A/B avec/sans
+l'élément de flash : aucune différence mesurable de fluidité (95e
+percentile du temps de frame 17,4ms contre 17,3ms). Injection de pannes
+(rendu qui échoue, qui ne répond jamais, élément DOM manquant) : dans
+tous les cas, écran refermé proprement, file jamais bloquée, cycle
+suivant normal.
+
+**Bug réel trouvé et corrigé par le premier agent, confirmé par le
+second - AVEC UNE PRÉCISION IMPORTANTE DU SECOND, à retenir pour ne pas
+propager une inexactitude dans un futur retour à l'utilisateur** : le
+minuteur détaché qui referme le flash rouge (`setTimeout(...,120)`)
+retirait "active" de l'ÉLÉMENT PARTAGÉ sans vérifier sa couleur - si "Mort
+du joueur" était interrompue par une exception moins de 120ms après
+l'impact, "Renaissance !" démarrait aussitôt et reprenait ce même élément
+en blanc ; le minuteur du rouge, toujours en attente, retirait alors
+"active" du flash BLANC à sa place. Mesuré (première relecture) : flash
+blanc tenu 114ms au lieu de 150ms, fondu commencé 37ms avant le dézoom.
+Corrigé (commit `f7fa455`) en ne retirant "active" que si l'élément est
+encore en mode rouge à cet instant précis - revérifié à 150,2ms/0,3ms
+d'écart après correctif. **Le message du commit `f7fa455` cite, à tort,
+"un rendu du titre qui échoue" comme exemple concret de scénario
+déclencheur - le SECOND agent a démontré expérimentalement que ce cas
+précis NE PEUT PAS déclencher le bug** : `renderAnimTitle` se termine
+TOUJOURS (avec ou sans erreur) AVANT que le flash rouge ne soit posé dans
+le code (l'ordre des instructions le garantit structurellement), donc un
+échec de rendu de titre n'a jamais l'occasion d'interrompre la séquence
+à ce moment précis. Aucune circonstance de jeu réel identifiée à ce jour
+ne peut déclencher ce bug - seule une injection de panne artificielle
+(interception réseau modifiant délibérément le JS servi) y parvient. Le
+correctif reste un filet de sécurité légitime à garder (défense en
+profondeur), mais ne doit pas être présenté comme la correction d'un bug
+utilisateur réellement rencontré - erreur de formulation du message de
+commit corrigée ici plutôt que par une réécriture d'historique (le commit
+est déjà poussé). Le second agent a aussi vérifié explicitement qu'un
+minuteur de flash rouge "périmé" (mort interrompue) ne peut jamais
+interférer avec le flash rouge d'un cycle ULTÉRIEUR : deux flashs rouges
+consécutifs sont nécessairement séparés d'au moins 600ms (50+550ms de
+délai/dézoom avant que le second puisse même se poser), largement
+au-delà des 120ms du minuteur - vérifié par un test à 3 morts en file,
+sous ralentissement CPU ×6 combiné à un blocage du thread principal de
+700ms, sans aucune interférence observée.
+
+**Deux points relevés par le second agent, non appliqués, décision
+utilisateur en attente** :
+1. `ANIM_TITLE_RENDER_TIMEOUT_MS` (1500ms, posé le 27/09/2026 dans le
+   tour précédent pour un souci différent - le préchargement de police)
+   équivaut désormais à la DURÉE ENTIÈRE d'un écran (1,5s) plutôt qu'à
+   une petite fraction comme avant. Mesuré : un rendu pathologiquement
+   lent (jamais observé en usage normal - mesuré à seulement 40-105ms
+   dans les pires conditions testées) pourrait, dans le pire des cas
+   (rendu qui n'aboutit jamais), faire grimper le total à 6s - plus lent
+   que les 5s que l'utilisateur vient justement de juger insuffisamment
+   dynamiques. Piste proposée par le second agent, non appliquée :
+   abaisser ce plafond à 500-600ms (encore 2,5 à 3× le pire rendu normal
+   mesuré à ce jour).
+2. En mode "animations réduites" (`prefers-reduced-motion`), les deux
+   flashs restent affichés mais sans fondu (transition instantanée) -
+   conforme aux recommandations d'accessibilité sur les flashs répétés
+   (bien en dessous de 3/seconde), mais l'utilisateur pourrait préférer
+   les désactiver entièrement pour ce mode plutôt que les garder en
+   version instantanée.
+
+**Confirmé sans rapport avec ce changement** (vérifié explicitement par
+le second agent à la demande du premier retour) : un message WebSocket
+"Nouveau tour" ne déclenche jamais de `refreshPlayer()` sur le
+téléphone (code confirmé) - un joueur peut donc voir des valeurs
+obsolètes jusqu'à l'actualisation périodique suivante (jusqu'à 5s),
+exactement comme n'importe quel autre joueur après n'importe quel tour -
+comportement préexistant, non aggravé par ce changement (le pire cas
+reste inchangé, seule la fenêtre où il pourrait se produire pendant
+l'animation elle-même a changé de forme, sans rien exposer de nouveau).
+
+Verdict final des deux agents : travail prêt à rapporter à l'utilisateur,
+aucun correctif de code supplémentaire nécessaire - seules la formulation
+du commit `f7fa455` (corrigée ci-dessus) et la documentation (cette
+entrée) restaient à mettre à jour.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.
