@@ -2831,10 +2831,15 @@ function playDeathImpactSound() {
 const DEATH_ANIM_ZOOM_START_DELAY_MS = 30; // laisse peindre l'état "zoomed-in" avant de déclencher la transition
 const DEATH_ANIM_DEZOOM_MS = 720;
 const DEATH_ANIM_IMPACT_MS = 450;
-// Demande utilisateur explicite : "une animation de 1 seconde qui reste
-// affichée 5 secondes" - comprise comme "l'ensemble reste visible 5
-// secondes AU TOTAL depuis le déclenchement", pas 1 + 5 = 6 secondes.
-const DEATH_ANIM_TOTAL_DISPLAY_MS = 5000;
+// Timing revu (27/09/2026, demande utilisateur explicite) : "je souhaiterais
+// que l'écran de la mort dure 2 secondes et que celui de la Renaissance
+// dure 3 secondes, ce qui fait un total de 5 secondes" - remplace l'ancien
+// réglage (5s + 5s = 10s au total), les deux écrans s'enchaînant
+// automatiquement. La chorégraphie interne (dézoom + impact, ~1,2s au
+// total, voir les constantes ci-dessus) tient toujours dans ce budget plus
+// court (il reste ~0,8s d'affichage fixe après l'impact, contre ~3,8s
+// avant) - vérifié qu'aucune étape n'est tronquée.
+const DEATH_ANIM_TOTAL_DISPLAY_MS = 2000;
 
 // Appelée UNIQUEMENT depuis drainDeathAnimQueue() ci-dessus - jamais
 // directement, pour garantir qu'une seule animation ne joue à la fois.
@@ -2949,7 +2954,11 @@ async function playDeathAnimation() {
 const REBIRTH_ANIM_ZOOM_START_DELAY_MS = 30;
 const REBIRTH_ANIM_DEZOOM_MS = 720;
 const REBIRTH_ANIM_IMPACT_MS = 450;
-const REBIRTH_ANIM_TOTAL_DISPLAY_MS = 5000; // même convention que "Mort du joueur" ("comme pour l'exemple précédent")
+// Timing revu (27/09/2026, demande utilisateur explicite - voir la même
+// constante côté "Mort du joueur" ci-dessus pour le raisonnement complet) :
+// 3 secondes pour "Renaissance !" (contre 5 auparavant), pour un total
+// enchaîné de 2+3 = 5 secondes plutôt que 5+5 = 10.
+const REBIRTH_ANIM_TOTAL_DISPLAY_MS = 3000;
 
 async function playRebirthAnimation() {
 	const overlay = el("rebirthAnimOverlay");
