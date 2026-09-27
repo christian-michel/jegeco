@@ -128,6 +128,16 @@ titre en coup de tampon) plutôt qu'une mort silencieuse.
   d'écran Playwright avant d'être corrigé, jamais par une simple relecture
   de code (le nom de fichier `death-background.jpg` était pourtant
   correct, seul son CONTENU était faux).
+- **Seconde relecture indépendante** (demandée explicitement par
+  l'utilisateur) : trois bugs réels supplémentaires trouvés en rejouant
+  ses propres scénarios plutôt qu'en relisant le rapport du premier
+  travail - dézoom quasi invisible (transition CSS héritée par erreur sur
+  l'état de départ), erreur JS + badge 🐞 dès la 2e mort d'un même joueur
+  (conteneur du titre vidé alors qu'un `ResizeObserver` de la mort
+  précédente restait actif), écran bloqué indéfiniment si le rendu du
+  titre échouait (aucun `try/finally`). Les trois corrigés le jour même -
+  voir `03-architecture-technique.md`, entrée du 26/09/2026, pour le
+  détail complet.
 
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la

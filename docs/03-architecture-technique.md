@@ -1741,12 +1741,17 @@ mécanisme existant) :
   second, contrairement au prototype de référence qui en recréait un à
   chaque appel.
 
-**Vérifié par un vrai test Playwright à deux joueurs** (pas seulement une
-relecture de code, cohérent avec la méthode établie de ce projet) : le
-joueur qui meurt voit bien l'animation complète (dézoom, texte rendu en
-`<svg>` par `cartoon-text.js`, tenue à l'écran), tandis qu'un second
-joueur de la même partie ne voit STRICTEMENT rien sur son propre écran -
-confirme le ciblage par joueur plutôt qu'une diffusion à toute la partie.
+**Vérifié par un premier test Playwright à deux joueurs** (pas seulement
+une relecture de code, cohérent avec la méthode établie de ce projet) : le
+joueur qui meurt voit bien l'animation se déclencher (overlay actif,
+texte rendu en `<svg>` par `cartoon-text.js`, tenue à l'écran le temps
+attendu), tandis qu'un second joueur de la même partie ne voit
+STRICTEMENT rien sur son propre écran - confirme le ciblage par joueur
+plutôt qu'une diffusion à toute la partie, ainsi que la réutilisation
+réelle en dette+smartphone (pas seulement en libre). **Ce premier test ne
+mesurait pas image par image l'amplitude du zoom** - une limite qui a
+permis à un vrai bug visuel de passer inaperçu (voir la seconde relecture
+ci-dessous).
 
 **Bug trouvé en testant, pas en relisant le code** : la première version
 pointait l'image de fond (`img/death-background.jpg`) vers le contenu de
@@ -1759,6 +1764,53 @@ uniquement via une capture d'écran Playwright réelle de l'animation avant
 d'être corrigé - encore un exemple de la valeur de "tester réellement"
 plutôt que de faire confiance à une relecture de code, une méthode déjà
 documentée plus haut dans ce journal.
+
+**Seconde relecture indépendante (26/09/2026, demandée explicitement par
+l'utilisateur pour ce chantier)** : un agent qui n'avait vu ni le
+raisonnement ni les captures d'écran du premier travail a rejoué ses
+propres scénarios Playwright (dette/libre/troc, deux morts consécutives,
+échec simulé du rendu du titre, mode classique) plutôt que de se fier au
+rapport fourni - a trouvé trois bugs réels, invisibles à la seule
+relecture du code initial :
+1. **Le dézoom depuis la lune était quasi invisible** : l'état de départ
+   "zoomed-in" (`scale(3.6)`) héritait de la transition CSS de 0,72s
+   destinée au DÉZOOM lui-même - l'image partait donc de `scale(1)` vers
+   `3.6` puis repartait aussitôt vers `1` pendant les 30ms d'attente
+   prévues pour "laisser peindre" cet état, mesuré à un facteur maximal
+   réel de ~1,3-1,6 au lieu de 3,6. Corrigé en appliquant l'état de
+   départ SANS transition (`transition: none` le temps d'une frame, via
+   un forçage de reflow - `void element.offsetWidth`), technique reprise
+   à l'identique pour l'overlay lui-même (fondu d'ouverture qui se
+   superposait au même dézoom, rendant l'écran normal du joueur
+   brièvement visible en transparence).
+2. **Erreur "ResizeObserver loop" et badge 🐞 dès la 2e mort d'un même
+   joueur** : `titleHost.innerHTML = ""` vidait le conteneur alors que le
+   `ResizeObserver` posé par `cartoon-text.js` lors de la mort PRÉCÉDENTE
+   restait actif, le faisant redessiner l'ancien titre en plein rappel
+   d'observation. `CartoonText.render()` vide déjà lui-même le conteneur
+   de façon synchrone avec le nouveau rendu - ce vidage manuel en trop a
+   simplement été retiré.
+3. **Écran bloqué indéfiniment en cas d'échec du rendu du titre** :
+   aucun `try/finally` n'entourait la séquence - une exception (simulée
+   par l'agent) laissait l'overlay plein écran actif (`pointer-events:
+   auto`, téléphone du joueur bloqué jusqu'au rechargement) et la file
+   d'attente bloquée pour toujours (`mDeathAnimRunning` jamais remis à
+   `false`). Corrigé par un `try/finally` classique qui garantit la
+   fermeture de l'overlay et l'appel à `refreshPlayer()` quoi qu'il
+   arrive, en plus de journaliser l'erreur via `pushDebugLog` - jamais un
+   échec silencieux.
+
+Corrections supplémentaires apportées à la suite de cette relecture,
+signalées comme améliorations plutôt que bugs bloquants : `fontFamily`
+explicitement fixée sur `"Sora"` (déjà vendorisée, voir `--font-display`)
+dans l'appel à `CartoonText.render` - aucune des polices cartoon par
+défaut de la bibliothèque (Luckiest Guy, Rubik...) n'étant vendorisée
+dans ce projet, le rendu retombait sur la police système générique ;
+`transform-origin` affiné à `50% 44%` (mesure précise de la position de
+la lune dans l'image, contre `50% 40%` estimé initialement à l'œil).
+
+Suite de tests automatisés rejouée après ces corrections : toujours 100%
+verte (geco-engine + geco-server), aucune régression.
 
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions

@@ -920,8 +920,9 @@ body {
 	background-image: url("/img/death-background.jpg");
 	background-size: cover; background-position: center; background-repeat: no-repeat;
 	/* Origine proche de la lune dans l'image fournie : le dézoom part de là
-	   plutôt que du centre géométrique de l'écran. */
-	transform-origin: 50% 40%;
+	   plutôt que du centre géométrique de l'écran (mesuré précisément sur
+	   img/death-background.jpg lors de la seconde relecture du 26/09/2026). */
+	transform-origin: 50% 44%;
 	transition: transform 0.72s cubic-bezier(0.15, 0.85, 0.35, 1);
 	will-change: transform;
 }

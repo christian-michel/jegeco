@@ -2792,39 +2792,85 @@ async function playDeathAnimation() {
 	const zoom = el("deathAnimZoom");
 	const titleHost = el("deathAnimTitleHost");
 
+	// Correctif (seconde relecture indépendante, 26/09/2026) : l'état de départ
+	// "zoomed-in" doit s'appliquer INSTANTANÉMENT - sans ça, la transition CSS
+	// de .death-anim-zoom (0,72 s) s'appliquait aussi à cette mise en place :
+	// l'image partait de scale(1) vers 3,6 pendant les 30 ms d'attente, puis
+	// repartait vers 1 - mesuré dans le navigateur, le zoom ne dépassait jamais
+	// ~1,3 à 1,6, le "dézoom depuis la lune" était donc quasi invisible.
+	zoom.style.transition = "none";
 	zoom.classList.remove("zoomed-out", "shake-impact");
 	zoom.classList.add("zoomed-in");
+	void zoom.offsetWidth; // force le calcul du style "zoomed-in" avant de rétablir la transition
+	zoom.style.transition = "";
 	titleHost.classList.remove("stamp-in");
 	titleHost.style.opacity = "0";
-	titleHost.innerHTML = "";
+	// Correctif (même relecture) : PAS de titleHost.innerHTML = "" ici -
+	// CartoonText.render() vide lui-même le conteneur, de façon synchrone avec
+	// le nouveau rendu. Le vider ICI, alors que le ResizeObserver posé par
+	// cartoon-text.js lors de la mort PRÉCÉDENTE est toujours actif, lui
+	// faisait reconstruire l'ancien titre en plein rappel d'observation -
+	// erreur "ResizeObserver loop completed with undelivered notifications"
+	// systématique dès la 2e mort d'un même joueur, remontée par pushDebugLog
+	// (badge 🐞 visible sur son téléphone). L'ancien titre reste invisible
+	// jusqu'au nouveau rendu (opacity 0 ci-dessus + classe stamp-in retirée).
 
+	// Correctif (même relecture) : apparition INSTANTANÉE de l'overlay (même
+	// technique que le zoom ci-dessus) - le fondu CSS de 0,25s (.death-anim-
+	// overlay, pensé pour une fermeture douce) se déclenchait aussi à
+	// l'ouverture et se superposait au dézoom : l'écran normal du joueur
+	// restait visible en transparence pendant le gros plan sur la lune.
+	// Fermeture (fin de fonction, "finally" ci-dessous) : conserve le fondu
+	// normal, une disparition progressive reste voulue là.
+	overlay.style.transition = "none";
 	overlay.classList.add("active");
-	await new Promise((r) => setTimeout(r, DEATH_ANIM_ZOOM_START_DELAY_MS));
+	void overlay.offsetWidth;
+	overlay.style.transition = "";
+	// Correctif (même relecture) : try/finally - sans lui, la moindre exception
+	// (ex. CartoonText.render qui échoue) laissait l'écran plein écran ACTIF
+	// indéfiniment (pointer-events: auto, téléphone du joueur bloqué jusqu'au
+	// rechargement de la page) et mDeathAnimRunning à true pour toujours
+	// (plus aucune animation de mort ensuite) - vérifié en simulant un échec
+	// de rendu dans le navigateur. Le déroulé normal est strictement inchangé.
+	try {
+		await new Promise((r) => setTimeout(r, DEATH_ANIM_ZOOM_START_DELAY_MS));
 
-	// ÉTAPE 1 : dézoom rapide depuis la lune jusqu'à la scène complète.
-	zoom.classList.remove("zoomed-in");
-	zoom.classList.add("zoomed-out");
-	await new Promise((r) => setTimeout(r, DEATH_ANIM_DEZOOM_MS));
+		// ÉTAPE 1 : dézoom rapide depuis la lune jusqu'à la scène complète.
+		zoom.classList.remove("zoomed-in");
+		zoom.classList.add("zoomed-out");
+		await new Promise((r) => setTimeout(r, DEATH_ANIM_DEZOOM_MS));
 
-	// ÉTAPE 2 : le titre (multilingue, voir js/vendor/cartoon-text.js)
-	// apparaît façon "coup de tampon", avec tremblement d'écran + son
-	// d'impact synchronisés.
-	titleHost.style.opacity = "";
-	await window.CartoonText.render(titleHost, t("playerView.death_anim_title"), { maxLines: 2 });
-	titleHost.classList.add("stamp-in");
-	zoom.classList.add("shake-impact");
-	playDeathImpactSound();
-	await new Promise((r) => setTimeout(r, DEATH_ANIM_IMPACT_MS));
-	zoom.classList.remove("shake-impact");
+		// ÉTAPE 2 : le titre (multilingue, voir js/vendor/cartoon-text.js)
+		// apparaît façon "coup de tampon", avec tremblement d'écran + son
+		// d'impact synchronisés.
+		titleHost.style.opacity = "";
+		// fontFamily (même relecture, 26/09/2026) : aucune des polices cartoon
+		// par défaut de cartoon-text.js (Luckiest Guy, Rubik...) n'est
+		// vendorisée dans ce projet (pas de CDN, voir CLAUDE.md) - sans cette
+		// option, le rendu retombait sur la police système générique. "Sora"
+		// est déjà vendorisée (voir --font-display, player.css) : réutilisée
+		// ici en priorité plutôt que d'ajouter un nouveau fichier de police.
+		await window.CartoonText.render(titleHost, t("playerView.death_anim_title"),
+			{ maxLines: 2, fontFamily: "'Sora','Luckiest Guy','Rubik',sans-serif" });
+		titleHost.classList.add("stamp-in");
+		zoom.classList.add("shake-impact");
+		playDeathImpactSound();
+		await new Promise((r) => setTimeout(r, DEATH_ANIM_IMPACT_MS));
+		zoom.classList.remove("shake-impact");
 
-	// ÉTAPE 3 : reste affichée jusqu'au total de 5 secondes demandé, puis
-	// referme automatiquement - refreshPlayer() recharge l'état du joueur
-	// (nouvelle main de départ, solde remis à zéro...) pour que l'écran
-	// retrouvé juste après reflète déjà sa renaissance.
-	const elapsed = DEATH_ANIM_ZOOM_START_DELAY_MS + DEATH_ANIM_DEZOOM_MS + DEATH_ANIM_IMPACT_MS;
-	await new Promise((r) => setTimeout(r, Math.max(0, DEATH_ANIM_TOTAL_DISPLAY_MS - elapsed)));
-	overlay.classList.remove("active");
-	refreshPlayer();
+		// ÉTAPE 3 : reste affichée jusqu'au total de 5 secondes demandé, puis
+		// referme automatiquement - refreshPlayer() recharge l'état du joueur
+		// (nouvelle main de départ, solde remis à zéro...) pour que l'écran
+		// retrouvé juste après reflète déjà sa renaissance.
+		const elapsed = DEATH_ANIM_ZOOM_START_DELAY_MS + DEATH_ANIM_DEZOOM_MS + DEATH_ANIM_IMPACT_MS;
+		await new Promise((r) => setTimeout(r, Math.max(0, DEATH_ANIM_TOTAL_DISPLAY_MS - elapsed)));
+	} catch (err) {
+		pushDebugLog("ERREUR", "Animation \"Mort du joueur\" interrompue :", err);
+	} finally {
+		zoom.classList.remove("shake-impact");
+		overlay.classList.remove("active");
+		refreshPlayer();
+	}
 }
 
 if (window.GecoI18n) window.GecoI18n.onChange(startOnce);
