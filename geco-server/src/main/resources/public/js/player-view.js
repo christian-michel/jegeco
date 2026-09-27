@@ -2828,18 +2828,29 @@ function playDeathImpactSound() {
 // Durées calquées EXACTEMENT sur les transitions/animations CSS
 // correspondantes (.death-anim-zoom / .death-anim-title-host, voir
 // player.css) - à garder synchronisées si l'une des deux change.
-const DEATH_ANIM_ZOOM_START_DELAY_MS = 30; // laisse peindre l'état "zoomed-in" avant de déclencher la transition
-const DEATH_ANIM_DEZOOM_MS = 720;
+const DEATH_ANIM_ZOOM_START_DELAY_MS = 50; // laisse peindre l'état "zoomed-in" avant de déclencher la transition
+// Timing revu une seconde fois (27/09/2026, second retour utilisateur avec
+// fichier de référence "test1.html" à l'appui) : "il faudrait lui donner un
+// autre timing afin de la rendre plus dynamique quand on joue" - remplace le
+// réglage précédent (2s/3s, 5s au total) par un rythme plus proche de celui
+// du fichier fourni. Ce fichier chaîne mort→renaissance en ~1,45s (délai
+// 50ms + dézoom 550ms + un impact quasi instantané suivi d'un maintien
+// d'environ 900ms) : le dézoom (720ms→550ms) et le délai initial (30ms→50ms)
+// reprennent directement ses valeurs (voir aussi la transition CSS
+// correspondante dans player.css, .death-anim-zoom, à garder synchronisée).
+// L'IMPACT_MS ci-dessous reste à 450ms (inchangé) : c'est la durée du
+// tremblement d'écran .death-anim-zoom.shake-impact, déjà définie dans
+// player.css - le changer aurait désynchronisé JS et CSS pour un gain
+// minime, alors que le fichier de référence utilise une valeur très proche
+// (400ms) pour son propre tremblement.
+const DEATH_ANIM_DEZOOM_MS = 550;
 const DEATH_ANIM_IMPACT_MS = 450;
-// Timing revu (27/09/2026, demande utilisateur explicite) : "je souhaiterais
-// que l'écran de la mort dure 2 secondes et que celui de la Renaissance
-// dure 3 secondes, ce qui fait un total de 5 secondes" - remplace l'ancien
-// réglage (5s + 5s = 10s au total), les deux écrans s'enchaînant
-// automatiquement. La chorégraphie interne (dézoom + impact, ~1,2s au
-// total, voir les constantes ci-dessus) tient toujours dans ce budget plus
-// court (il reste ~0,8s d'affichage fixe après l'impact, contre ~3,8s
-// avant) - vérifié qu'aucune étape n'est tronquée.
-const DEATH_ANIM_TOTAL_DISPLAY_MS = 2000;
+// Confirmé par question explicite posée à l'utilisateur (27/09/2026) entre
+// "aussi rapide que la référence" (~1,5s + ~1,5s ≈ 3s au total) et "garder
+// 2s+3s=5s" - réponse : "Aussi rapide que la référence". Écran de mort donc
+// ramené à 1,5s (reste ~0,45s d'affichage fixe après l'impact - le tampon
+// "Mort du joueur" reste lisible, juste plus bref).
+const DEATH_ANIM_TOTAL_DISPLAY_MS = 1500;
 
 // Correctif (27/09/2026, relecture indépendante du timing 2s+3s) : le
 // try/finally de playDeathAnimation/playRebirthAnimation ne protège que d'une
@@ -2953,6 +2964,22 @@ async function playDeathAnimation() {
 		titleHost.classList.add("stamp-in");
 		zoom.classList.add("shake-impact");
 		playDeathImpactSound();
+		// Flash rouge synchronisé avec l'impact (27/09/2026, inspiré du fichier
+		// de référence "test1.html" fourni par l'utilisateur - "plus
+		// dynamique"). Jamais attendu (fire-and-forget, comme le tremblement
+		// d'écran et le son juste au-dessus) : purement décoratif et bref, il
+		// ne doit jamais retarder la suite de la séquence - voir
+		// .anim-flash-overlay dans player.css, élément PARTAGÉ avec le flash
+		// blanc de playRebirthAnimation (jamais actifs en même temps).
+		const impactFlash = el("animFlashOverlay");
+		if (impactFlash) {
+			impactFlash.classList.remove("flash-white");
+			impactFlash.style.transition = "none";
+			impactFlash.classList.add("flash-red", "active");
+			void impactFlash.offsetWidth;
+			impactFlash.style.transition = "";
+			setTimeout(() => impactFlash.classList.remove("active"), 120);
+		}
 		await new Promise((r) => setTimeout(r, DEATH_ANIM_IMPACT_MS));
 		zoom.classList.remove("shake-impact");
 
@@ -2993,14 +3020,24 @@ async function playDeathAnimation() {
 // fonction totalement autonome et réutilisable en elle-même (aucune
 // dépendance à l'état de "Mort du joueur"), au cas où un futur besoin
 // voudrait la déclencher seule.
-const REBIRTH_ANIM_ZOOM_START_DELAY_MS = 30;
-const REBIRTH_ANIM_DEZOOM_MS = 720;
+// REBIRTH_ANIM_ZOOM_START_DELAY_MS sert désormais AUSSI de délai de tenue du
+// flash blanc masquant l'enchaînement (voir playRebirthAnimation, et
+// .anim-flash-overlay dans player.css) - 150ms au lieu de 30ms (second
+// retour utilisateur, 27/09/2026, fichier de référence "test1.html" :
+// "setTimeout 150ms" avant de révéler la scène suivante). Le dézoom
+// (720ms→550ms) reprend la même valeur que "Mort du joueur" ci-dessus, même
+// raisonnement (voir son commentaire détaillé) - à garder synchronisée avec
+// la transition CSS .rebirth-anim-zoom dans player.css. IMPACT_MS inchangé
+// (450ms, synchronisé avec le tremblement d'écran CSS partagé
+// deathAnimShake).
+const REBIRTH_ANIM_ZOOM_START_DELAY_MS = 150;
+const REBIRTH_ANIM_DEZOOM_MS = 550;
 const REBIRTH_ANIM_IMPACT_MS = 450;
-// Timing revu (27/09/2026, demande utilisateur explicite - voir la même
-// constante côté "Mort du joueur" ci-dessus pour le raisonnement complet) :
-// 3 secondes pour "Renaissance !" (contre 5 auparavant), pour un total
-// enchaîné de 2+3 = 5 secondes plutôt que 5+5 = 10.
-const REBIRTH_ANIM_TOTAL_DISPLAY_MS = 3000;
+// Confirmé par la même question posée à l'utilisateur que côté "Mort du
+// joueur" ci-dessus (27/09/2026) : "Aussi rapide que la référence" (~1,5s +
+// ~1,5s ≈ 3s au total). Écran de renaissance donc ramené à 1,5s (reste
+// ~0,35s d'affichage fixe après l'impact).
+const REBIRTH_ANIM_TOTAL_DISPLAY_MS = 1500;
 
 async function playRebirthAnimation() {
 	const overlay = el("rebirthAnimOverlay");
@@ -3035,12 +3072,37 @@ async function playRebirthAnimation() {
 	void overlay.offsetWidth;
 	overlay.style.transition = "";
 
+	// Flash blanc masquant l'enchaînement mort→renaissance (27/09/2026,
+	// inspiré du fichier de référence "test1.html" fourni par l'utilisateur -
+	// "plus dynamique"). Affiché INSTANTANÉMENT (même truc "transition: none"
+	// + reflow forcé que ci-dessus) pendant que la scène "renaissance" -
+	// déjà zoomée sur le cercle doré à cet instant précis - se met en place
+	// juste en dessous, invisible sous le flash : masque la coupure plutôt
+	// que de laisser apparaître d'un coup le cercle doré grossi. Réutilise
+	// le MÊME élément que le flash rouge de "Mort du joueur" (jamais actifs
+	// simultanément, voir .anim-flash-overlay dans player.css) - retiré plus
+	// bas, synchronisé avec le début du dézoom (voir ÉTAPE 1).
+	const flashOverlay = el("animFlashOverlay");
+	if (flashOverlay) {
+		flashOverlay.classList.remove("flash-red");
+		flashOverlay.style.transition = "none";
+		flashOverlay.classList.add("flash-white", "active");
+		void flashOverlay.offsetWidth;
+		flashOverlay.style.transition = "";
+	}
+
 	// try/finally englobant TOUTE la séquence (voir le même correctif sur
 	// playDeathAnimation) : garantit que l'overlay se referme et que
 	// refreshPlayer() est appelé quoi qu'il arrive, même si CartoonText.render
 	// échoue.
 	try {
 		await new Promise((r) => setTimeout(r, REBIRTH_ANIM_ZOOM_START_DELAY_MS));
+
+		// Le flash blanc posé plus haut s'estompe PENDANT que le dézoom
+		// démarre (voir son commentaire détaillé ci-dessus) - la scène se
+		// révèle donc progressivement plutôt que d'apparaître d'un coup une
+		// fois le flash retiré.
+		if (flashOverlay) flashOverlay.classList.remove("active");
 
 		// ÉTAPE 1 : dézoom rapide depuis le cercle doré jusqu'à la scène
 		// ensoleillée complète.
@@ -3079,6 +3141,10 @@ async function playRebirthAnimation() {
 	} finally {
 		zoom.classList.remove("shake-impact");
 		overlay.classList.remove("active");
+		// Filet de sécurité : si une exception a interrompu la séquence AVANT
+		// le retrait normal du flash (ÉTAPE 1 ci-dessus), il ne doit jamais
+		// rester bloqué visible à l'écran - sans effet si déjà retiré.
+		if (flashOverlay) flashOverlay.classList.remove("active");
 		refreshPlayer();
 	}
 }

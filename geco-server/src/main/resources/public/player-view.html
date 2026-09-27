@@ -286,8 +286,10 @@
 	     déjà en place dans cet écran (voir .square-anim-overlay). Se
 	     déclenche automatiquement dès la réception de l'événement
 	     WebSocket "death" (voir connectPlayerWs/playDeathAnimation), dure
-	     environ 1 seconde puis reste affichée 5 secondes au total avant de
-	     refermer automatiquement. -->
+	     reste affichée environ 1,5 seconde au total avant de refermer
+	     automatiquement (timing revu le 27/09/2026, inspiré d'un second
+	     fichier de référence fourni par l'utilisateur pour un rythme plus
+	     dynamique en cours de partie - voir DEATH_ANIM_TOTAL_DISPLAY_MS). -->
 	<div class="death-anim-overlay" id="deathAnimOverlay">
 		<div class="death-anim-zoom" id="deathAnimZoom"></div>
 		<div class="death-anim-title-host" id="deathAnimTitleHost"></div>
@@ -324,6 +326,13 @@
 		<div class="rebirth-anim-avatar-circle" id="rebirthAnimAvatarCircle"></div>
 		<div class="rebirth-anim-title-host" id="rebirthAnimTitleHost"></div>
 	</div>
+
+	<!-- Flash plein écran partagé par "Mort du joueur" (rouge, à l'impact) et
+	     "Renaissance !" (blanc, masque l'enchaînement) - voir le commentaire
+	     détaillé dans player.css (.anim-flash-overlay) et player-view.js
+	     (playDeathAnimation/playRebirthAnimation). Un seul élément partagé :
+	     les deux animations ne sont jamais actives simultanément. -->
+	<div class="anim-flash-overlay" id="animFlashOverlay"></div>
 
 	<!-- ===== Onglet "Stats" : classement complet ===== -->
 	<div id="leaderboardScreen" class="main-content hidden">

@@ -923,7 +923,13 @@ body {
 	   plutôt que du centre géométrique de l'écran (mesuré précisément sur
 	   img/death-background.jpg lors de la seconde relecture du 26/09/2026). */
 	transform-origin: 50% 44%;
-	transition: transform 0.72s cubic-bezier(0.15, 0.85, 0.35, 1);
+	/* Timing revu (27/09/2026, demande utilisateur explicite, inspiré du
+	   fichier de référence "test1.html" fourni pour rendre la séquence "plus
+	   dynamique") : dézoom raccourci de 0,72s à 0,55s, courbe reprise du
+	   fichier de référence (cubic-bezier(0.16,1,0.3,1), un "ease-out" plus
+	   franc) - voir player-view.js, DEATH_ANIM_DEZOOM_MS, qui doit rester
+	   synchronisée avec cette durée. */
+	transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
 	will-change: transform;
 }
 .death-anim-zoom.zoomed-in { transform: scale(3.6); }
@@ -993,7 +999,9 @@ body {
 	/* Centre du cercle doré vide dans l'image fournie (49,9% / 48,9%) : le
 	   dézoom part de là plutôt que du centre géométrique de l'écran. */
 	transform-origin: 50% 49%;
-	transition: transform 0.72s cubic-bezier(0.15, 0.85, 0.35, 1);
+	/* Même correctif de timing que .death-anim-zoom ci-dessus (27/09/2026) -
+	   voir REBIRTH_ANIM_DEZOOM_MS côté JS, à garder synchronisée. */
+	transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
 	will-change: transform;
 }
 .rebirth-anim-zoom.zoomed-in { transform: scale(3.6); }
@@ -1066,6 +1074,27 @@ body {
 }
 .rebirth-anim-title-host.stamp-in { animation: deathAnimStampSlam 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
 @media (prefers-reduced-motion: reduce) { .rebirth-anim-title-host.stamp-in { animation: none; opacity: 1; } }
+
+/* Flash plein écran partagé par "Mort du joueur" ET "Renaissance !"
+   (27/09/2026, inspiré du fichier de référence "test1.html" fourni par
+   l'utilisateur pour rendre la séquence "plus dynamique") : un seul
+   élément réutilisé par les deux animations (jamais actives simultanément,
+   donc jamais de conflit) - rouge synchronisé avec l'impact de "Mort du
+   joueur" (voir playDeathImpactSound côté JS), blanc pour masquer
+   l'enchaînement vers "Renaissance !" (la scène "renaissance", déjà zoomée
+   sur le cercle doré, se met en place EN DESSOUS du flash pendant qu'il
+   est encore opaque, puis le flash s'estompe PENDANT que le dézoom
+   démarre - voir player-view.js). z-index au-dessus des deux overlays
+   (3050/3060) pour toujours les recouvrir, quelle que soit la scène en
+   cours. */
+.anim-flash-overlay {
+	position: fixed; inset: 0; z-index: 3070; pointer-events: none;
+	opacity: 0; transition: opacity 150ms ease-out;
+}
+.anim-flash-overlay.active { opacity: 1; }
+.anim-flash-overlay.flash-red { background: rgba(225, 29, 72, 0.55); }
+.anim-flash-overlay.flash-white { background: rgba(255, 255, 255, 0.92); }
+@media (prefers-reduced-motion: reduce) { .anim-flash-overlay { transition: none; } }
 
 /* ============================================================
    Infobulles temporaires (02/09/2026) - remonté par l'utilisateur : "solde
