@@ -1030,7 +1030,22 @@ body {
    `background-size: cover` lui-même) : `max(44vw, 24,56vh)` - légèrement
    sous les valeurs exactes mesurées sur l'image (45,8% de largeur, 25,6%
    de hauteur) pour rester bien À L'INTÉRIEUR de l'anneau doré, jamais
-   par-dessus, quel que soit le ratio de l'écran. */
+   par-dessus, quel que soit le ratio de l'écran.
+   AJUSTEMENT (27/09/2026, retour utilisateur avec maquette à l'appui) :
+   "retirer l'ombre portée... en essayant de placer l'image au plus près
+   du cercle pour donner l'impression que l'image est à l'intérieur du
+   cadre" - la marge de sécurité ci-dessus (44/24,56 contre 45,8/25,6
+   mesurés, soit ~96% de la taille réelle du disque) laissait un bandeau
+   bleu ciel visible entre le cercle avatar et l'anneau doré, combiné à
+   l'ombre portée ci-dessous qui accentuait l'impression d'un disque
+   flottant AU-DESSUS du fond plutôt que serti DEDANS. Marge resserrée à
+   ~99% de la taille mesurée (45,3vw/25,3vh, contre 44vw/24,56vh avant) -
+   quasiment au ras de l'anneau tout en gardant un minimum de marge pour
+   ne jamais déborder par-dessus sur un écran extrême ; `aspect-ratio: 1/1`
+   plus `object-fit: cover` sur l'image (voir .avatar-img, inchangé)
+   garantissent qu'aucune valeur de largeur ne déforme jamais le ratio de
+   l'avatar, quel que soit l'écran. Ombre portée entièrement retirée (voir
+   box-shadow ci-dessous, supprimé). */
 .rebirth-anim-avatar-circle {
 	position: absolute; left: 49.9%; top: 48.9%; transform: translate(-50%, -50%) scale(0.6);
 	/* `vh` classique en repli d'abord (compatibilité maximale), puis `dvh`
@@ -1042,11 +1057,10 @@ body {
 	   reste affichée. Une déclaration dupliquée volontaire : un navigateur
 	   qui ne comprend pas `dvh` ignore silencieusement cette seconde ligne
 	   et garde la première (`vh`), aucun `@supports` nécessaire. */
-	width: max(44vw, 24.56vh);
-	width: max(44vw, 24.56dvh);
+	width: max(45.3vw, 25.3vh);
+	width: max(45.3vw, 25.3dvh);
 	aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
 	z-index: 1; opacity: 0; will-change: transform, opacity;
-	box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 10px 24px rgba(0, 0, 0, 0.45);
 }
 .rebirth-anim-avatar-circle .avatar-img,
 .rebirth-anim-avatar-circle span { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 3rem; background: #fff; }
