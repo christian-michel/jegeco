@@ -214,8 +214,9 @@ timing raccourci ("l'écran de la mort dure 2 secondes... celui de la
 Renaissance dure 3 secondes, ce qui fait un total de 5 secondes", contre
 5s+5s=10s auparavant), plus une vérification en "partie test" que les
 écrans ne restent jamais bloqués et se déclenchent au bon moment, plus un
-troisième tour de relecture indépendante à deux agents (voir plus bas pour
-son verdict une fois disponible).
+troisième tour de relecture indépendante à deux agents, avec cette fois un
+mandat élargi (code + exécution réelle + fluidité de la partie, autorité
+explicite de corriger directement).
 
 - **Test sur un vrai téléphone iOS/Android : non disponible dans cet
   environnement** - disclosure honnête faite à l'utilisateur, aucune
@@ -233,8 +234,24 @@ son verdict une fois disponible).
   à deux moments différents de la même session (9/9 contrôles passés).
 - Suite de tests automatisés toujours 100% verte (aucun code serveur
   modifié).
+- **Bug réel trouvé et corrigé par le premier agent, confirmé par le
+  second** : l'écran de mort pouvait rester bloqué indéfiniment (téléphone
+  du joueur inutilisable) si le rendu du titre stylé ne se terminait
+  JAMAIS - cas réel identifié : la police "Sora" en graisse forte n'était
+  téléchargée qu'au moment même de la première mort d'une partie, en plein
+  milieu de l'animation, donc vulnérable à un simple ralentissement
+  réseau à cet instant précis. Corrigé par (1) préchargement de cette
+  police dès le chargement de la page, avant toute mort possible, et (2)
+  un plafond de 1,5s sur l'attente du rendu du titre, au-delà duquel
+  l'animation continue quand même (journalisé, jamais un silence).
+  Seconde relecture indépendante : a reproduit le bug AVANT correctif de
+  façon totalement autonome, confirmé la résolution APRÈS, vérifié le
+  risque propre à ce type de correctif (le rendu abandonné ne peut jamais
+  écraser un rendu plus récent), et re-testé le timing/la fluidité de
+  fond en comble - verdict final : fonctionnalité prête, aucun défaut
+  bloquant restant.
 - Voir `03-architecture-technique.md`, entrée du 27/09/2026, pour le
-  détail complet des mesures.
+  détail complet des mesures et du correctif.
 
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la

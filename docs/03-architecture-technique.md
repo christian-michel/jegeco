@@ -2043,6 +2043,108 @@ Suite de tests automatisés (geco-engine + geco-server) toujours 100%
 verte après le changement de timing (seul du JS pur, aucun code serveur
 modifié).
 
+**Test sur un vrai téléphone (iOS/Android) : toujours impossible.** Répété
+ici pour mémoire (déjà indiqué plus haut) : ni cette vérification, ni les
+deux tours de relecture indépendante qui suivent, n'ont pu tester autre
+chose que Chromium headless (Playwright) - jamais un appareil physique.
+
+**Deux agents de contrôle, mandat élargi** (demande utilisateur explicite,
+27/09/2026) : "Mets en place un agent qui contrôle que tout soit ok au
+niveau du code. Ok au niveau de l'exécution et ok au niveau de la
+fluidité de la partie. Si ce n'est pas le cas, il faut qu'il modifie et
+s'il n'y a pas de bug, il faut qu'il identifie les raisons du manque de
+fluidité dans la partie et qu'il me fasse un retour. Mais ensuite en
+place un second agent qui contrôle que le premier agent de contrôle est
+bien fait son travail." - mandat plus large que les deux tours précédents
+(code + exécution RÉELLE + ressenti de fluidité, avec autorité explicite
+de corriger directement, et obligation de remonter une cause racine
+concrète plutôt qu'une supposition si la fluidité semblait insuffisante
+sans bug identifiable).
+
+**Bug réel trouvé et corrigé par le premier agent** : `playDeathAnimation`/
+`playRebirthAnimation` protègent leur séquence par un `try/finally`, mais
+celui-ci ne protège que d'une EXCEPTION du rendu du titre - jamais d'une
+promesse qui ne se termine JAMAIS. Or `CartoonText.render()` attend en
+interne `document.fonts.load("900 ... Sora")`, police qui n'est utilisée
+nulle part ailleurs sur l'écran joueur et n'était donc téléchargée
+QU'AU MOMENT MÊME de la première mort d'une partie, en plein milieu de
+l'animation - un simple ralentissement réseau à cet instant précis (pas
+forcément un vrai échec) suffisait à laisser l'écran de mort bloqué en
+plein écran INDÉFINIMENT (`pointer-events` actif, téléphone du joueur
+inutilisable), la file d'attente restant figée derrière. Reproduit
+explicitement en retenant artificiellement cette seule requête réseau
+(écran resté bloqué au-delà de 14s dans le test).
+
+Double correctif, dans le même fichier `player-view.js`, aucun changement
+serveur :
+1. Police préchargée dès l'événement `load` de la page (donc AVANT toute
+   mort possible dans la partie), pour plus dépendre du réseau pendant
+   l'animation elle-même. Volontairement démarré APRÈS `load` plutôt
+   qu'avant : un chargement de police qui traîne retarderait sinon `load`
+   lui-même (vérifié explicitement avant de choisir cet ordre).
+2. Nouvel utilitaire partagé `renderAnimTitle()`, utilisé par les deux
+   animations : plafonne l'attente du rendu à 1500ms
+   (`ANIM_TITLE_RENDER_TIMEOUT_MS`, très au-dessus d'un rendu normal -
+   mesuré 7 à ~190ms y compris processeur ralenti x6) via
+   `Promise.race()` - au-delà, la séquence continue sans attendre et
+   journalise via `pushDebugLog` (jamais un silence), l'écran se referme
+   donc TOUJOURS. Une exception synchrone continue de remonter
+   normalement au `catch` déjà en place.
+
+**Seconde relecture indépendante (audit du premier agent)** : a reproduit
+le même scénario de façon totalement indépendante (ses propres scripts,
+son propre serveur isolé, en interceptant directement la requête du
+fichier JS pour comparer le build AVANT/APRÈS le correctif au lieu de
+faire confiance au rapport) - confirme intégralement : écran bloqué au-delà
+de 14s avant correctif (`mDeathAnimRunning` restant à `true`, un tap sur
+l'écran heurtant bien l'overlay au lieu de l'application), fermeture
+propre à ~3,5s/~4,5s (mort/renaissance) après correctif dans le pire cas
+(rendu qui ne se termine jamais), reprise normale (~2,0s/~3,0s) dès
+l'événement suivant. A aussi vérifié spécifiquement le risque introduit
+PAR le correctif lui-même (le point le plus délicat d'un `Promise.race`
+avec délai : que devient la promesse "perdante" si elle finit quand même
+plus tard ?) : le rendu abandonné continue effectivement en arrière-plan
+et peut écrire dans le titre après coup, mais toujours dans le bon ordre
+(chaque appel attend la même police, donc un ancien rendu ne peut jamais
+écraser un rendu plus récent du même titre), sans collision d'identifiants
+SVG entre deux titres (`cartoon-text.js` les numérote), et sans effet
+visible si l'écran concerné est déjà refermé. Confirme également, en
+conditions de réseau lent simulées (400ms de latence, 50 Ko/s), que le
+préchargement se termine largement avant que le téléphone puisse même
+recevoir un message WebSocket de mort - le filet de 1500ms ne sert donc,
+en pratique, que d'ultime sécurité. Suite de tests toujours verte, aucune
+régression trouvée, aucun nouveau correctif nécessaire. A aussi confirmé,
+en les remesurant lui-même, que les 5 observations "non-bugs" du premier
+agent (voir plus bas) n'en sont effectivement pas.
+
+**Fluidité, verdict confirmé par les deux agents** : le budget plus court
+ne raccourcit QUE le palier d'affichage fixe après le tampon (~0,9s pour
+"Mort du joueur" pleinement affiché, ~1,9s pour "Renaissance !" avec
+l'avatar) - la chorégraphie interne (dézoom + impact) reste inchangée et
+rien n'est visuellement tronqué, y compris sous processeur ralenti x6 sur
+un rendu "à froid" (premier rendu de police de la partie). Observations
+notées par le premier agent, jugées non bloquantes par le second (les
+deux prédatent ce changement de timing ou sont cosmétiques, aucune n'a
+été corrigée) : un bref palier quasi statique (~300-400ms) avant
+l'apparition du tampon (paramétrable via `DEATH_ANIM_DEZOOM_MS` si
+l'utilisateur souhaite un jour ajuster ce ressenti précis - décision de
+conception, pas un défaut) ; le toast "Nouveau tour" (z-index supérieur)
+qui peut s'afficher par-dessus l'animation si l'animateur valide un
+nouveau tour au même instant (mesuré : ne recouvre ni le titre ni
+l'avatar, seulement le bas du décor sur petit écran) ; le bouton de
+langue toujours visible par-dessus (cosmétique, préexistant) ; une frame
+un peu plus longue (40-100ms) au moment précis où l'animation de
+renaissance prend le relais de celle de mort ; un rendu à froid
+légèrement plus long (100-160ms) sur le tout premier tampon d'une partie
+(construction du SVG de `cartoon-text.js`) sans que cela tronque quoi que
+ce soit.
+
+Verdict final de ce troisième tour de relecture : fonctionnalité prête,
+aucun défaut bloquant restant après ce correctif. Documentation du
+correctif complétée après coup (l'audit du second agent a relevé que ce
+fichier ne mentionnait pas encore `renderAnimTitle()` ni le préchargement
+de police au moment de sa relecture).
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.
