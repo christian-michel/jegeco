@@ -2434,6 +2434,77 @@ aucun correctif de code supplémentaire nécessaire - seules la formulation
 du commit `f7fa455` (corrigée ci-dessus) et la documentation (cette
 entrée) restaient à mettre à jour.
 
+### Avatar de renaissance : ombre retirée, resserré contre l'anneau, bug de centrage trouvé et corrigé (27/09/2026, troisième changement le même jour)
+
+Retour utilisateur, avec une maquette à l'appui : "Attention à l'écran de
+la renaissance qui doit bien prendre l'avatar du joueur, pas un avatar
+inventé. D'autre part, t'est-il possible de retirer l'ombre portée sur
+l'avatar en essayant de placer l'image au plus proche du cercle pour
+donner l'impression que l'image est à l'intérieur du cadre - tout en
+conservant l'aspect responsive et sans déformer le ratio hauteur ×
+largeur ?"
+
+**Vérifié avant tout changement, déjà correct** : l'avatar RÉEL du joueur
+(`buildProfileAvatarHtml`, image de galerie ou SVG personnalisé) était
+déjà celui affiché - jamais un avatar générique inventé, sauf repli
+emoji légitime si aucun avatar n'est configuré (joueur ajouté à la main
+par l'animateur). Confirmé par les deux agents de contrôle sur des
+sessions à 4 et 5 joueurs avec des types d'avatar différents (image de
+galerie, SVG personnalisé, config manquante) : toujours le bon avatar,
+jamais de mélange entre joueurs, jamais un ancien avatar affiché
+(`avatarConfigJson` ne peut être modifié qu'à l'inscription, aucune route
+ne permet de le changer en cours de partie).
+
+**Deux ajustements CSS sur `.rebirth-anim-avatar-circle`** :
+1. `box-shadow` supprimée entièrement (l'ombre portée donnait
+   l'impression d'un disque flottant au-dessus du fond plutôt que serti
+   dedans).
+2. Marge de sécurité resserrée : `44vw/24,56vh` (~96% du disque réel
+   mesuré, 45,8%/25,6%) → `45,3vw/25,3vh` (~99%) - quasiment au ras de
+   l'anneau doré. `aspect-ratio: 1/1` et `object-fit: cover` (déjà en
+   place) garantissent qu'aucune valeur de largeur ne déforme jamais
+   l'avatar.
+
+**Bug réel trouvé et corrigé par le premier agent de contrôle, confirmé
+et affiné par le second** : la position `left: 49,9%; top: 48,9%`
+utilisait des fractions de l'ÉCRAN, alors que ces valeurs mesurent le
+centre de l'anneau dans l'IMAGE mise à l'échelle en "cover" - exactement
+le même défaut déjà rencontré (et corrigé) pour la LARGEUR. Sur un écran
+plus large que l'image (ratio > 768/1376 = 0,558 : tablette, téléphone
+plié déplié, écran carré, paysage...), l'image déborde en hauteur et le
+vrai centre de l'anneau remonte par rapport à 48,9% de l'écran - avec la
+marge tout juste resserrée à ~99% ci-dessus, l'avatar mordait alors
+visiblement sur le bas de l'anneau (mesuré : jusqu'à -5,6px à 667×375).
+Corrigé en reprenant le même principe `max()` que la largeur pour la
+position : `left: calc(50% - max(0,057vw, 0,032vh)); top: calc(50% -
+max(1,934vw, 1,080vh));` (plus les doublons `dvh`), les constantes étant
+dérivées d'un ajustement de cercle précis sur l'anneau réel de
+`img/rebirth-background.webp`. Strictement identique à l'ancien
+comportement sur un téléphone en portrait classique (écart < 0,3px) -
+seuls les écrans plus larges que l'image sont concernés.
+
+**Seconde relecture indépendante** : a revérifié la totalité (avatar réel
+sur 47 morts, cinq types de configuration, jamais de mélange entre
+joueurs) sur 21 tailles d'écran DIFFÉRENTES de celles du premier agent
+(du très étroit à une grande tablette 2560×1440, en passant par le seuil
+critique du ratio 0,558 testé des deux côtés à 1px près) - 141/141
+contrôles géométriques passés, jamais le moindre débordement, jamais de
+saut visible au franchissement du seuil critique (redimensionnement
+pixel par pixel vérifié). A reconstruit les constantes du premier agent
+depuis les mathématiques de `background-size: cover` (pas seulement
+empiriquement) et confirmé leur cohérence interne. A trouvé UN écart
+mineur dans la mesure du premier agent (biais d'un demi-pixel image dû à
+un arrondi de coordonnée de pixel dans son script de mesure, effet
+inférieur à 0,3px à l'écran, ne cause jamais de débordement) -
+explicitement qualifié de raffinement optionnel, non nécessaire, non
+appliqué. A confirmé que `10.webp` (la maquette fournie par
+l'utilisateur) est byte-identique à `6.webp` (déjà utilisée comme
+référence lors de la construction initiale de cette animation) - même
+image, pas une nouvelle référence.
+
+Verdict final des deux agents : travail prêt à rapporter à l'utilisateur
+tel quel, aucun correctif supplémentaire nécessaire.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.
