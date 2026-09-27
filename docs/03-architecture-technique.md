@@ -1891,9 +1891,21 @@ version, jamais redécouvertes une seconde fois** :
 (même leçon que le dézoom sur la lune de "Mort du joueur", dont l'origine
 avait dû être corrigée après coup) : détection par script Python du plus
 gros disque quasi blanc dans l'image fournie
-(`img/rebirth-background.webp`) - centre à 49,9%/48,9%, rayon ≈23% de la
-largeur - utilisés directement comme `transform-origin` du dézoom et
-comme position/taille du cercle contenant l'avatar.
+(`img/rebirth-background.webp`) - centre à 49,9%/48,9%, diamètre 45,8% de
+la largeur (768×1376px) - utilisés comme `transform-origin` du dézoom et
+comme position du cercle contenant l'avatar.
+
+**Bug trouvé en seconde relecture indépendante, corrigé** : la taille de
+ce cercle était initialement fixée en `width: 44%` (fraction de la seule
+LARGEUR de l'écran) - correct uniquement quand `background-size: cover`
+met le fond à l'échelle par la largeur, mais PAS sur un écran de téléphone
+plus étroit/haut que l'image (cas fréquent, le fond se met alors à
+l'échelle par la HAUTEUR à la place) : le disque doré réellement affiché
+devient alors plus grand que prévu, laissant un bandeau blanc visible
+autour de l'avatar (mesuré : seulement 77-79% de la taille réelle du
+disque sur des résolutions de téléphone courantes). Corrigé en reprenant
+le même principe que `cover` lui-même (le plus grand des deux calculs
+possibles) : `width: max(44vw, 24,56vh)`.
 
 **Avatar réel du joueur**, jamais un avatar générique : réutilise
 `buildProfileAvatarHtml` (déjà utilisé par l'écran Profil, avec son repli

@@ -2975,6 +2975,15 @@ async function playRebirthAnimation() {
 		await window.CartoonText.render(titleHost, t("playerView.rebirth_anim_title"),
 			{ maxLines: 2, fontFamily: "'Sora','Luckiest Guy','Rubik',sans-serif" });
 		titleHost.classList.add("stamp-in");
+		// Correctif (27/09/2026, relecture indépendante) : retirer l'opacité
+		// "0" posée EN LIGNE plus haut, exactement comme pour titleHost juste
+		// au-dessus - sinon, en mode "animations réduites" (prefers-reduced-
+		// motion, voir player.css : animation: none; opacity: 1), ce style en
+		// ligne l'emportait sur la règle CSS et l'avatar restait INVISIBLE
+		// (cercle doré vide), vérifié dans le navigateur. Sans effet en mode
+		// normal : l'animation rebirthAnimAvatarPop (fill "forwards") prend
+		// déjà le pas sur tout style en ligne.
+		avatarCircle.style.opacity = "";
 		avatarCircle.classList.add("stamp-in");
 		zoom.classList.add("shake-impact");
 		playRebirthChimeSound();

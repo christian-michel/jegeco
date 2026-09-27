@@ -969,9 +969,14 @@ body {
    leçon retenue de la première version de "Mort du joueur" (origine du
    zoom d'abord estimée à l'œil, corrigée après coup lors d'une relecture).
    z-index au-dessus de .death-anim-overlay (3050) : les deux ne sont
-   jamais visibles simultanément (strictement enchaînées), l'ordre choisi
-   ici n'a donc pas d'effet visible, mais reste cohérent avec la
-   progression déjà en place (carré 3000 < mort 3050 < renaissance 3060).
+   jamais ACTIVES simultanément (strictement enchaînées), MAIS cet ordre
+   compte bel et bien (précision du 27/09/2026, relecture indépendante,
+   vérifiée dans le navigateur en inversant les z-index) : "Mort du
+   joueur" se referme avec un fondu de 0,25s alors que "Renaissance !"
+   s'ouvre instantanément - avec un z-index inférieur, la scène de mort
+   en train de s'effacer recouvrait visiblement le début du zoom sur le
+   cercle doré. Garder renaissance > mort (carré 3000 < mort 3050 <
+   renaissance 3060).
    ============================================================ */
 .rebirth-anim-overlay {
 	position: fixed; inset: 0; z-index: 3060;
@@ -1002,15 +1007,25 @@ body {
 /* Avatar RÉEL du joueur (voir buildProfileAvatarHtml, déjà utilisé par
    l'écran Profil - jamais un avatar générique), positionné/dimensionné
    pour venir se loger exactement dans le cercle doré une fois le dézoom
-   terminé. Diamètre (44% de la largeur) légèrement inférieur au disque
-   blanc mesuré (45,8%) pour rester bien à l'intérieur de l'anneau doré,
-   jamais par-dessus. N'apparaît qu'une fois le dézoom achevé - jamais
-   synchronisé image par image avec le zoom du fond (bien plus simple et
-   fiable qu'un suivi de position en temps réel), même principe que le
-   titre ci-dessous. */
+   terminé. N'apparaît qu'une fois le dézoom achevé - jamais synchronisé
+   image par image avec le zoom du fond (bien plus simple et fiable qu'un
+   suivi de position en temps réel), même principe que le titre ci-dessous.
+   BUG TROUVÉ (27/09/2026, relecture indépendante) : un simple `width: 44%`
+   (fraction de la LARGEUR de l'écran) ne correspond au disque blanc réel
+   qu'une fois le fond affiché en mode "cover" limité par la largeur - sur
+   un écran de téléphone plus étroit/haut que l'image (cas fréquent, le
+   fond est alors mis à l'échelle par la HAUTEUR), le disque réel à
+   l'écran est PLUS GRAND que 44% de la largeur (mesuré : seulement
+   77-79% de la taille réelle du disque sur des résolutions de téléphone
+   courantes - un bandeau blanc visible autour de l'avatar). Corrigé en
+   prenant le plus grand des deux calculs possibles (comme le fait
+   `background-size: cover` lui-même) : `max(44vw, 24,56vh)` - légèrement
+   sous les valeurs exactes mesurées sur l'image (45,8% de largeur, 25,6%
+   de hauteur) pour rester bien À L'INTÉRIEUR de l'anneau doré, jamais
+   par-dessus, quel que soit le ratio de l'écran. */
 .rebirth-anim-avatar-circle {
 	position: absolute; left: 49.9%; top: 48.9%; transform: translate(-50%, -50%) scale(0.6);
-	width: 44%; aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
+	width: max(44vw, 24.56vh); aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
 	z-index: 1; opacity: 0; will-change: transform, opacity;
 	box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 10px 24px rgba(0, 0, 0, 0.45);
 }
