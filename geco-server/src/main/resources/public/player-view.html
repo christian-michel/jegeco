@@ -293,6 +293,38 @@
 		<div class="death-anim-title-host" id="deathAnimTitleHost"></div>
 	</div>
 
+	<!-- ===== Animation "Renaissance !" (27/09/2026) =====
+	     Remonté par l'utilisateur : "peux-tu faire de même avec la
+	     renaissance du joueur... le fond dézoome et le texte apparaît comme
+	     un coup de tampon, comme pour l'exemple précédent." Bloc réutilisable
+	     de façon totalement indépendante de "Mort du joueur" ci-dessus
+	     (voir playRebirthAnimation dans player-view.js) - MAIS enchaîné
+	     automatiquement juste après lui sur le même événement WebSocket
+	     "death" : ce moteur de jeu ne connaît qu'un seul événement DEATH qui
+	     déclenche à la fois la mort ET la renaissance immédiate (nouvelle
+	     main de départ) - il n'existe pas de second déclenchement distinct
+	     pour "la renaissance" à proprement parler (le bouton de l'assistant
+	     animateur s'appelle d'ailleurs déjà "Valider la renaissance" - voir
+	     app.js, wizNextDeathDU/wizNextDeathTroc/wizNextDeathInventory).
+	     Choix confirmé explicitement par l'utilisateur (question posée,
+	     réponse actée) : les deux animations à la suite plutôt que l'une
+	     remplaçant l'autre - raconte les deux temps forts du même instant de
+	     jeu. Dézoome depuis le cercle doré (où s'affiche le VRAI avatar du
+	     joueur, voir buildProfileAvatarHtml déjà utilisé par l'écran Profil)
+	     jusqu'à la scène ensoleillée complète (image fournie par
+	     l'utilisateur, voir img/rebirth-background.webp), puis le titre
+	     apparaît façon coup de tampon - même technique que "Mort du joueur"
+	     (js/vendor/cartoon-text.js, jamais un texte codé en dur, pour rester
+	     multilingue). Réutilisable par les trois systèmes monétaires en mode
+	     smartphone (dette/libre/troc) SANS AUCUN changement serveur : le
+	     chaînage se fait entièrement côté client sur la même diffusion
+	     "death" déjà agnostique du système monétaire. -->
+	<div class="rebirth-anim-overlay" id="rebirthAnimOverlay">
+		<div class="rebirth-anim-zoom" id="rebirthAnimZoom"></div>
+		<div class="rebirth-anim-avatar-circle" id="rebirthAnimAvatarCircle"></div>
+		<div class="rebirth-anim-title-host" id="rebirthAnimTitleHost"></div>
+	</div>
+
 	<!-- ===== Onglet "Stats" : classement complet ===== -->
 	<div id="leaderboardScreen" class="main-content hidden">
 		<section class="card leaderboard-card">

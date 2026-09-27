@@ -151,6 +151,51 @@ titre en coup de tampon) plutôt qu'une mort silencieuse.
   appareil iOS/Android n'ont été testés par les agents de relecture -
   seulement le même appel HTTP que l'assistant envoie.
 
+### Animation "Renaissance !" (construite le 27/09/2026)
+
+Demande utilisateur : "peux-tu faire de même avec la renaissance du
+joueur... le fond dézoome et le texte apparaît comme un coup de tampon,
+comme pour l'exemple précédent."
+
+- **Enchaînée automatiquement après "Mort du joueur", jamais un second
+  déclenchement séparé** : ce moteur de jeu ne connaît qu'un seul
+  événement (`DEATH`) qui déclenche à la fois la mort ET la renaissance
+  immédiate - il n'existe pas de second point d'accroche distinct pour
+  "la renaissance" (le bouton de l'assistant animateur s'appelle
+  d'ailleurs déjà "Valider la renaissance"). Décision confirmée
+  explicitement avec l'utilisateur (question posée avant implémentation,
+  réponse actée) : les deux animations jouent l'une après l'autre sur le
+  même événement, plutôt que l'une remplaçant l'autre - racontent les
+  deux temps forts du même instant de jeu (~10 secondes au total).
+- **Aucun changement serveur nécessaire** : le chaînage se fait
+  entièrement côté client (file d'attente déjà en place pour "Mort du
+  joueur"), sur la diffusion WebSocket "death" déjà agnostique du système
+  monétaire - réutilisable d'emblée par dette/libre/troc en mode
+  smartphone, sans le moindre `if` supplémentaire sur
+  `Game.getMoneySystem()`.
+- **Avatar RÉEL du joueur affiché dans le cercle doré** (jamais un avatar
+  générique) : réutilise `buildProfileAvatarHtml`, déjà utilisé par
+  l'écran Profil - avatar de la galerie, avatar personnalisé (SVG), ou
+  repli emoji générique si aucun n'est configuré, exactement les trois
+  mêmes cas que partout ailleurs dans l'app.
+- **Toutes les leçons de la double relecture indépendante de "Mort du
+  joueur" appliquées dès la première version** (jamais redécouvertes une
+  seconde fois) : état de départ du zoom rendu instantané
+  (`transition: none` + reflow forcé), aucun vidage manuel du conteneur du
+  titre avant `CartoonText.render` (celui-ci s'en charge lui-même),
+  `try/finally` englobant toute la séquence. Position/rayon du cercle doré
+  mesurés précisément sur l'image fournie (détection du plus gros disque
+  quasi blanc), jamais estimés à l'œil.
+- Son de carillon ascendant synthétisé (Web Audio API), pensé pour un
+  moment positif - contrairement au son sourd de "Mort du joueur".
+- Vérifié par un test Playwright dédié : enchaînement bien séquentiel
+  (jamais les deux overlays actifs en même temps), dézoom qui démarre bien
+  très agrandi dès la première frame (échantillonnage image par image),
+  avatar réel correctement affiché (testé avec un avatar de galerie ET
+  avec le repli emoji), aucune erreur console sur la séquence complète,
+  un second joueur de la même partie ne voit ni l'une ni l'autre
+  animation.
+
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la
   Monnaie** (`DU = c × masse_monétaire / joueurs_vivants`, avec `c` dépendant

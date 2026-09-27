@@ -2002,6 +2002,10 @@ msgstr "🔄 Révolution n°{n} : les valeurs des cartes viennent de tourner."
 msgid "playerView.death_anim_title"
 msgstr "Mort du joueur"
 
+# ============ Animation "Renaissance !" (27/09/2026) ============
+msgid "playerView.rebirth_anim_title"
+msgstr "Renaissance !"
+
 # ============ Infobulles temporaires (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"
 msgstr "Vous n'avez pas assez d'unités monétaires"

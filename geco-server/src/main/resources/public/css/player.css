@@ -958,6 +958,90 @@ body {
 @media (prefers-reduced-motion: reduce) { .death-anim-title-host.stamp-in { animation: none; opacity: 1; } }
 
 /* ============================================================
+   Animation "Renaissance !" (27/09/2026) - même mécanique que "Mort du
+   joueur" ci-dessus (dézoom rapide + "coup de tampon" du titre), enchaînée
+   automatiquement juste après elle sur le même événement (voir le
+   commentaire détaillé dans player-view.html) - bloc CSS néanmoins
+   totalement indépendant, jamais mélangé au précédent, pour rester
+   réutilisable séparément si un jour nécessaire. Cercle doré : position et
+   rayon mesurés précisément sur img/rebirth-background.webp (détection du
+   plus gros disque quasi blanc de l'image) plutôt qu'estimés à l'œil -
+   leçon retenue de la première version de "Mort du joueur" (origine du
+   zoom d'abord estimée à l'œil, corrigée après coup lors d'une relecture).
+   z-index au-dessus de .death-anim-overlay (3050) : les deux ne sont
+   jamais visibles simultanément (strictement enchaînées), l'ordre choisi
+   ici n'a donc pas d'effet visible, mais reste cohérent avec la
+   progression déjà en place (carré 3000 < mort 3050 < renaissance 3060).
+   ============================================================ */
+.rebirth-anim-overlay {
+	position: fixed; inset: 0; z-index: 3060;
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+	overflow: hidden; background: #0a1f0f;
+}
+.rebirth-anim-overlay.active { opacity: 1; pointer-events: auto; }
+
+.rebirth-anim-zoom {
+	position: absolute; inset: 0;
+	background-image: url("/img/rebirth-background.webp");
+	background-size: cover; background-position: center; background-repeat: no-repeat;
+	/* Centre du cercle doré vide dans l'image fournie (49,9% / 48,9%) : le
+	   dézoom part de là plutôt que du centre géométrique de l'écran. */
+	transform-origin: 50% 49%;
+	transition: transform 0.72s cubic-bezier(0.15, 0.85, 0.35, 1);
+	will-change: transform;
+}
+.rebirth-anim-zoom.zoomed-in { transform: scale(3.6); }
+.rebirth-anim-zoom.zoomed-out { transform: scale(1); }
+.rebirth-anim-zoom.shake-impact { animation: deathAnimShake 450ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+@media (prefers-reduced-motion: reduce) {
+	.rebirth-anim-zoom { transition: none; }
+	.rebirth-anim-zoom.shake-impact { animation: none; }
+}
+
+/* Avatar RÉEL du joueur (voir buildProfileAvatarHtml, déjà utilisé par
+   l'écran Profil - jamais un avatar générique), positionné/dimensionné
+   pour venir se loger exactement dans le cercle doré une fois le dézoom
+   terminé. Diamètre (44% de la largeur) légèrement inférieur au disque
+   blanc mesuré (45,8%) pour rester bien à l'intérieur de l'anneau doré,
+   jamais par-dessus. N'apparaît qu'une fois le dézoom achevé - jamais
+   synchronisé image par image avec le zoom du fond (bien plus simple et
+   fiable qu'un suivi de position en temps réel), même principe que le
+   titre ci-dessous. */
+.rebirth-anim-avatar-circle {
+	position: absolute; left: 49.9%; top: 48.9%; transform: translate(-50%, -50%) scale(0.6);
+	width: 44%; aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
+	z-index: 1; opacity: 0; will-change: transform, opacity;
+	box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+.rebirth-anim-avatar-circle .avatar-img,
+.rebirth-anim-avatar-circle span { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 3rem; background: #fff; }
+.rebirth-anim-avatar-circle.stamp-in { animation: rebirthAnimAvatarPop 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
+@keyframes rebirthAnimAvatarPop {
+	0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+	70%  { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+	100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .rebirth-anim-avatar-circle.stamp-in { animation: none; opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+.rebirth-anim-title-host {
+	/* Positionné en absolu (haut de l'écran, comme sur le modèle fourni -
+	   mesuré sur img/6.webp : le titre occupe environ 19-27% de la hauteur,
+	   le cercle doré est plus bas, vers 49%) plutôt qu'un centrage flex
+	   comme .death-anim-title-host : ici DEUX éléments (fond + cercle
+	   avatar) se partagent déjà l'écran, le titre a besoin de sa propre
+	   position fixe, indépendante du centrage automatique. left/right/margin
+	   pour le centrage horizontal (jamais `transform`, laissé entièrement
+	   libre pour l'animation du coup de tampon ci-dessous). */
+	position: absolute; left: 0; right: 0; top: 18%; margin: 0 auto;
+	z-index: 2; width: 82%; max-width: 420px;
+	opacity: 0; will-change: transform, opacity, filter;
+	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.4));
+}
+.rebirth-anim-title-host.stamp-in { animation: deathAnimStampSlam 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
+@media (prefers-reduced-motion: reduce) { .rebirth-anim-title-host.stamp-in { animation: none; opacity: 1; } }
+
+/* ============================================================
    Infobulles temporaires (02/09/2026) - remonté par l'utilisateur : "solde
    insuffisant" pendant un achat, "fin du tour" à l'expiration du minuteur.
    Voir showToast() dans player-view.js.

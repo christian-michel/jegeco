@@ -2730,6 +2730,17 @@ async function drainDeathAnimQueue() {
 		while (mDeathAnimQueue.length > 0) {
 			mDeathAnimQueue.shift();
 			await playDeathAnimation(); // toujours attendu en entier avant la suivante - jamais deux animations en même temps
+			// Enchaînement "Renaissance !" (27/09/2026, demande utilisateur,
+			// confirmée explicitement - question posée, réponse actée) : ce
+			// moteur de jeu ne connaît qu'un seul événement DEATH qui
+			// déclenche à la fois la mort ET la renaissance immédiate -
+			// jamais un second événement WebSocket distinct pour "la
+			// renaissance". Les deux animations restent deux fonctions/blocs
+			// CSS totalement indépendants et réutilisables séparément (voir
+			// playRebirthAnimation) - seul CET enchaînement précis, ici, les
+			// relie l'une à l'autre pour raconter les deux temps forts du
+			// même instant de jeu.
+			await playRebirthAnimation();
 		}
 	} finally {
 		mDeathAnimRunning = false;
@@ -2880,6 +2891,137 @@ async function playDeathAnimation() {
 		zoom.classList.remove("shake-impact");
 		overlay.classList.remove("active");
 		refreshPlayer();
+	}
+}
+
+// ============================================================
+// Animation "Renaissance !" (27/09/2026) - remonté par l'utilisateur :
+// "peux-tu faire de même avec la renaissance du joueur... le fond
+// dézoome et le texte apparaît comme un coup de tampon, comme pour
+// l'exemple précédent." Mécanique et code structurés à l'identique de
+// playDeathAnimation ci-dessus (mêmes constantes de timing, même
+// technique try/finally, même truc "transition: none" + reflow forcé
+// pour un état de départ vraiment instantané) - toutes les leçons de la
+// double relecture indépendante de "Mort du joueur" (dézoom qui restait
+// invisible, ResizeObserver qui redessinait un ancien titre, écran bloqué
+// en cas d'échec de rendu) sont appliquées ICI dès la première version,
+// plutôt que de les redécouvrir une seconde fois.
+//
+// N'est JAMAIS appelée par sa propre file d'attente : contrairement à
+// "Mort du joueur" (déclenchée directement par l'événement WebSocket
+// "death"), "Renaissance !" est enchaînée par drainDeathAnimQueue()
+// ci-dessus, juste après "Mort du joueur" - ce moteur de jeu ne connaît
+// qu'un seul événement DEATH pour les deux temps forts (voir le
+// commentaire détaillé dans player-view.html). Reste néanmoins une
+// fonction totalement autonome et réutilisable en elle-même (aucune
+// dépendance à l'état de "Mort du joueur"), au cas où un futur besoin
+// voudrait la déclencher seule.
+const REBIRTH_ANIM_ZOOM_START_DELAY_MS = 30;
+const REBIRTH_ANIM_DEZOOM_MS = 720;
+const REBIRTH_ANIM_IMPACT_MS = 450;
+const REBIRTH_ANIM_TOTAL_DISPLAY_MS = 5000; // même convention que "Mort du joueur" ("comme pour l'exemple précédent")
+
+async function playRebirthAnimation() {
+	const overlay = el("rebirthAnimOverlay");
+	const zoom = el("rebirthAnimZoom");
+	const avatarCircle = el("rebirthAnimAvatarCircle");
+	const titleHost = el("rebirthAnimTitleHost");
+
+	// Avatar RÉEL du joueur (voir buildProfileAvatarHtml, déjà utilisé par
+	// l'écran Profil) - jamais un avatar générique. Rendu une seule fois ici
+	// : contrairement au titre (cartoon-text.js gère son propre
+	// ResizeObserver), un simple <img>/<span> n'a besoin d'aucune précaution
+	// particulière pour être remplacé à chaque renaissance.
+	avatarCircle.innerHTML = buildProfileAvatarHtml(state.player ? state.player.avatarConfigJson : null);
+	avatarCircle.classList.remove("stamp-in");
+	avatarCircle.style.opacity = "0";
+	titleHost.classList.remove("stamp-in");
+	titleHost.style.opacity = "0";
+
+	// État de départ "zoomed-in" ET ouverture de l'overlay INSTANTANÉS (voir
+	// le correctif équivalent de "Mort du joueur", 26/09/2026) : sans le
+	// "transition: none" + reflow forcé ci-dessous, la transition CSS
+	// prévue pour le DÉZOOM s'appliquerait aussi à cette simple mise en
+	// place, rendant le dézoom quasi invisible.
+	zoom.style.transition = "none";
+	zoom.classList.remove("zoomed-out", "shake-impact");
+	zoom.classList.add("zoomed-in");
+	void zoom.offsetWidth; // force le calcul du style avant de rétablir la transition
+	zoom.style.transition = "";
+
+	overlay.style.transition = "none";
+	overlay.classList.add("active");
+	void overlay.offsetWidth;
+	overlay.style.transition = "";
+
+	// try/finally englobant TOUTE la séquence (voir le même correctif sur
+	// playDeathAnimation) : garantit que l'overlay se referme et que
+	// refreshPlayer() est appelé quoi qu'il arrive, même si CartoonText.render
+	// échoue.
+	try {
+		await new Promise((r) => setTimeout(r, REBIRTH_ANIM_ZOOM_START_DELAY_MS));
+
+		// ÉTAPE 1 : dézoom rapide depuis le cercle doré jusqu'à la scène
+		// ensoleillée complète.
+		zoom.classList.remove("zoomed-in");
+		zoom.classList.add("zoomed-out");
+		await new Promise((r) => setTimeout(r, REBIRTH_ANIM_DEZOOM_MS));
+
+		// ÉTAPE 2 : l'avatar apparaît dans le cercle ET le titre (multilingue,
+		// voir js/vendor/cartoon-text.js) façon "coup de tampon", avec
+		// tremblement d'écran + son synchronisés - les deux ensemble, comme
+		// sur le modèle fourni.
+		titleHost.style.opacity = "";
+		await window.CartoonText.render(titleHost, t("playerView.rebirth_anim_title"),
+			{ maxLines: 2, fontFamily: "'Sora','Luckiest Guy','Rubik',sans-serif" });
+		titleHost.classList.add("stamp-in");
+		avatarCircle.classList.add("stamp-in");
+		zoom.classList.add("shake-impact");
+		playRebirthChimeSound();
+		await new Promise((r) => setTimeout(r, REBIRTH_ANIM_IMPACT_MS));
+		zoom.classList.remove("shake-impact");
+
+		// ÉTAPE 3 : reste affichée jusqu'au total de 5 secondes demandé, puis
+		// referme automatiquement.
+		const elapsed = REBIRTH_ANIM_ZOOM_START_DELAY_MS + REBIRTH_ANIM_DEZOOM_MS + REBIRTH_ANIM_IMPACT_MS;
+		await new Promise((r) => setTimeout(r, Math.max(0, REBIRTH_ANIM_TOTAL_DISPLAY_MS - elapsed)));
+	} catch (err) {
+		pushDebugLog("ERREUR", "Animation \"Renaissance !\" interrompue :", err);
+	} finally {
+		zoom.classList.remove("shake-impact");
+		overlay.classList.remove("active");
+		refreshPlayer();
+	}
+}
+
+// Synthèse sonore d'un carillon ascendant (Web Audio API, aucun fichier
+// externe - même principe que playDeathImpactSound, réutilise le même
+// AudioContext partagé), pensé pour un moment positif (contrairement au
+// son sourd de "Mort du joueur") : trois notes brèves montantes.
+function playRebirthChimeSound() {
+	try {
+		if (!mPlayerAudioCtx) mPlayerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		if (mPlayerAudioCtx.state === "suspended") mPlayerAudioCtx.resume();
+		const ctx = mPlayerAudioCtx;
+		const now = ctx.currentTime;
+		const notes = [523.25, 659.25, 783.99]; // Do5, Mi5, Sol5 - accord majeur ascendant
+		notes.forEach((freq, i) => {
+			const start = now + (i * 0.09);
+			const osc = ctx.createOscillator();
+			const gain = ctx.createGain();
+			osc.type = "sine";
+			osc.frequency.setValueAtTime(freq, start);
+			gain.gain.setValueAtTime(0.0001, start);
+			gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+			gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);
+			osc.connect(gain);
+			gain.connect(ctx.destination);
+			osc.start(start);
+			osc.stop(start + 0.4);
+		});
+	} catch (err) {
+		// Ni synthèse audio possible (navigateur très restrictif) : on
+		// abandonne silencieusement, jamais bloquant pour l'animation visuelle.
 	}
 }
 

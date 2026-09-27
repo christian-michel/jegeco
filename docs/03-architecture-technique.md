@@ -1833,6 +1833,94 @@ scénario peu probable en usage réel (nécessite une page HTML désynchronisée
 de son propre JS), mais corrigé par prudence avec un second `try/finally`
 englobant, au niveau de `drainDeathAnimQueue` elle-même.
 
+### Animation "Renaissance !" (27/09/2026)
+
+Demande utilisateur, avec fichiers de référence fournis (une image de fond
+ciel ensoleillé/cercle doré vide, une image du même fond avec le texte
+"RENAISSANCE !" et un avatar dans le cercle, un mockup du style de texte,
+plus les mêmes `cartoon-text.js`/`En_prison.html` déjà fournis pour "Mort
+du joueur") : "peux-tu faire de même avec la renaissance du joueur... le
+fond dézoome et le texte apparaît comme un coup de tampon, comme pour
+l'exemple précédent."
+
+**Question d'architecture posée et tranchée AVANT implémentation** : en
+lisant le code du wizard (`app.js`), le bouton qui déclenche l'événement
+`DEATH` s'appelle déjà "Valider la renaissance"
+(`t("wiz.validate_rebirth_btn")`, sur `wizNextDeathDU`/`wizNextDeathTroc`/
+`wizNextDeathInventory`) - ce moteur de jeu ne modélise la mort et la
+renaissance QUE comme un seul et même événement (voir `Event.java`, le
+même `case QUIT: case DEATH:` qui gère aussi bien la fin de vie que la
+redistribution d'une main fraîche). Il n'existe donc structurellement
+AUCUN second point de déclenchement distinct pour "la renaissance" à
+côté de celui déjà utilisé pour "Mort du joueur" - la seule question
+restait de savoir comment articuler les deux animations sur ce même
+événement. Question posée explicitement à l'utilisateur (deux options :
+les deux à la suite, ou "Renaissance !" seule en remplacement) - réponse :
+les deux à la suite. Décision qui a évité un contresens potentiellement
+coûteux (construire "Renaissance !" comme si elle avait son propre
+événement dédié, pour découvrir ensuite qu'il fallait la fusionner avec
+"Mort du joueur").
+
+**Implémentation, sans le moindre changement serveur** : `GecoServer.java`
+diffuse toujours le même message WebSocket `"death"` qu'avant (aucune
+modification) - tout l'enchaînement vit côté client
+(`player-view.js`) : `drainDeathAnimQueue()` appelle désormais
+`await playDeathAnimation(); await playRebirthAnimation();` l'une après
+l'autre, dans la même boucle/le même `try/finally` déjà en place.
+`playRebirthAnimation()` reste une fonction entièrement autonome et
+réutilisable en elle-même (aucune dépendance à l'état de "Mort du
+joueur") - seul CET enchaînement précis les relie.
+
+**Toutes les leçons de la double relecture indépendante de "Mort du
+joueur" (21-26/09/2026, voir plus haut) appliquées dès la première
+version, jamais redécouvertes une seconde fois** :
+- État de départ du zoom («zoomed-in», `scale(3.6)`) et ouverture de
+  l'overlay rendus INSTANTANÉS via `transition: none` + reflow forcé
+  (`void element.offsetWidth`) AVANT même d'écrire la première ligne de
+  code de la séquence normale - plutôt que de laisser la transition CSS
+  du dézoom s'appliquer par erreur à cette mise en place, comme ça avait
+  été le cas pour "Mort du joueur" avant correction.
+- Aucun `titleHost.innerHTML = ""` manuel avant `CartoonText.render` (qui
+  s'en charge lui-même, de façon synchrone avec le nouveau rendu) - le
+  bug du `ResizeObserver` qui redessinait un ancien titre à la 2e
+  occurrence n'a donc jamais eu l'occasion d'apparaître ici.
+- `try/finally` englobant TOUTE la séquence dès le départ, garantissant la
+  fermeture de l'overlay et l'appel à `refreshPlayer()` quoi qu'il arrive.
+
+**Position du cercle doré mesurée précisément**, pas estimée à l'œil
+(même leçon que le dézoom sur la lune de "Mort du joueur", dont l'origine
+avait dû être corrigée après coup) : détection par script Python du plus
+gros disque quasi blanc dans l'image fournie
+(`img/rebirth-background.webp`) - centre à 49,9%/48,9%, rayon ≈23% de la
+largeur - utilisés directement comme `transform-origin` du dézoom et
+comme position/taille du cercle contenant l'avatar.
+
+**Avatar réel du joueur**, jamais un avatar générique : réutilise
+`buildProfileAvatarHtml` (déjà utilisé par l'écran Profil, avec son repli
+emoji déjà géré si aucun avatar n'est configuré) plutôt que de réinventer
+un affichage d'avatar spécifique à cette animation.
+
+**Son distinct**, pensé pour un moment positif : un carillon ascendant à
+trois notes (Do5-Mi5-Sol5) synthétisé via Web Audio API, réutilisant le
+même `AudioContext` partagé que "Mort du joueur" et le sifflet de nouveau
+tour - jamais un fichier audio externe, cohérent avec le reste de l'app.
+
+**Vérifié par un test Playwright dédié** : enchaînement bien séquentiel
+(jamais les deux overlays actifs simultanément - vérifié explicitement à
+1,5s puis 5,5s après le déclenchement), dézoom échantillonné image par
+image (`requestAnimationFrame`) confirmant un démarrage à `scale(3,6)`
+maintenu ~90ms avant transition fluide vers `1` (la première tentative de
+vérification, avec un simple point de contrôle à un instant fixe, avait
+donné un résultat trompeur - artefact de mesure, pas un bug, corrigé en
+échantillonnant frame par frame plutôt qu'à un instant isolé), avatar réel
+testé avec un avatar de galerie ET avec le repli emoji, aucune erreur
+`ResizeObserver` sur la séquence complète (~10,6s), un second joueur de la
+même partie ne voit ni l'une ni l'autre animation.
+
+Suite de tests automatisés (geco-engine + geco-server) : toujours 100%
+verte, aucune régression - cohérent avec le fait qu'aucun code serveur
+n'a été modifié pour cette fonctionnalité.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

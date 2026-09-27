@@ -1998,6 +1998,10 @@ msgstr "🔄 Revolution #{n}: card values just rotated."
 msgid "playerView.death_anim_title"
 msgstr "Player died"
 
+# ============ "Rebirth" animation (27/09/2026) ============
+msgid "playerView.rebirth_anim_title"
+msgstr "Rebirth!"
+
 # ============ Temporary toast notifications (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"
 msgstr "You don't have enough currency units"
