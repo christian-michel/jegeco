@@ -246,14 +246,22 @@ class StatsServiceExchangeStatsTest
 			assertEquals(2, v[0]);
 		// Somme des valeurs par joueur = 2x la valeur globale (chaque
 		// transaction comptée deux fois, une par participant).
-		final int sumPlayerValues = byName.values().stream().mapToInt(PlayerExchangeStat::totalValue).sum();
-		assertEquals(2 * stats.globalValue(), sumPlayerValues);
+		final double sumPlayerValues = byName.values().stream().mapToDouble(PlayerExchangeStat::totalValue).sum();
+		assertEquals(2 * stats.globalValue(), sumPlayerValues, 0.001);
 
 		// --- Masse monétaire détaillée : un point par tour joué, delta
 		// cohérent avec la masse réelle observée (dérivée, jamais recalculée
 		// séparément - voir la Javadoc de MoneyMassDetailPoint). ---
 		final MoneyMassDetailReport massDetail = report.moneyMassDetail();
 		assertEquals(3, massDetail.points().size());
+		// Régression (27/09/2026, relecture indépendante - voir
+		// StatsService.resetJetonsToStartOfGameForReplay) : le tour 1 doit
+		// montrer la masse RÉELLE du début de partie (dotation de départ :
+		// 3 joueurs × 7 unités = 21), jamais la masse de fin de partie qu'un
+		// rejeu naïf lui attribuait (ici, avec les soldes gonflés par
+		// boostAllBalances, plusieurs millions).
+		assertEquals(21, massDetail.points().get(0).moneyMass(),
+				"tour 1 : masse réelle du début de partie (3 × 7), pas la masse finale"); //$NON-NLS-1$
 		int previousMass = 0;
 		for (final MoneyMassDetailPoint point : massDetail.points())
 		{
@@ -271,6 +279,50 @@ class StatsServiceExchangeStatsTest
 		final double expectedAvgDelta = Math.round(deltas.stream().mapToInt(Integer::intValue).average().orElse(0) * 10)
 				/ 10.0;
 		assertEquals(expectedAvgDelta, massDetail.averageMassDelta(), 0.001);
+	}
+
+	/**
+	 * Régression (27/09/2026, relecture indépendante + campagne de test en
+	 * HTTP réel) : avec "Valeur d'une pièce faible" = 0,5, une carte faible
+	 * (0,5 DU) coûte deux fois plus de JETONS que d'unités monétaires - les
+	 * valeurs d'échange doivent être rapportées en UNITÉS MONÉTAIRES (même
+	 * unité que la masse monétaire affichée à côté, et que l'axe "Unités
+	 * monétaires" du graphique), jamais en nombre de jetons.
+	 */
+	@Test
+	void testExchangeValuesAreInMonetaryUnitsWhenWeakCoinValueIsNotOne() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 12, "AnimTest", null, //$NON-NLS-1$
+				"Test exchange-stats weakCoinValue 0,5", "2026-09-27", "Ceres", 1, 180, 0.5, false, 4, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final int gameId = game.getId();
+		final int aliceId = sService.addPlayer(gameId, "Alice").getId(); //$NON-NLS-1$
+		final int bobId = sService.addPlayer(gameId, "Bob").getId(); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, catalog(6));
+
+		sService.recordTransaction(gameId, aliceId, bobId, aWeakCardHeldBy(gameId, aliceId), "faible", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$
+				"nonce-wcv-a", System.currentTimeMillis() + 60_000); //$NON-NLS-1$
+
+		final List<Transaction> transactions = sService.listTransactions(gameId);
+		assertEquals(1, transactions.size());
+		final int valueInJetons = transactions.get(0).totalCoinsValue();
+		assertTrue(valueInJetons > 0);
+		// Vérité terrain calculée ICI : 14 jetons de départ par joueur (7 unités
+		// / 0,5), DU = round(taux TRM × 14 / 2) - le prix d'une carte faible
+		// (0,5 DU) vaut donc valueInJetons × 0,5 unités monétaires.
+		final double expectedUnits = valueInJetons * 0.5;
+
+		final ExchangeAndMoneyReport report = sStats.computeExchangeAndMoneyReport(sService.getGame(gameId),
+				transactions);
+		assertEquals(expectedUnits, report.exchangeStats().globalValue(), 0.001);
+		assertEquals(expectedUnits, report.exchangeStats().byTurn().get(0).totalValue(), 0.001);
+		assertEquals(expectedUnits, report.exchangeStats().averageValuePerExchange(), 0.051);
+		assertEquals(expectedUnits, report.exchangeStats().medianValuePerExchange(), 0.051);
+		for (final PlayerExchangeStat p : report.exchangeStats().byPlayer())
+			assertEquals(expectedUnits, p.totalValue(), 0.001, p.playerName());
+		// Même unité que la masse monétaire : 2 joueurs × 14 jetons × 0,5 = 14 unités au tour 1.
+		assertEquals(14, report.moneyMassDetail().points().get(0).moneyMass());
 	}
 
 	@Test

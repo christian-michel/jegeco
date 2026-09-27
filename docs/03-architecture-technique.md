@@ -2615,3 +2615,47 @@ smartphone à 4 joueurs, capture d'écran de la section rendue - voir
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.
+
+### Relecture indépendante et campagne 2/4/10 joueurs du rapport "Échanges monétaires" (27/09/2026, même soir)
+
+**Méthode** : relecture du diff 7e2f7fb par un second agent, puis 3 parties
+libre + smartphone (2, 4 et 10 joueurs, 12 tours nominaux de 5 minutes -
+simulées, comme `GameServiceFullGameSimulationTest`, mais pilotées en HTTP
+RÉEL contre `geco-server.jar` : chaque "téléphone" depuis sa propre IP
+loopback, offre de vente → consultation → rachat ; l'animateur rejoue
+exactement l'assistant de fin de tour : D pour les mourants, W pour chaque
+actif avec le DU, T ; fin de partie : Q pour chacun puis E). Une vérité
+terrain est tenue INDÉPENDAMMENT (jetons de chaque joueur, masse "vivante"
+recalculée aux mêmes instants que le moteur, DU recalculé par la formule
+TRM, prix de chaque carte, révolutions et percée technologique observées
+comme un téléphone/l'animateur les voit) et comparée à `/exchange-stats`,
+`/report` et `/activity`. Résultat : 0 écart en direct (masse, DU, jetons,
+valeur de chacun des 370 échanges) ; deux bugs du nouveau rapport :
+
+1. **Unités** : `Transaction.totalCoinsValue()` compte des JETONS faibles,
+   affichés sous l'axe "Unités monétaires" à côté d'une masse monétaire,
+   elle, en unités monétaires. Identique si "Valeur d'une pièce faible" = 1,
+   faux sinon - mesuré avec 0,5 : 24612 "unités" échangées au lieu de 12306.
+   Corrigé (`StatsService.monetaryUnitsPerJeton`, valeurs en `double`) ; la
+   dette smartphone garde 1 jeton = 1 unité par construction.
+2. **Tour 1 = masse finale** : `Game.recomputeAll` ne remet jamais
+   `Player.jetonWeak` à zéro, et le tout premier TURN rejoué voit des
+   joueurs déjà suivis par smartphone - il recalcule donc la masse depuis
+   leurs jetons de FIN de partie (mesuré : 14725 au lieu de 28 à 4 joueurs,
+   avec une fausse destruction de -14673 au tour 2 et des médianes
+   faussées). Corrigé LOCALEMENT au rapport
+   (`resetJetonsToStartOfGameForReplay` : dotation de départ réelle avant le
+   rejeu, jetons d'origine restaurés après, objet détaché jamais persisté) -
+   le redesign du rejeu utilisé par Annuler/éditer reste une décision
+   utilisateur en attente. Le graphique pré-existant "Évolution de la masse
+   monétaire" (`computeMoneyMassHistory`) et la courbe Galilée
+   (`computeWealthOverTime`) ont exactement le même défaut au tour 1, visible
+   sur le même écran que le nouveau graphique désormais juste : volontairement
+   NON modifiés ici (décision attendue), le même appel s'y applique en une
+   ligne.
+
+Également retiré : deux variables mortes et un commentaire "BUG TROUVÉ ET
+CORRIGÉ" dans `renderReport` (app.js) qui décrivait comme corrigé un bug
+dont l'hypothèse avait été infirmée. Deux tests de régression ajoutés à
+`StatsServiceExchangeStatsTest` (échouent sur le code d'avant : masse tour 1
+1610612733 au lieu de 21 ; valeur 6,0 au lieu de 3,0).

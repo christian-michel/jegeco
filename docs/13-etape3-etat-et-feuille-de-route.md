@@ -447,6 +447,18 @@ juste avant).
   `03-architecture-technique.md` pour leurs conclusions. Le "certificat du
   joueur" (points forts/faibles), demandé dans le même message, reste
   **différé** à la demande explicite de l'utilisateur.
+  **Relecture indépendante + campagne (27/09/2026, même soir)** : 3
+  parties libre+smartphone (2/4/10 joueurs, 12 tours) jouées en HTTP réel
+  avec vérité terrain tenue indépendamment - 0 écart sur les jetons, la
+  masse, le DU et le prix de chaque échange ; deux bugs du nouveau rapport
+  trouvés et corrigés : (1) valeurs d'échange en JETONS affichées comme
+  "unités monétaires" (faux dès que "Valeur d'une pièce faible" ≠ 1, ×2
+  avec 0,5) ; (2) point "tour 1" de la masse détaillée égal à la masse
+  FINALE (rejeu), d'où une fausse "destruction" au tour 2 - corrigé
+  localement dans ce rapport (voir `03-architecture-technique.md`). Le
+  graphique pré-existant "Évolution de la masse monétaire" et la courbe
+  Galilée gardent ce défaut au tour 1 (point 4bis ci-dessous) - même
+  correctif local applicable en une ligne, décision utilisateur attendue.
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 

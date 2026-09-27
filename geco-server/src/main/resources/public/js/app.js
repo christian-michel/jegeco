@@ -3477,18 +3477,18 @@ async function renderReport(gameId, includeBank = false) {
 	const exchangeReport = await Api.getExchangeStats(gameId).catch(() => null);
 	const isDebt = game.moneySystem === 1;
 	const isTroc = game.moneySystem === 2;
-	// BUG TROUVÉ ET CORRIGÉ (27/09/2026, remonté par un utilisateur qui
-	// demandait à compléter l'écran des statistiques) : cette section était
-	// masquée pour TOUTE partie en monnaie libre, avec le commentaire "aucun
-	// événement individuel n'existe pour retracer les échanges entre
-	// joueurs" - vrai pour la libre CLASSIQUE (sans smartphone), mais plus
-	// pour la libre SMARTPHONE depuis l'étape 3 (17-18/09/2026) : chaque
-	// achat/vente y crée une vraie Transaction individuelle (voir
-	// GameService.recordTransaction), exactement comme en dette smartphone.
-	// Le discriminant qui fait foi est donc `hasStartingAllocation` (voir
-	// CLAUDE.md, "jamais AppSettings.gameMode"), pas `moneySystem` seul.
-	const isSmartphoneTracked = game.players.some((p) => p.hasStartingAllocation);
-	const isLibreSmartphone = !isDebt && !isTroc && isSmartphoneTracked;
+	// Corrigé le 27/09/2026 (relecture indépendante) : un bloc de commentaire
+	// placé ici annonçait "BUG TROUVÉ ET CORRIGÉ" (section "Activité par
+	// joueur" masquée à tort en libre smartphone) et déclarait deux variables
+	// (isSmartphoneTracked/isLibreSmartphone) jamais utilisées nulle part -
+	// alors que cette hypothèse a été vérifiée puis INFIRMÉE (voir le
+	// commentaire sur activitySection plus bas, et le message du commit
+	// 7e2f7fb) et qu'aucun comportement n'avait changé. Retirés pour ne pas
+	// induire en erreur une prochaine lecture. Le masquage de la nouvelle
+	// section "Échanges monétaires" ne dépend d'ailleurs pas du client : il
+	// suit exchangeReport.applicable, décidé côté serveur
+	// (StatsService.computeExchangeAndMoneyReport, même discriminant
+	// startingCardsJson que hasStartingAllocation).
 	const accent = isDebt ? "#2563eb" : "#16a34a";
 	setMoneyTheme(game.moneySystem);
 
@@ -3546,15 +3546,14 @@ async function renderReport(gameId, includeBank = false) {
 	// brassé le plus de volume - triée par volume brassé décroissant (déjà fait
 	// côté serveur), on met juste en valeur la première ligne (le "plus actif").
 	// Vérifié le 27/09/2026 (à la demande d'un utilisateur qui soupçonnait cette
-	// section injustement masquée en libre smartphone, voir isLibreSmartphone
-	// plus haut) : computeActivityReport ne rejoue QUE les événements liés au
+	// section injustement masquée en libre smartphone) : computeActivityReport ne rejoue QUE les événements liés au
 	// CRÉDIT (NEW_CREDIT/INTEREST_ONLY/REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON),
 	// jamais les Transaction d'achat/vente de cartes - la monnaie libre n'a
 	// aucun de ces événements, avec ou sans smartphone. La démasquer pour la
 	// libre afficherait donc un tableau à zéro partout, pas un vrai correctif :
 	// le masquage reste juste pour ce système. L'activité d'ÉCHANGE (achat/
 	// vente de cartes) propre à la libre/dette smartphone est couverte par la
-	// nouvelle section "Échanges monétaires" plus bas (voir renderExchangeStats,
+	// nouvelle section "Échanges monétaires" plus bas (voir renderExchangeStatsSection,
 	// basée sur les vraies Transaction). La colonne "Emprunté" n'a de sens
 	// qu'en monnaie dette (ni la monnaie libre ni le troc n'ont de crédit).
 	el("activitySection").classList.toggle("hidden", !isDebt && !isTroc);

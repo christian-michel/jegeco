@@ -96,9 +96,21 @@ public class StatsService
 	 * {@link Transaction}) survenus PENDANT le tour donné : nombre d'échanges
 	 * et leur valeur totale en unités monétaires (voir
 	 * {@code Transaction.totalCoinsValue()}, déjà net de tout rendu de
-	 * monnaie).
+	 * monnaie, puis converti en unités monétaires - voir
+	 * {@link StatsService#monetaryUnitsPerJeton}).
+	 * <p>
+	 * BUG TROUVÉ ET CORRIGÉ (27/09/2026, relecture indépendante + campagne de
+	 * test en HTTP réel) : {@code totalValue} était un nombre de JETONS FAIBLES
+	 * (ce que compte {@code totalCoinsValue()}), affiché pourtant sous l'axe
+	 * "Unités monétaires" et comparé visuellement à la masse monétaire, elle
+	 * toujours en unités monétaires (voir Game.computeMoneyMassFromActivePlayersJetons).
+	 * Identique tant que "Valeur d'une pièce faible" vaut 1, faux dès qu'elle
+	 * diffère - mesuré avec 0,5 : 48 échanges affichés pour 24612 "unités"
+	 * au lieu de 12306, et au tour 2 44 "unités" échangées pour une masse
+	 * monétaire totale de 26 unités. Devient un {@code double} : une valeur en
+	 * jetons × 0,5 (ou 0,2...) n'est plus forcément entière.
 	 */
-	public record ExchangeTurnPoint(int turn, int count, int totalValue)
+	public record ExchangeTurnPoint(int turn, int count, double totalValue)
 	{
 	}
 
@@ -110,9 +122,9 @@ public class StatsService
 	 * fois pour l'acheteur ET une fois pour le vendeur (deux participants
 	 * distincts), contrairement à {@code globalCount}/{@code globalValue} de
 	 * {@link ExchangeStats} qui ne comptent chaque transaction qu'une seule
-	 * fois.
+	 * fois. {@code totalValue} en unités monétaires (voir {@link ExchangeTurnPoint}).
 	 */
-	public record PlayerExchangeStat(String playerName, int count, int totalValue)
+	public record PlayerExchangeStat(String playerName, int count, double totalValue)
 	{
 	}
 
@@ -126,9 +138,10 @@ public class StatsService
 	 * tour". Exclut volontairement les échanges troc (carte contre carte,
 	 * jamais de valeur monétaire - voir {@code Transaction.isCardSwap()}/
 	 * {@code isGoodsTrade()}) : cette statistique n'a de sens qu'en monnaie
-	 * dette/libre.
+	 * dette/libre. Toutes les valeurs en unités monétaires (voir
+	 * {@link ExchangeTurnPoint}, correctif du 27/09/2026).
 	 */
-	public record ExchangeStats(int globalCount, int globalValue, double averageValuePerExchange,
+	public record ExchangeStats(int globalCount, double globalValue, double averageValuePerExchange,
 			double medianValuePerExchange, double averageCountPerTurn, double medianCountPerTurn,
 			List<ExchangeTurnPoint> byTurn, List<PlayerExchangeStat> byPlayer)
 	{
@@ -147,6 +160,14 @@ public class StatsService
 	 * mode strict TRM) : la masse elle-même reste la seule source de vérité,
 	 * jamais recalculée séparément par une seconde formule qui pourrait
 	 * diverger.
+	 * <p>
+	 * Précision de sens (27/09/2026, relecture indépendante) : le point du
+	 * "tour t" est capturé à l'événement TURN qui OUVRE ce tour - c'est donc la
+	 * masse EN CIRCULATION PENDANT le tour t (celle avec laquelle se font les
+	 * échanges du tour t, voir {@link ExchangeTurnPoint}), et {@code massDelta}
+	 * du tour t est la création/destruction survenue JUSTE AVANT lui (DU
+	 * distribué et morts/sorties de l'entre-deux-tours t-1 → t). Le tour 1
+	 * compte donc comme "création" la dotation de départ (7 unités par joueur).
 	 */
 	public record MoneyMassDetailPoint(int turn, int moneyMass, int massDelta, int activePlayers,
 			double massPerPlayer)
@@ -662,28 +683,36 @@ public class StatsService
 	{
 		final List<Transaction> monetary = pTransactions.stream()
 				.filter(t -> !t.isCardSwap() && !t.isGoodsTrade()).toList();
+		// Correctif du 27/09/2026 (voir ExchangeTurnPoint) : les sommes restent
+		// tenues en JETONS entiers (long, jamais de dépassement ni d'erreur
+		// d'arrondi cumulée), converties en unités monétaires UNE SEULE FOIS à
+		// la fin de chaque agrégat.
+		final double unitsPerJeton = monetaryUnitsPerJeton(pGame);
 
 		final int globalCount = monetary.size();
 		final List<Integer> sortedValues = monetary.stream().map(Transaction::totalCoinsValue).sorted().toList();
-		final int globalValue = sortedValues.stream().mapToInt(Integer::intValue).sum();
-		final double averageValuePerExchange = globalCount == 0 ? 0 : (double) globalValue / globalCount;
-		final double medianValuePerExchange = computeMedian(sortedValues);
+		final long globalValueJetons = sortedValues.stream().mapToLong(Integer::longValue).sum();
+		final double averageValuePerExchange = globalCount == 0 ? 0
+				: ((double) globalValueJetons / globalCount) * unitsPerJeton;
+		final double medianValuePerExchange = computeMedian(sortedValues) * unitsPerJeton;
 
 		// Un point par tour DÉJÀ JOUÉ (1..tour courant), même sans aucun
 		// échange (compte à 0) - pour que le graphique montre une vraie
 		// continuité temporelle plutôt que de ne représenter que les tours
 		// où quelque chose s'est produit.
-		final Map<Integer, int[]> byTurnMap = new TreeMap<>();
+		final Map<Integer, long[]> byTurnMap = new TreeMap<>();
 		for (int turn = 1; turn <= Math.max(pGame.getTurnNumber(), 0); turn++)
-			byTurnMap.put(turn, new int[2]);
+			byTurnMap.put(turn, new long[2]);
 		for (final Transaction t : monetary)
 		{
-			final int[] bucket = byTurnMap.computeIfAbsent(t.getTurnNumber(), k -> new int[2]);
+			final long[] bucket = byTurnMap.computeIfAbsent(t.getTurnNumber(), k -> new long[2]);
 			bucket[0]++;
 			bucket[1] += t.totalCoinsValue();
 		}
 		final List<ExchangeTurnPoint> byTurn = byTurnMap.entrySet().stream()
-				.map(e -> new ExchangeTurnPoint(e.getKey(), e.getValue()[0], e.getValue()[1])).toList();
+				.map(e -> new ExchangeTurnPoint(e.getKey(), (int) e.getValue()[0],
+						round2(e.getValue()[1] * unitsPerJeton)))
+				.toList();
 		final List<Integer> sortedCountsPerTurn = byTurn.stream().map(ExchangeTurnPoint::count).sorted().toList();
 		final double averageCountPerTurn = sortedCountsPerTurn.isEmpty() ? 0
 				: sortedCountsPerTurn.stream().mapToInt(Integer::intValue).average().orElse(0);
@@ -691,30 +720,31 @@ public class StatsService
 
 		// Chaque transaction implique deux participants (acheteur + vendeur) :
 		// comptée une fois pour chacun (voir Javadoc de PlayerExchangeStat).
-		final Map<String, int[]> byPlayerMap = new java.util.LinkedHashMap<>();
+		final Map<String, long[]> byPlayerMap = new java.util.LinkedHashMap<>();
 		for (final Player p : pGame.getPlayers())
-			byPlayerMap.put(p.getName(), new int[2]);
+			byPlayerMap.put(p.getName(), new long[2]);
 		for (final Transaction t : monetary)
 		{
 			final int value = t.totalCoinsValue();
 			if (t.getBuyer() != null)
 			{
-				final int[] b = byPlayerMap.computeIfAbsent(t.getBuyer().getName(), k -> new int[2]);
+				final long[] b = byPlayerMap.computeIfAbsent(t.getBuyer().getName(), k -> new long[2]);
 				b[0]++;
 				b[1] += value;
 			}
 			if (t.getSeller() != null)
 			{
-				final int[] s = byPlayerMap.computeIfAbsent(t.getSeller().getName(), k -> new int[2]);
+				final long[] s = byPlayerMap.computeIfAbsent(t.getSeller().getName(), k -> new long[2]);
 				s[0]++;
 				s[1] += value;
 			}
 		}
 		final List<PlayerExchangeStat> byPlayer = byPlayerMap.entrySet().stream()
-				.map(e -> new PlayerExchangeStat(e.getKey(), e.getValue()[0], e.getValue()[1]))
+				.map(e -> new PlayerExchangeStat(e.getKey(), (int) e.getValue()[0],
+						round2(e.getValue()[1] * unitsPerJeton)))
 				.sorted(Comparator.comparingInt(PlayerExchangeStat::count).reversed()).toList();
 
-		return new ExchangeStats(globalCount, globalValue, round1(averageValuePerExchange),
+		return new ExchangeStats(globalCount, round2(globalValueJetons * unitsPerJeton), round1(averageValuePerExchange),
 				round1(medianValuePerExchange), round1(averageCountPerTurn), round1(medianCountPerTurn), byTurn,
 				byPlayer);
 	}
@@ -731,17 +761,32 @@ public class StatsService
 	{
 		final List<MoneyMassDetailPoint> points = new ArrayList<>();
 		final int[] previousMass = { 0 };
-		pGame.recomputeAll(event -> {
-			if (event.getEvt() == EventType.TURN)
+		final Map<Player, int[]> jetonsBeforeReplay = resetJetonsToStartOfGameForReplay(pGame);
+		try
+		{
+			pGame.recomputeAll(event -> {
+				if (event.getEvt() == EventType.TURN)
+				{
+					final int mass = pGame.getMoneyMass();
+					final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
+					final double massPerPlayer = activeCount == 0 ? 0 : (double) mass / activeCount;
+					points.add(new MoneyMassDetailPoint(pGame.getTurnNumber(), mass, mass - previousMass[0],
+							(int) activeCount, round1(massPerPlayer)));
+					previousMass[0] = mass;
+				}
+			});
+		}
+		finally
+		{
+			// Hygiène : rend à l'objet (détaché, jamais persisté ici) les jetons
+			// qu'il avait avant ce rejeu - voir resetJetonsToStartOfGameForReplay.
+			for (final Map.Entry<Player, int[]> e : jetonsBeforeReplay.entrySet())
 			{
-				final int mass = pGame.getMoneyMass();
-				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
-				final double massPerPlayer = activeCount == 0 ? 0 : (double) mass / activeCount;
-				points.add(new MoneyMassDetailPoint(pGame.getTurnNumber(), mass, mass - previousMass[0],
-						(int) activeCount, round1(massPerPlayer)));
-				previousMass[0] = mass;
+				e.getKey().setJetonWeak(e.getValue()[0]);
+				e.getKey().setJetonMedium(e.getValue()[1]);
+				e.getKey().setJetonStrong(e.getValue()[2]);
 			}
-		});
+		}
 
 		final List<Integer> sortedDeltas = points.stream().map(MoneyMassDetailPoint::massDelta).sorted().toList();
 		final List<Double> sortedMassPerPlayer = points.stream().map(MoneyMassDetailPoint::massPerPlayer).sorted()
@@ -762,6 +807,82 @@ public class StatsService
 		final int n = pSortedValues.size();
 		return n % 2 == 1 ? pSortedValues.get(n / 2)
 				: (pSortedValues.get(n / 2 - 1) + pSortedValues.get(n / 2)) / 2.0;
+	}
+
+	/**
+	 * Valeur, en unités monétaires, d'un jeton faible tel que compté par
+	 * {@code Transaction.totalCoinsValue()} - voir le correctif du 27/09/2026
+	 * sur {@link ExchangeTurnPoint}. Monnaie LIBRE : "Valeur d'une pièce
+	 * faible" de la partie (le prix d'une carte y est converti en jetons
+	 * PHYSIQUES par division par cette valeur, voir GameService.levelValue).
+	 * Monnaie DETTE smartphone : toujours 1 - "1 jeton faible = 1 unité
+	 * monétaire" (voir CLAUDE.md et Event.applyEvent, cas NEW_CREDIT, qui
+	 * crédite jetonWeak du principal tel quel, sans aucune conversion).
+	 */
+	private static double monetaryUnitsPerJeton(final Game pGame)
+	{
+		if (pGame.getMoneySystem() != Game.MONEY_LIBRE)
+			return 1;
+		return (pGame.getWeakCoinValue() == 0) ? 1 : pGame.getWeakCoinValue();
+	}
+
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (27/09/2026, relecture indépendante + campagne de
+	 * test 2/4/10 joueurs en HTTP réel) : en monnaie LIBRE suivie par
+	 * smartphone, le point "tour 1" de la masse détaillée valait la masse
+	 * FINALE de la partie (mesuré : 14725 au lieu de 28 pour 4 joueurs, 28207
+	 * au lieu de 70 pour 10 joueurs), et le tour 2 affichait en conséquence une
+	 * "destruction" fictive de presque toute cette masse (-14673 au lieu de
+	 * +24) - faussant aussi les moyennes/médianes de variation et de masse par
+	 * joueur. Cause (même mécanisme que la limite "Tour 1" déjà documentée dans
+	 * CLAUDE.md pour le graphique "masse monétaire") : en direct, le tout
+	 * premier TURN est appliqué AVANT la mise en place (dotation de 7 unités),
+	 * puis GameService.dealStartingHandsForLibreIfNeeded resynchronise la masse
+	 * sur les jetons tout juste distribués ; en REJEU (Game.recomputeAll, qui ne
+	 * remet jamais Player.jetonWeak à zéro), ce même TURN voit les joueurs déjà
+	 * suivis par smartphone et recalcule la masse à partir de leurs jetons
+	 * ACTUELS (ceux de fin de partie), jamais de ceux du départ.
+	 * <p>
+	 * Correctif volontairement LOCAL à ce rapport (lecture seule, objet détaché
+	 * jamais persisté - aucun effet sur le rejeu utilisé par Annuler/éditer,
+	 * dont la refonte reste une décision utilisateur en attente, voir
+	 * CLAUDE.md) : avant le rejeu, chaque joueur reçoit les jetons qu'il avait
+	 * RÉELLEMENT au début du tour 1 - la dotation de départ
+	 * (Game.computeStartingJetonsPerPlayer, exactement ce que distribue
+	 * dealStartingHandsForLibreIfNeeded) pour un joueur ayant rejoint avant le
+	 * premier TURN, 0 pour un joueur arrivé plus tard (aucune dotation en
+	 * direct avant son premier point de contrôle WEALTH_CHECKPOINT). Les
+	 * tours suivants sont déjà exacts sans cela (chaque WEALTH_CHECKPOINT
+	 * rejoué, posé pour TOUS les joueurs actifs juste avant chaque TURN,
+	 * remet les jetons à leur valeur réelle). Sans objet hors libre+smartphone
+	 * (la dette ne recalcule jamais la masse depuis les jetons) : renvoie alors
+	 * une table vide, sans rien modifier. Renvoie les jetons d'avant la
+	 * modification, pour que l'appelant les restaure après le rejeu.
+	 */
+	private Map<Player, int[]> resetJetonsToStartOfGameForReplay(final Game pGame)
+	{
+		final Map<Player, int[]> before = new java.util.LinkedHashMap<>();
+		if ((pGame.getMoneySystem() != Game.MONEY_LIBRE) || !isSmartphoneTrackedGame(pGame))
+			return before;
+		// Par identifiant plutôt que par instance : ne dépend pas de l'identité
+		// d'objet JPA entre Event.getPlayer() et Game.getPlayers().
+		final java.util.Set<Integer> joinedBeforeFirstTurn = new java.util.HashSet<>();
+		for (final Event event : pGame.getEvents())
+		{
+			if (event.getEvt() == EventType.TURN)
+				break;
+			if ((event.getEvt() == EventType.JOIN) && (event.getPlayer() != null))
+				joinedBeforeFirstTurn.add(event.getPlayer().getId());
+		}
+		final int startingJetons = pGame.computeStartingJetonsPerPlayer();
+		for (final Player p : pGame.getPlayers())
+		{
+			before.put(p, new int[] { p.getJetonWeak(), p.getJetonMedium(), p.getJetonStrong() });
+			p.setJetonWeak(joinedBeforeFirstTurn.contains(p.getId()) ? startingJetons : 0);
+			p.setJetonMedium(0);
+			p.setJetonStrong(0);
+		}
+		return before;
 	}
 
 	/** Même principe que {@link #computeMedian(List)}, pour une liste de {@code double} déjà triée. */
