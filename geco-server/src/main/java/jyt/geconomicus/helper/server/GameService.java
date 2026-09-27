@@ -36,6 +36,82 @@ public class GameService
 	}
 
 	/**
+	 * Verrou PAR PARTIE sérialisant toutes les opérations qui LISENT puis
+	 * RÉÉCRIVENT l'état partagé d'une partie (jetons des joueurs, pioche
+	 * {@code Game.smartphoneCardPileJson}, carrés, inventaires dérivés, masse
+	 * monétaire) - voir {@link #withGameLock}.
+	 * <p>
+	 * BUG CRITIQUE CONFIRMÉ ET CORRIGÉ (27/09/2026). Le risque était documenté
+	 * dans CLAUDE.md ("Connu, non corrigé" : validation puis écriture SANS
+	 * verrou) mais jamais observé. Enquête menée suite au retour utilisateur
+	 * (partie libre + smartphone, 2 joueurs, 8 tours : "Montre mécanique x4"
+	 * jamais encaissée, trois modèles "Très forte" à x5) - REPRODUIT en HTTP
+	 * réel sur le jar non corrigé (84fd145) : 100 manches de 4 rachats
+	 * /trade-offers/{code}/redeem tirés SIMULTANÉMENT pour un même acheteur
+	 * (3 joueurs) :
+	 * <ul>
+	 * <li>jetons : deux achats concurrents lisent le même solde puis
+	 * l'écrasent chacun avec SA valeur - somme des jetons des joueurs modifiée
+	 * dans 52 manches sur 100 (jusqu'à +31 073 unités créées de rien) ;</li>
+	 * <li>carrés : deux checkAndCashInSquares concurrents pour le même joueur
+	 * voient le même carré et l'encaissent chacun (666 carrés du même modèle
+	 * pour le même joueur à moins de 50 ms d'intervalle), puis réécrivent
+	 * chacun la pioche entière (JSON) d'après leur propre lecture - des cartes
+	 * sont recréées : jusqu'à 22 exemplaires d'un modèle qui n'en compte que
+	 * 5, 15 modèles hors conservation.</li>
+	 * </ul>
+	 * Les mêmes 100 manches tirées SÉQUENTIELLEMENT sur ce même jar : 0 dérive,
+	 * conservation exacte - c'est bien la concurrence qui cassait tout. Avec ce
+	 * verrou, 100 manches simultanées : 0 dérive, conservation exacte, jamais
+	 * plus de 5 exemplaires d'un modèle (voir GameServiceConcurrentRedeemTest,
+	 * vérifié échouant sans ce correctif).
+	 * <p>
+	 * ATTENTION, ce correctif n'explique PAS à lui seul la capture d'écran de
+	 * l'utilisateur : la même situation (un joueur détenant les 15 cartes "Très
+	 * forte" d'une partie à 2 joueurs, carrés restant à x4/x5) se reproduit SANS
+	 * AUCUNE concurrence, par épuisement des petites pioches (3 modèles x 5
+	 * exemplaires par niveau à 2 joueurs) - les carrés ne peuvent alors plus
+	 * rien promouvoir (voir checkAndCashInSquares, garde-fous "niveau dégénéré"
+	 * et "une révolution par appel"). Décision de règle soumise à l'utilisateur,
+	 * non tranchée ici.
+	 * <p>
+	 * Correctif volontairement simple : un {@link java.util.concurrent.locks.ReentrantLock}
+	 * par partie, en mémoire - suffisant puisque la base H2 est un fichier
+	 * embarqué ouvert par UN SEUL processus (voir persistence.xml). Chaque
+	 * opération verrouillée ouvre sa PROPRE EntityManager après avoir obtenu le
+	 * verrou et valide (commit) avant de le rendre : EclipseLink (4.0.4, cache
+	 * partagé par défaut, aucun réglage de cache dans persistence.xml) fusionne
+	 * les changements validés dans son cache partagé pendant le commit
+	 * lui-même, et aucune écriture ne le contourne (pas de SQL natif en
+	 * écriture hors BACKUP) - le détenteur suivant voit donc toujours l'état
+	 * validé par le précédent. Réentrant parce que checkAndCashInSquares appelle
+	 * recordEvent (rupture technologique) sous le même verrou. Deux parties
+	 * différentes ne se bloquent jamais entre elles.
+	 */
+	private final java.util.concurrent.ConcurrentHashMap<Integer, java.util.concurrent.locks.ReentrantLock> mGameLocks = new java.util.concurrent.ConcurrentHashMap<>();
+
+	@FunctionalInterface
+	private interface GameLockedBody<T, E extends Exception>
+	{
+		T run() throws E;
+	}
+
+	private <T, E extends Exception> T withGameLock(final int pGameId, final GameLockedBody<T, E> pBody) throws E
+	{
+		final java.util.concurrent.locks.ReentrantLock lock = mGameLocks.computeIfAbsent(pGameId,
+				k -> new java.util.concurrent.locks.ReentrantLock());
+		lock.lock();
+		try
+		{
+			return pBody.run();
+		}
+		finally
+		{
+			lock.unlock();
+		}
+	}
+
+	/**
 	 * Exposé pour {@link BackupService}, qui a besoin d'émettre une requête SQL
 	 * native (BACKUP TO) - pas de raison de dupliquer la connexion à la base
 	 * plutôt que de réutiliser celle déjà créée pour GameService.
@@ -118,8 +194,24 @@ public class GameService
 	{
 		if (pGame.getTurnNumber() == 0)
 			return false; // pas encore démarrée
-		if (pGame.getTurnNumber() >= pGame.getNbTurnsPlanned())
-			return false; // dernier tour déjà joué
+		// BUG TROUVÉ ET CORRIGÉ (27/09/2026, campagne de test 2/4/10 joueurs x 12
+		// tours, en HTTP réel) : ce test était ">=" - or turnNumber est le numéro
+		// du tour EN COURS (le tout premier TURN le fait passer de 0 à 1, voir
+		// btnStartGame/btnStartNewTurn dans app.js, qui refuse justement d'aller
+		// au-delà de nbTurnsPlanned). Pendant TOUT le dernier tour prévu
+		// (turnNumber == nbTurnsPlanned), les téléphones recevaient donc
+		// tradingAllowed = false et "Les échanges sont actuellement en pause." -
+		// mesuré : 0 échange possible au tour 12/12 (idem 3/3 en partie courte),
+		// alors que le chrono animateur tournait normalement. Corrigé : bloqué
+		// seulement au-delà du dernier tour, ou dès que l'animateur a enregistré
+		// la fin de partie (END, bouton "Terminer la partie" - peut arriver avant
+		// l'expiration du chrono). L'expiration naturelle du chrono du dernier
+		// tour reste gérée plus bas, comme pour tous les autres tours.
+		if (pGame.getTurnNumber() > pGame.getNbTurnsPlanned())
+			return false; // au-delà du dernier tour (ne devrait pas arriver)
+		if ((pGame.getEvents() != null)
+				&& pGame.getEvents().stream().anyMatch(e -> e.getEvt() == jyt.geconomicus.helper.Event.EventType.END))
+			return false; // partie terminée par l'animateur
 		if (pGame.getPausedRemainingSeconds() != null)
 			return false; // minuteur explicitement mis en pause par l'animateur
 		// Remonté par l'utilisateur (02/09/2026) : "lorsque le compte à rebours
@@ -283,7 +375,16 @@ public class GameService
 		}
 	}
 
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026) - l'événement
+	// JOIN appliqué ci-dessous fait un lecture-modification-écriture de
+	// Game.moneyMass (Event.applyEvent, cas JOIN : changeMoneyMass), exposé à la
+	// même perte de mise à jour qu'un TURN/une transaction concurrente.
 	public Player addPlayer(final int pGameId, final String pName)
+	{
+		return withGameLock(pGameId, () -> addPlayerUnlocked(pGameId, pName));
+	}
+
+	private Player addPlayerUnlocked(final int pGameId, final String pName)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -326,7 +427,19 @@ public class GameService
 	 * en le voyant déjà à l'écran, mais utile ici où deux téléphones pourraient
 	 * saisir le même prénom sans le savoir.
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026) - en plus du
+	// JOIN (voir addPlayer ci-dessus), la vérification "prénom déjà pris" puis
+	// l'insertion forment un contrôle-puis-écriture : plusieurs téléphones qui
+	// s'inscrivent au même instant (cas typique en début de partie) pourraient
+	// sinon passer tous deux le contrôle avec le même prénom.
 	public Player joinAsPlayer(final int pGameId, final String pName, final Integer pDeclaredAge,
+			final String pFavoriteColor, final String pAvatarConfigJson) throws DuplicatePlayerNameException
+	{
+		return withGameLock(pGameId,
+				() -> joinAsPlayerUnlocked(pGameId, pName, pDeclaredAge, pFavoriteColor, pAvatarConfigJson));
+	}
+
+	private Player joinAsPlayerUnlocked(final int pGameId, final String pName, final Integer pDeclaredAge,
 			final String pFavoriteColor, final String pAvatarConfigJson) throws DuplicatePlayerNameException
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -375,7 +488,22 @@ public class GameService
 	 * Enregistre un nouvel événement (crédit, remboursement, mort, nouveau tour, etc.)
 	 * et déclenche son application sur l'état du jeu (mêmes règles que Swing/CreditActionDialog).
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public Event recordEvent(final int pGameId, final String pEventTypeChar, final Integer pPlayerId,
+			final int pPrincipal, final int pInterest, final int pWeakCards, final int pMediumCards,
+			final int pStrongCards, final Integer pCounterpartyPlayerId, final int pGoodsFromPlayer,
+			final int pGoodsFromCounterparty, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
+			final int pWeakGoodsFromCounterparty, final int pMediumGoodsFromCounterparty,
+			final int pStrongGoodsFromCounterparty)
+			throws PlayerNotFoundException
+	{
+		return withGameLock(pGameId, () -> recordEventUnlocked(pGameId, pEventTypeChar, pPlayerId, pPrincipal,
+				pInterest, pWeakCards, pMediumCards, pStrongCards, pCounterpartyPlayerId, pGoodsFromPlayer,
+				pGoodsFromCounterparty, pWeakCoins, pMediumCoins, pStrongCoins, pWeakGoodsFromCounterparty,
+				pMediumGoodsFromCounterparty, pStrongGoodsFromCounterparty));
+	}
+
+	private Event recordEventUnlocked(final int pGameId, final String pEventTypeChar, final Integer pPlayerId,
 			final int pPrincipal, final int pInterest, final int pWeakCards, final int pMediumCards,
 			final int pStrongCards, final Integer pCounterpartyPlayerId, final int pGoodsFromPlayer,
 			final int pGoodsFromCounterparty, final int pWeakCoins, final int pMediumCoins, final int pStrongCoins,
@@ -639,7 +767,19 @@ public class GameService
 	 * (ou à un futur écran animateur) de refléter le changement de main dans
 	 * son inventaire, cette méthode ne fait qu'en garder la trace.
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public Transaction recordTransaction(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
+			final String pCardTypeId, final String pCardLevel, final int pWeakCoins, final int pMediumCoins,
+			final int pStrongCoins, final int pBuyerWeakGoods, final int pBuyerMediumGoods,
+			final int pBuyerStrongGoods, final String pNonce, final long pExpiresAtEpochMs)
+			throws PlayerNotFoundException
+	{
+		return withGameLock(pGameId, () -> recordTransactionUnlocked(pGameId, pSellerPlayerId, pBuyerPlayerId,
+				pCardTypeId, pCardLevel, pWeakCoins, pMediumCoins, pStrongCoins, pBuyerWeakGoods, pBuyerMediumGoods,
+				pBuyerStrongGoods, pNonce, pExpiresAtEpochMs));
+	}
+
+	private Transaction recordTransactionUnlocked(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
 			final String pCardTypeId, final String pCardLevel, final int pWeakCoins, final int pMediumCoins,
 			final int pStrongCoins, final int pBuyerWeakGoods, final int pBuyerMediumGoods,
 			final int pBuyerStrongGoods, final String pNonce, final long pExpiresAtEpochMs)
@@ -675,6 +815,44 @@ public class GameService
 				throw new IllegalArgumentException("Ce QR code a déjà été utilisé."); //$NON-NLS-1$
 			if (System.currentTimeMillis() > pExpiresAtEpochMs)
 				throw new IllegalArgumentException("Ce QR code a expiré, demandez-en un nouveau au vendeur."); //$NON-NLS-1$
+			// BUGS CONFIRMÉS ET CORRIGÉS (27/09/2026, campagne de test menée suite
+			// au retour utilisateur "carré non encaissé, modèles à x5") - même
+			// classe de défaut que celui corrigé le 18/09/2026 pour recordCardSwap
+			// (niveaux déclarés par le client jamais revérifiés), jamais appliqué
+			// jusqu'ici à l'achat contre jetons (dette/libre + smartphone) :
+			// 1) Propriété du vendeur jamais revérifiée : un vendeur peut afficher
+			//    PLUSIEURS QR successifs pour la même carte (fermer puis rouvrir
+			//    l'écran de vente - chaque code reste valable ~90 s, aucune route
+			//    ne l'annule). Reproduit en HTTP réel, SANS concurrence (jar
+			//    84fd145) : vendeur à 1 exemplaire, 2 QR, 2 rachats acceptés (201) -
+			//    le total de ce modèle détenu par les joueurs est passé de 3 à 4 (une
+			//    carte créée à partir de rien, le compte négatif du vendeur étant
+			//    ensuite masqué par computePlayerCardInventory). Avec ce correctif :
+			//    le rachat en trop est refusé, total inchangé.
+			//    Scénario réaliste sans aucun client modifié : "le QR ne passe pas,
+			//    je le rouvre" pendant qu'un premier acheteur est déjà sur l'écran
+			//    de confirmation.
+			// 2) Niveau (donc PRIX en monnaie libre) pris tel quel depuis le
+			//    client : reproduit en HTTP réel, une carte faible déclarée
+			//    "moyenne" a été payée 6 unités au lieu de 3 (DU = 6) et enregistrée
+			//    comme "moyenne". Avec ce correctif : 3 unités, niveau "faible".
+			// Correction : pour une partie suivie par smartphone (pioche partagée
+			// présente ET vendeur doté d'une main de départ - jamais en mode
+			// classique, inchangé), le niveau est désormais dérivé de la pioche de
+			// la partie (findLevelOfCard, comme recordCardSwap) et le vendeur doit
+			// détenir au moins un exemplaire de la carte À CET INSTANT - vérifié
+			// sous le verrou de partie (voir withGameLock), donc sans course
+			// possible entre deux rachats concurrents du même exemplaire.
+			String cardLevel = pCardLevel;
+			if ((game.getSmartphoneCardPileJson() != null) && (seller.getStartingCardsJson() != null))
+			{
+				final String serverLevel = resolveCardLevelFromPile(game, pCardTypeId);
+				if (serverLevel == null)
+					throw new IllegalArgumentException("Carte inconnue pour cette partie."); //$NON-NLS-1$
+				cardLevel = serverLevel;
+				if (computePlayerCardInventory(em, pGameId, pSellerPlayerId).getOrDefault(pCardTypeId, 0) <= 0)
+					throw new IllegalArgumentException("Vente refusée : cette carte n'est plus dans les mains du vendeur."); //$NON-NLS-1$
+			}
 			final int price = pWeakCoins + (2 * pMediumCoins) + (4 * pStrongCoins);
 			// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 07/09/2026) :
 			// "il faut que chaque jeton en circulation puisse être traçable et à
@@ -699,7 +877,7 @@ public class GameService
 			int actualStrongChange = 0;
 			if (game.getMoneySystem() == Game.MONEY_LIBRE)
 			{
-				final int requiredValue = levelValue(game, pCardLevel);
+				final int requiredValue = levelValue(game, cardLevel);
 				final int buyerValue = buyer.getJetonWeak() + (2 * buyer.getJetonMedium())
 						+ (4 * buyer.getJetonStrong());
 				// Remonté par l'utilisateur (07/09/2026) : "il faut que l'acheteur
@@ -737,7 +915,7 @@ public class GameService
 					throw new IllegalArgumentException("Solde insuffisant pour cet achat."); //$NON-NLS-1$
 			}
 			em.getTransaction().begin();
-			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, pCardLevel,
+			final Transaction transaction = new Transaction(game, seller, buyer, pCardTypeId, cardLevel,
 					actualWeakCoins, actualMediumCoins, actualStrongCoins, actualWeakChange, actualMediumChange,
 					actualStrongChange, pBuyerWeakGoods, pBuyerMediumGoods, pBuyerStrongGoods, pNonce);
 			em.persist(transaction);
@@ -805,11 +983,11 @@ public class GameService
 			// l'inverse pour l'acheteur.
 			if (game.getMoneySystem() == Game.MONEY_TROC)
 			{
-				applyGoodsLevelDelta(seller, pCardLevel, -1);
+				applyGoodsLevelDelta(seller, cardLevel, -1);
 				applyGoodsLevelDelta(seller, "faible", pBuyerWeakGoods); //$NON-NLS-1$
 				applyGoodsLevelDelta(seller, "moyenne", pBuyerMediumGoods); //$NON-NLS-1$
 				applyGoodsLevelDelta(seller, "forte", pBuyerStrongGoods); //$NON-NLS-1$
-				applyGoodsLevelDelta(buyer, pCardLevel, 1);
+				applyGoodsLevelDelta(buyer, cardLevel, 1);
 				applyGoodsLevelDelta(buyer, "faible", -pBuyerWeakGoods); //$NON-NLS-1$
 				applyGoodsLevelDelta(buyer, "moyenne", -pBuyerMediumGoods); //$NON-NLS-1$
 				applyGoodsLevelDelta(buyer, "forte", -pBuyerStrongGoods); //$NON-NLS-1$
@@ -866,7 +1044,17 @@ public class GameService
 	 * Transaction.isCardSwap()) - jamais un champ Player mis à jour
 	 * séparément, qui risquerait de diverger.
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public Transaction recordCardSwap(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
+			final String pCardTypeId, final String pCardLevel, final String pOfferedCardTypeId,
+			final String pOfferedCardLevel, final String pNonce, final long pExpiresAtEpochMs)
+			throws PlayerNotFoundException
+	{
+		return withGameLock(pGameId, () -> recordCardSwapUnlocked(pGameId, pSellerPlayerId, pBuyerPlayerId,
+				pCardTypeId, pCardLevel, pOfferedCardTypeId, pOfferedCardLevel, pNonce, pExpiresAtEpochMs));
+	}
+
+	private Transaction recordCardSwapUnlocked(final int pGameId, final int pSellerPlayerId, final int pBuyerPlayerId,
 			final String pCardTypeId, final String pCardLevel, final String pOfferedCardTypeId,
 			final String pOfferedCardLevel, final String pNonce, final long pExpiresAtEpochMs)
 			throws PlayerNotFoundException
@@ -1512,7 +1700,16 @@ public class GameService
 	 * exactement comme une vraie mise en place ne se refait pas en cours de
 	 * partie.
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public void captureDeckPlayerCountIfNeeded(final int pGameId)
+	{
+		withGameLock(pGameId, () -> {
+			captureDeckPlayerCountIfNeededUnlocked(pGameId);
+			return null;
+		});
+	}
+
+	private void captureDeckPlayerCountIfNeededUnlocked(final int pGameId)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -1584,7 +1781,17 @@ public class GameService
 	 *            le consulte jamais directement, voir la règle déjà en place
 	 *            pour AppSettings).
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public void dealStartingHandsForLibreIfNeeded(final int pGameId,
+			final java.util.Map<String, List<String>> pAvailableCardIdsByLevel)
+	{
+		withGameLock(pGameId, () -> {
+			dealStartingHandsForLibreIfNeededUnlocked(pGameId, pAvailableCardIdsByLevel);
+			return null;
+		});
+	}
+
+	private void dealStartingHandsForLibreIfNeededUnlocked(final int pGameId,
 			final java.util.Map<String, List<String>> pAvailableCardIdsByLevel)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -1828,7 +2035,13 @@ public class GameService
 	 * qu'il les tirait déjà identiques à 3 cartes déjà en main) - la boucle
 	 * protège contre ce cas, même rare.
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public java.util.List<CardSquareEvent> checkAndCashInSquares(final int pGameId, final int pPlayerId)
+	{
+		return withGameLock(pGameId, () -> checkAndCashInSquaresUnlocked(pGameId, pPlayerId));
+	}
+
+	private java.util.List<CardSquareEvent> checkAndCashInSquaresUnlocked(final int pGameId, final int pPlayerId)
 	{
 		final java.util.List<CardSquareEvent> cashedInThisCall = new java.util.ArrayList<>();
 		// FILET DE SÉCURITÉ ABSOLU (remonté par l'utilisateur, 06/09/2026, preuve
@@ -2196,6 +2409,27 @@ public class GameService
 		return null;
 	}
 
+	// Variante de findLevelOfCard lisant directement la pioche JSON de la partie
+	// (27/09/2026, utilisée par recordTransaction pour ne plus jamais faire
+	// confiance au niveau déclaré par le client) - null si la pioche est
+	// absente/illisible ou si ce modèle n'y figure pas.
+	private String resolveCardLevelFromPile(final Game pGame, final String pCardTypeId)
+	{
+		if ((pGame.getSmartphoneCardPileJson() == null) || (pCardTypeId == null))
+			return null;
+		try
+		{
+			return findLevelOfCard(new com.fasterxml.jackson.databind.ObjectMapper().readValue(pGame.getSmartphoneCardPileJson(),
+					new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.Map<String, Integer>>>()
+					{
+					}), pCardTypeId);
+		}
+		catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+		{
+			return null;
+		}
+	}
+
 	/**
 	 * Portage Java EXACT de computeDuBreakdown() côté client (app.js) -
 	 * remonté par l'utilisateur (08/09/2026) : "il faut changer la règle de
@@ -2470,7 +2704,16 @@ public class GameService
 	 * Swing originale : réinitialise tout à zéro puis rejoue chaque événement restant
 	 * dans l'ordre.
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public void deleteEvent(final int pGameId, final int pEventId)
+	{
+		withGameLock(pGameId, () -> {
+			deleteEventUnlocked(pGameId, pEventId);
+			return null;
+		});
+	}
+
+	private void deleteEventUnlocked(final int pGameId, final int pEventId)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -2516,7 +2759,17 @@ public class GameService
 	 * propre personnage une fois inscrit (aucune route publique ne le
 	 * permet).
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public void editEvent(final int pGameId, final int pEventId, final int pPrincipal, final int pInterest,
+			final java.util.Date pTstamp, final String pName)
+	{
+		withGameLock(pGameId, () -> {
+			editEventUnlocked(pGameId, pEventId, pPrincipal, pInterest, pTstamp, pName);
+			return null;
+		});
+	}
+
+	private void editEventUnlocked(final int pGameId, final int pEventId, final int pPrincipal, final int pInterest,
 			final java.util.Date pTstamp, final String pName)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
@@ -2676,7 +2929,13 @@ public class GameService
 		return deathSchedule;
 	}
 
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public boolean undoLastEvent(final int pGameId)
+	{
+		return withGameLock(pGameId, () -> undoLastEventUnlocked(pGameId));
+	}
+
+	private boolean undoLastEventUnlocked(final int pGameId)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -2711,7 +2970,16 @@ public class GameService
 	 * partie avant de retirer le joueur lui-même, pour ne pas laisser d'événement
 	 * orphelin en base.
 	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
 	public void deletePlayer(final int pGameId, final int pPlayerId)
+	{
+		withGameLock(pGameId, () -> {
+			deletePlayerUnlocked(pGameId, pPlayerId);
+			return null;
+		});
+	}
+
+	private void deletePlayerUnlocked(final int pGameId, final int pPlayerId)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -2832,7 +3100,15 @@ public class GameService
 			{
 				final java.util.Date base = game.getTurnStartedAt() == null ? new java.util.Date()
 						: game.getTurnStartedAt();
-				game.setTurnStartedAt(new java.util.Date(base.getTime() - pDeltaSeconds * 1000L));
+				// BUG TROUVÉ ET CORRIGÉ (27/09/2026, campagne de test en HTTP réel) :
+				// c'était "base - delta" - temps restant = durée - (maintenant -
+				// turnStartedAt), reculer turnStartedAt RACCOURCIT donc le tour :
+				// mesuré, "+30 s" (seul appel existant, btnTimerExtend dans app.js)
+				// faisait passer le temps restant de X à X - 30 s, côté chrono
+				// animateur ET côté coupure des échanges smartphone
+				// (isTradingAllowed). Présent depuis l'import initial (53b3ebf), la
+				// branche "en pause" ci-dessus ajoutait, elle, correctement.
+				game.setTurnStartedAt(new java.util.Date(base.getTime() + pDeltaSeconds * 1000L));
 			}
 			em.getTransaction().commit();
 			return game;

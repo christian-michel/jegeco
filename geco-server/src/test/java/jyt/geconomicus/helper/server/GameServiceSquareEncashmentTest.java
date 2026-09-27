@@ -88,6 +88,43 @@ class GameServiceSquareEncashmentTest
 		return new int[] { gameId, p0, p1 };
 	}
 
+	/**
+	 * Place une carte chez l'acheteur via une vente depuis le vendeur - la
+	 * technique de ce fichier (voir setUpGameWithTwoPlayers). Adapté le
+	 * 27/09/2026 : recordTransaction vérifie désormais que le vendeur DÉTIENT
+	 * la carte au moment de la vente (bug "même carte vendue via plusieurs QR",
+	 * reproduit en HTTP réel - voir le commentaire dans GameService). Ce fichier
+	 * faisait jusqu'ici vendre par p0 des cartes qu'il n'avait jamais eues
+	 * (précisément le trou corrigé) : le vendeur reçoit donc d'abord cet
+	 * exemplaire dans sa dotation (Player.startingCardsJson) - exactement la
+	 * carte "fabriquée" que l'ancienne technique créait implicitement, sans rien
+	 * changer d'autre aux scénarios testés.
+	 */
+	private void sell(final int pGameId, final int pSeller, final int pBuyer, final String pCardId, final String pLevel,
+			final String pNonce) throws Exception
+	{
+		final jakarta.persistence.EntityManager em = sEmf.createEntityManager();
+		try
+		{
+			em.getTransaction().begin();
+			final jyt.geconomicus.helper.Player seller = em.find(jyt.geconomicus.helper.Player.class, pSeller);
+			final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			final Map<String, Integer> hand = mapper.readValue(seller.getStartingCardsJson(),
+					new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, Integer>>()
+					{
+					});
+			hand.merge(pCardId, 1, Integer::sum);
+			seller.setStartingCardsJson(mapper.writeValueAsString(hand));
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+		sService.recordTransaction(pGameId, pSeller, pBuyer, pCardId, pLevel, 0, 0, 0, 0, 0, 0, pNonce,
+				System.currentTimeMillis() + 60_000);
+	}
+
 	@Test
 	void testTopLevelSquareLoopsBackToWeakInsteadOfBeingStuck() throws Exception
 	{
@@ -104,8 +141,8 @@ class GameServiceSquareEncashmentTest
 		// troc), ce qui permet de construire ce scénario de façon
 		// déterministe sans dépendre d'une cascade aléatoire.
 		for (int i = 0; i < 4; i++)
-			sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-					"tresforte-" + gameId + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
+			sell(gameId, p0, p1, "tresforte_0", "tresforte", //$NON-NLS-1$ //$NON-NLS-2$
+					"tresforte-" + gameId + "-" + i); //$NON-NLS-1$
 
 		// Au moins 1 carré attendu (le carré tresforte lui-même) - PAS
 		// forcément exactement 1 : p1 détient aussi sa VRAIE main de départ
@@ -156,11 +193,11 @@ class GameServiceSquareEncashmentTest
 		// rotation des valeurs, ce scénario exact laissait "forte_0"
 		// définitivement bloqué (voir le commentaire de tête de fichier).
 		for (int i = 0; i < 4; i++)
-			sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-					"tresforte-" + gameId + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
+			sell(gameId, p0, p1, "tresforte_0", "tresforte", //$NON-NLS-1$ //$NON-NLS-2$
+					"tresforte-" + gameId + "-" + i); //$NON-NLS-1$
 		for (int i = 0; i < 4; i++)
-			sService.recordTransaction(gameId, p0, p1, "forte_0", "forte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-					"forte-" + gameId + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$
+			sell(gameId, p0, p1, "forte_0", "forte", //$NON-NLS-1$ //$NON-NLS-2$
+					"forte-" + gameId + "-" + i); //$NON-NLS-1$
 
 		sService.checkAndCashInSquares(gameId, p1);
 
@@ -229,8 +266,8 @@ class GameServiceSquareEncashmentTest
 		for (int cycle = 0; cycle < 6; cycle++)
 		{
 			for (int i = 0; i < 4; i++)
-				sService.recordTransaction(gameId, p0, p1, "moyenne_0", "moyenne", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-						"n" + gameId + "-" + (nonce++), System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+				sell(gameId, p0, p1, "moyenne_0", "moyenne", //$NON-NLS-1$ //$NON-NLS-2$
+						"n" + gameId + "-" + (nonce++)); //$NON-NLS-1$ //$NON-NLS-2$
 			setupSquares.addAll(sService.checkAndCashInSquares(gameId, p1));
 		}
 		final boolean moyenneDegeneratedDuringSetup = setupSquares.stream()
@@ -265,11 +302,11 @@ class GameServiceSquareEncashmentTest
 		// d'itération : exactement la situation qui, en vrai playtest,
 		// affamait silencieusement des carrés entiers.
 		for (int i = 0; i < 4; i++)
-			sService.recordTransaction(gameId, p0, p1, "moyenne_0", "moyenne", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-					"n" + gameId + "-" + (nonce++), System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+			sell(gameId, p0, p1, "moyenne_0", "moyenne", //$NON-NLS-1$ //$NON-NLS-2$
+					"n" + gameId + "-" + (nonce++)); //$NON-NLS-1$ //$NON-NLS-2$
 		for (int i = 0; i < 4; i++)
-			sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-					"n" + gameId + "-" + (nonce++), System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+			sell(gameId, p0, p1, "tresforte_0", "tresforte", //$NON-NLS-1$ //$NON-NLS-2$
+					"n" + gameId + "-" + (nonce++)); //$NON-NLS-1$ //$NON-NLS-2$
 
 		final List<CardSquareEvent> squares = sService.checkAndCashInSquares(gameId, p1);
 
@@ -311,8 +348,8 @@ class GameServiceSquareEncashmentTest
 		for (int rev = 1; rev <= 4; rev++)
 		{
 			for (int i = 0; i < 4; i++)
-				sService.recordTransaction(gameId, p0, p1, "tresforte_0", "tresforte", 0, 0, 0, 0, 0, 0, //$NON-NLS-1$ //$NON-NLS-2$
-						"rev" + gameId + "-" + rev + "-" + i, System.currentTimeMillis() + 60_000); //$NON-NLS-1$ //$NON-NLS-2$
+				sell(gameId, p0, p1, "tresforte_0", "tresforte", //$NON-NLS-1$ //$NON-NLS-2$
+						"rev" + gameId + "-" + rev + "-" + i); //$NON-NLS-1$ //$NON-NLS-2$
 			sService.checkAndCashInSquares(gameId, p1);
 		}
 
