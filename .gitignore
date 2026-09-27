@@ -56,3 +56,12 @@ gecoJPA-server-test.log
 # Worktrees Git créés par des agents Claude Code (sous-tâches isolées) -
 # infrastructure de session, jamais du contenu du dépôt.
 /.claude/worktrees/
+
+# Trouvé et supprimé le 27/09/2026 (seconde relecture indépendante de la
+# campagne de test 2/4/10 joueurs) : 1836 fichiers (27 Mo, jsdom/undici et
+# leurs dépendances) commités par erreur depuis le commit 486a029 DANS le
+# dossier servi publiquement par le serveur web (aucun package.json dans
+# tout le dépôt n'en dépend, aucune page HTML/JS ne les charge - confirmé
+# avant suppression) - embarqués dans le jar et servis sans authentification
+# à qui en devine le chemin, pour un contenu que rien n'utilise jamais.
+/geco-server/src/main/resources/public/node_modules/

@@ -1053,8 +1053,12 @@ public class GecoServer
 			ctx.json(GameDetailDto.from(game));
 		});
 
-		// Prolonge le tour en cours (bouton "+30s" du minuteur) : recule l'horodatage de
-		// départ du tour, ce qui allonge le temps restant pour tous les clients connectés.
+		// Prolonge le tour en cours (bouton "+30s" du minuteur) : avance l'horodatage
+		// de départ du tour, ce qui allonge le temps restant pour tous les clients
+		// connectés (commentaire corrigé le 27/09/2026, seconde relecture
+		// indépendante - il disait par erreur "recule", exactement le bug qui
+		// faisait RACCOURCIR le tour au lieu de l'allonger, voir GameService.
+		// extendCurrentTurn).
 		pApp.post("/api/games/{id}/turn/extend", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			requireGamePin(ctx, id);
@@ -1697,7 +1701,7 @@ public class GecoServer
 					if (buyerBalance < previewPrice)
 						throw new BadRequestResponse("Solde insuffisant pour cet achat."); //$NON-NLS-1$
 					if (!mGameService.canAffordLibrePurchase(id, req.buyerPlayerId(), preview.sellerPlayerId(),
-							preview.cardLevel()))
+							preview.cardTypeId(), preview.cardLevel()))
 						throw new BadRequestResponse("Impossible de rendre la monnaie pour cet achat."); //$NON-NLS-1$
 				}
 				else

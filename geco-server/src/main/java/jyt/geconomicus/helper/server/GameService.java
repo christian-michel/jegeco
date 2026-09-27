@@ -802,6 +802,27 @@ public class GameService
 				throw new PlayerNotFoundException(String.valueOf(pBuyerPlayerId));
 			if (seller.equals(buyer))
 				throw new IllegalArgumentException("Le vendeur et l'acheteur ne peuvent pas être le même joueur."); //$NON-NLS-1$
+			// BUG TROUVÉ ET CORRIGÉ (27/09/2026, seconde relecture indépendante de
+			// la campagne de test) : jusqu'ici, RIEN n'empêchait un achat/une vente
+			// impliquant un joueur déjà INACTIF (mort sans renaissance en cours,
+			// ou sorti via QUIT/l'assistant de fin de partie) - fenêtre ouverte
+			// précisément par le correctif du même jour sur isTradingAllowed (voir
+			// plus haut) : avant lui, le DERNIER tour bloquait TOUS les échanges
+			// pendant que l'assistant enregistrait les QUIT de fin de partie,
+			// masquant ce trou ; une fois les échanges réautorisés sur le dernier
+			// tour, un joueur pouvait continuer à acheter/vendre après avoir déjà
+			// été sorti. Reproduit en HTTP réel : un joueur rendu inactif (QUIT)
+			// achetait quand même une carte (201), ses jetons changeant après que
+			// son solde de sortie avait déjà été enregistré. Le bouton animateur
+			// "Fin de tour" (app.js) n'arrête que le chrono affiché à l'écran de
+			// l'animateur, jamais le serveur lui-même - cette vérification est
+			// donc la protection qui compte réellement. Un joueur en RENAISSANCE
+			// (mort puis remis en jeu) redevient actif normalement, donc jamais
+			// bloqué par cette vérification.
+			if (!seller.isActive())
+				throw new IllegalArgumentException("Ce joueur n'est plus actif dans la partie."); //$NON-NLS-1$
+			if (!buyer.isActive())
+				throw new IllegalArgumentException("Ce joueur n'est plus actif dans la partie."); //$NON-NLS-1$
 			// Protection anti-rejeu du QR autonome (voir Transaction.java) : le
 			// nonce est généré côté client par le vendeur, jamais par le serveur -
 			// on se contente donc ici de vérifier qu'il n'a encore jamais servi,
@@ -837,14 +858,27 @@ public class GameService
 			//    "moyenne" a été payée 6 unités au lieu de 3 (DU = 6) et enregistrée
 			//    comme "moyenne". Avec ce correctif : 3 unités, niveau "faible".
 			// Correction : pour une partie suivie par smartphone (pioche partagée
-			// présente ET vendeur doté d'une main de départ - jamais en mode
-			// classique, inchangé), le niveau est désormais dérivé de la pioche de
-			// la partie (findLevelOfCard, comme recordCardSwap) et le vendeur doit
-			// détenir au moins un exemplaire de la carte À CET INSTANT - vérifié
-			// sous le verrou de partie (voir withGameLock), donc sans course
-			// possible entre deux rachats concurrents du même exemplaire.
+			// présente - jamais en mode classique, inchangé), le niveau est
+			// désormais dérivé de la pioche de la partie (findLevelOfCard, comme
+			// recordCardSwap) et le vendeur doit détenir au moins un exemplaire de
+			// la carte À CET INSTANT - vérifié sous le verrou de partie (voir
+			// withGameLock), donc sans course possible entre deux rachats
+			// concurrents du même exemplaire.
+			// BUG TROUVÉ ET CORRIGÉ (27/09/2026, seconde relecture indépendante) :
+			// la condition d'origine exigeait EN PLUS que le VENDEUR ait
+			// startingCardsJson non nul - or un joueur qui rejoint via
+			// joinAsPlayer() (le flux "scanner le QR pour rejoindre en cours de
+			// mise en place") ne reçoit jamais ce champ (voir joinAsPlayer, qui ne
+			// distribue aucune main) tant qu'il n'est pas mort au moins une fois
+			// (seul dealFreshHandForPlayer le renseigne) - un tel vendeur
+			// échappait donc entièrement à cette vérification alors même que la
+			// partie a bien une pioche partagée. Seule la présence de la pioche
+			// PARTAGÉE (Game.smartphoneCardPileJson) fait foi ici, exactement le
+			// principe déjà établi pour checkAndCashInSquares/
+			// dealStartingHandsForLibreIfNeeded (voir CLAUDE.md, "pioche/carré/
+			// promotion PARTAGÉE") - jamais une donnée propre à UN joueur.
 			String cardLevel = pCardLevel;
-			if ((game.getSmartphoneCardPileJson() != null) && (seller.getStartingCardsJson() != null))
+			if (game.getSmartphoneCardPileJson() != null)
 			{
 				final String serverLevel = resolveCardLevelFromPile(game, pCardTypeId);
 				if (serverLevel == null)
@@ -1073,6 +1107,14 @@ public class GameService
 				throw new PlayerNotFoundException(String.valueOf(pBuyerPlayerId));
 			if (seller.equals(buyer))
 				throw new IllegalArgumentException("Le vendeur et l'acheteur ne peuvent pas être le même joueur."); //$NON-NLS-1$
+			// Même protection qu'ajoutée à recordTransaction ce même jour
+			// (27/09/2026, voir son commentaire détaillé) : un joueur déjà
+			// inactif (QUIT/mort sans renaissance) ne peut plus échanger, même en
+			// troc.
+			if (!seller.isActive())
+				throw new IllegalArgumentException("Ce joueur n'est plus actif dans la partie."); //$NON-NLS-1$
+			if (!buyer.isActive())
+				throw new IllegalArgumentException("Ce joueur n'est plus actif dans la partie."); //$NON-NLS-1$
 			// Même protection anti-rejeu que recordTransaction ci-dessus (le
 			// TradeOfferService côté appelant protège déjà contre une double
 			// rédemption du même code, celle-ci est une seconde protection
@@ -1251,8 +1293,19 @@ public class GameService
 	 * un message dédié à chaque cas est de toute façon donné plus tard par
 	 * recordTransaction elle-même, qui reste la seule à faire foi).
 	 */
+	// BUG TROUVÉ ET CORRIGÉ (27/09/2026, seconde relecture indépendante) : ce
+	// pré-contrôle (avant consommation du QR, voir son appelant dans
+	// GecoServer) faisait confiance au niveau DÉCLARÉ par l'offre du vendeur
+	// (pCardLevel) - jamais exploitable pour créer de la valeur (le VRAI
+	// niveau/prix est de toute façon revérifié dans recordTransaction, voir
+	// resolveCardLevelFromPile, depuis ce même jour), mais pouvait faire
+	// échouer ou réussir ce pré-contrôle sur le mauvais prix, gâchant
+	// inutilement un QR pour un achat qui aurait dû réussir (ou l'inverse).
+	// Ajout de pCardTypeId pour dériver le niveau depuis la pioche de la
+	// partie, exactement comme recordTransaction - jamais en mode classique
+	// (pas de pioche partagée), qui garde le niveau déclaré tel quel.
 	public boolean canAffordLibrePurchase(final int pGameId, final int pBuyerPlayerId, final int pSellerPlayerId,
-			final String pCardLevel)
+			final String pCardTypeId, final String pDeclaredCardLevel)
 	{
 		final EntityManager em = mEntityManagerFactory.createEntityManager();
 		try
@@ -1262,7 +1315,17 @@ public class GameService
 			final Game game = em.find(Game.class, pGameId);
 			if ((buyer == null) || (seller == null) || (game == null))
 				return false;
-			final int requiredValue = levelValue(game, pCardLevel);
+			// Même correctif que recordTransaction ce même jour (27/09/2026) : la
+			// présence de la pioche PARTAGÉE seule fait foi, jamais en plus une
+			// donnée propre au vendeur (voir son commentaire détaillé).
+			String cardLevel = pDeclaredCardLevel;
+			if (game.getSmartphoneCardPileJson() != null)
+			{
+				final String serverLevel = resolveCardLevelFromPile(game, pCardTypeId);
+				if (serverLevel != null)
+					cardLevel = serverLevel;
+			}
+			final int requiredValue = levelValue(game, cardLevel);
 			return findPaymentWithChange(buyer.getJetonWeak(), buyer.getJetonMedium(), buyer.getJetonStrong(),
 					seller.getJetonWeak(), seller.getJetonMedium(), seller.getJetonStrong(), requiredValue) != null;
 		}
@@ -2304,6 +2367,62 @@ public class GameService
 				final boolean isRevolution = !nextPileExhausted
 						&& LEVEL_ORDER.get(LEVEL_ORDER.size() - 1).equals(squareLevel);
 
+				// BUG TROUVÉ ET CORRIGÉ (27/09/2026, seconde relecture indépendante
+				// de la campagne de test 2/4/10 joueurs) : le repli dégénéré
+				// ci-dessous (promotedCardId == squareCardId, aucune VRAIE
+				// promotion - voir le commentaire détaillé plus bas) faisait
+				// DIFFUSER ce carré comme un VRAI carré (un message WebSocket
+				// "square", donc une animation "carré" rejouée sur le téléphone du
+				// joueur) alors que RIEN de significatif ne change pour lui (les 4
+				// cartes rendues puis re-piochées sont, par construction, le même
+				// modèle). Reproduit par le second agent de contrôle : un joueur
+				// qui concentre TOUT le stock d'un niveau (petite pioche à 2
+				// joueurs) déclenche ce cas à CHAQUE achat suivant - l'animation se
+				// rejoue donc à chaque transaction, pour un résultat strictement
+				// nul.
+				// PREMIÈRE TENTATIVE DE CORRECTIF, REVENUE EN ARRIÈRE : ne plus
+				// PERSISTER du tout le CardSquareEvent dans ce cas casse la
+				// conservation des cartes - computePlayerCardInventory REJOUE
+				// l'historique des CardSquareEvent (voir son commentaire de tête de
+				// méthode) pour reconstituer l'inventaire d'un joueur ; la pioche
+				// (JSON), elle, est bien mutée par le brassage ci-dessus - sans
+				// événement pour l'accompagner, les deux divergent. Confirmé par
+				// GameServiceFullGameSimulationTest (dette+smartphone) : total de
+				// cartes en circulation qui change après un échange (100 → 99).
+				// CORRECTIF RETENU : le CardSquareEvent EST TOUJOURS persisté
+				// (conservation intacte, comportement de calcul d'inventaire
+				// inchangé), seule sa présence dans la liste RETOURNÉE par cette
+				// méthode change - c'est CETTE liste que GecoServer parcourt pour
+				// diffuser "square" en WebSocket et déclencher l'animation
+				// smartphone (voir son appelant) ; l'exclure de la liste retournée
+				// suffit donc à faire disparaître l'animation fantôme sans toucher
+				// au calcul de conservation.
+				// DEUXIÈME CORRECTIF (même jour, en fiabilisant
+				// testDegeneratePromotionAtOneLevelNeverStarvesADifferentEligibleSquare) :
+				// la définition initiale (promotedCardId == squareCardId, repli
+				// STRICTEMENT sur le même modèle) manquait un cas tout aussi réel -
+				// nextPileExhausted vrai mais le repli tire un modèle DIFFÉRENT du
+				// même niveau (plusieurs modèles disponibles à ce niveau) : le
+				// joueur reste économiquement au même palier (aucune promotion vers
+				// un niveau supérieur), donc ce n'est PAS un progrès réel non plus -
+				// mais l'ancienne définition le laissait passer comme un "vrai"
+				// carré. Pire : reproduit par ce même test (aléatoire selon le
+				// mélange des modèles à la mise en place) - DEUX modèles d'un même
+				// niveau peuvent s'échanger indéfiniment ce rôle de "carré" l'un
+				// contre l'autre (jamais promotedCardId == squareCardId stricto
+				// sensu, toujours un modèle différent), consommant les 50
+				// itérations du filet de sécurité SANS jamais atteindre un autre
+				// carré, pourtant réellement éligible, plus loin dans l'ordre
+				// d'itération de l'inventaire. La bonne généralisation :
+				// nextPileExhausted À LUI SEUL signale déjà "aucun progrès
+				// économique réel" - c'est d'ailleurs exactement la condition qui
+				// rend isRevolution/isFirstBreakthrough faux plus haut, cohérence
+				// désormais totale entre les trois. Le niveau reste marqué dégénéré
+				// pour le reste de cet appel comme avant, exactement le même
+				// principe que le correctif du 22/09/2026 juste en dessous - qui
+				// s'applique donc maintenant dès la PREMIÈRE occurrence, même à
+				// modèle différent, au lieu d'attendre une répétition à l'identique.
+				final boolean noopSquare = nextPileExhausted;
 				final Player player = em.find(Player.class, pPlayerId);
 				em.getTransaction().begin();
 				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
@@ -2311,7 +2430,9 @@ public class GameService
 				// (comme smartphoneCardPileJson juste au-dessus), jamais avant
 				// begin() - un champ modifié sur une entité gérée hors
 				// transaction n'est pas garanti d'être persisté par ce provider
-				// JPA.
+				// JPA. Note : isRevolution est toujours faux quand noopSquare est
+				// vrai (les deux exigent !nextPileExhausted, mutuellement
+				// exclusifs avec ce repli).
 				if (isRevolution)
 				{
 					game.setRevolutionCount(game.getRevolutionCount() + 1);
@@ -2322,7 +2443,12 @@ public class GameService
 						isRevolution, game.getRevolutionCount());
 				em.persist(squareEvent);
 				em.getTransaction().commit();
-				cashedInThisCall.add(squareEvent);
+				// Toujours persisté ci-dessus (conservation) ; jamais retourné/
+				// diffusé quand c'est un no-op (voir le commentaire détaillé
+				// au-dessus) - c'est ici, et ici seulement, que la différence se
+				// joue.
+				if (!noopSquare)
+					cashedInThisCall.add(squareEvent);
 
 				if (isFirstBreakthrough)
 				{
@@ -2366,14 +2492,15 @@ public class GameService
 				// dégénéré gagnait la course à CHAQUE appel suivant - confirmé
 				// bloqué sur des DIZAINES d'appels consécutifs lors d'un vrai
 				// playtest, empêchant toute progression vers une révolution
-				// pourtant à portée de main. On encaisse bien CE carré (le joueur
-				// n'est jamais bloqué, intention du correctif du 05/09/2026
-				// préservée), et on exclut désormais ce niveau précis de la
-				// détection pour le RESTE de ce call (jamais toute la fonction) -
-				// la boucle continue à chercher un AUTRE modèle réellement
-				// encaissable, exactement le même principe que
-				// revolutionAlreadyHappenedThisCall plus haut.
-				if (promotedCardId.equals(squareCardId))
+				// pourtant à portée de main. La pioche brasse bien ce carré (le
+				// joueur n'est jamais bloqué, intention du correctif du 05/09/2026
+				// préservée - voir noopSquare plus haut, qui évite seulement de le
+				// signaler comme un VRAI carré depuis le 27/09/2026), et on exclut
+				// désormais ce niveau précis de la détection pour le RESTE de ce
+				// call (jamais toute la fonction) - la boucle continue à chercher
+				// un AUTRE modèle réellement encaissable, exactement le même
+				// principe que revolutionAlreadyHappenedThisCall plus haut.
+				if (noopSquare)
 					degenerateLevelsThisCall.add(squareLevel);
 			}
 			finally

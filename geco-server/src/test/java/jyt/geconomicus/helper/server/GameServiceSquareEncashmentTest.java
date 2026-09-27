@@ -1,6 +1,7 @@
 package jyt.geconomicus.helper.server;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
@@ -262,6 +263,18 @@ class GameServiceSquareEncashmentTest
 		// moyenne -> forte, chacune consommant 1 exemplaire de la pioche
 		// forte - jamais un raccourci artificiel qui laisserait la pioche
 		// intacte pendant que la main du joueur, elle, semble pleine.
+		// Correctif du 27/09/2026 (seconde relecture indépendante, campagne de
+		// test 2/4/10 joueurs) : un carré dégénéré (aucune VRAIE promotion,
+		// promotedCardId == squareCardId) n'est PLUS jamais retourné par
+		// checkAndCashInSquares (voir son commentaire détaillé) - sinon
+		// l'animation "carré" se rejouerait sur le téléphone du joueur à
+		// chaque transaction suivante, pour un résultat strictement nul.
+		// L'événement reste TOUJOURS persisté (conservation des cartes
+		// inchangée), donc ce préalable de scénario se vérifie désormais via
+		// listPlayerSquares (l'historique réel en base). setupSquares (la
+		// liste RETOURNÉE par checkAndCashInSquares) est conservée telle
+		// quelle : elle sert plus bas à vérifier directement qu'aucun carré
+		// no-op n'y apparaît jamais.
 		final java.util.List<CardSquareEvent> setupSquares = new java.util.ArrayList<>();
 		for (int cycle = 0; cycle < 6; cycle++)
 		{
@@ -270,19 +283,83 @@ class GameServiceSquareEncashmentTest
 						"n" + gameId + "-" + (nonce++)); //$NON-NLS-1$ //$NON-NLS-2$
 			setupSquares.addAll(sService.checkAndCashInSquares(gameId, p1));
 		}
-		final boolean moyenneDegeneratedDuringSetup = setupSquares.stream()
+		final boolean moyenneDegeneratedDuringSetup = sService.listPlayerSquares(gameId, p1).stream()
 				.anyMatch(s -> "moyenne".equals(s.getCashedLevel()) //$NON-NLS-1$
 						&& s.getCashedCardTypeId().equals(s.getPromotedCardTypeId()));
 		assertTrue(moyenneDegeneratedDuringSetup,
 				"préalable du scénario : après 6 cycles (largement plus que les 5 exemplaires de la pioche forte), " //$NON-NLS-1$
-						+ "le carré moyenne_0 doit avoir dégénéré au moins une fois (pioche forte épuisée) - carrés observés : " //$NON-NLS-1$
+						+ "le carré moyenne_0 doit avoir dégénéré au moins une fois (pioche forte épuisée), visible dans " //$NON-NLS-1$
+						+ "l'historique persisté même s'il n'est plus retourné/diffusé (voir le correctif du 27/09/2026)"); //$NON-NLS-1$
+		// Preuve directe du correctif du 27/09/2026 : aucun des carrés
+		// RETOURNÉS pendant ces 6 cycles ne doit être un no-op - c'est
+		// exactement ce que la diffusion WebSocket (et donc l'animation
+		// smartphone) ne doit plus jamais montrer.
+		final boolean anyNoopSquareReturned = setupSquares.stream()
+				.anyMatch(s -> s.getCashedCardTypeId().equals(s.getPromotedCardTypeId()));
+		assertFalse(anyNoopSquareReturned,
+				"un carré dégénéré (sans VRAIE promotion) ne doit plus jamais être retourné/diffusé - carrés retournés : " //$NON-NLS-1$
 						+ setupSquares); //$NON-NLS-1$
+
+		// Correctif du 27/09/2026 (seconde relecture indépendante) : les 6
+		// cycles ci-dessus ne se contentent PAS de faire dégénérer moyenne_0
+		// - checkAndCashInSquares traite TOUTES les cascades possibles en un
+		// seul appel (voir sa boucle interne), donc une fois forte_0 accumulé
+		// à 4+ exemplaires par les vraies promotions moyenne->forte, une
+		// VRAIE cascade forte->tresforte->(retour)faible peut ELLE AUSSI se
+		// déclencher pendant ces mêmes 6 appels - et consommer, au passage,
+		// une partie du stock de la pioche "faible" partagée (seulement 15
+		// exemplaires au total pour cette partie à 2 joueurs, 8 déjà distribués
+		// à la mise en place). Mesuré : après les 6 cycles, la pioche "faible"
+		// peut se retrouver ENTIÈREMENT épuisée par ces cascades imprévues -
+		// ce qui rendrait alors le carré tresforte_0 planté juste en dessous
+		// LUI AUSSI dégénéré (repli vers son propre niveau, faute de place en
+		// "faible"), cassant la prémisse même de ce scénario ("pioche
+		// tresforte intacte - promotion saine attendue, en boucle vers
+		// faible"). Sans rapport avec le correctif du jour sur checkAndCashInSquares
+		// (qui se contente de ne plus RETOURNER/DIFFUSER un carré dégénéré,
+		// jamais de changer QUAND un carré dégénère) - ce risque existait déjà
+		// avant, simplement invisible tant qu'un carré dégénéré était encore
+		// retourné comme un carré normal. Reconstitué explicitement ici pour
+		// rendre le scénario déterministe, indépendamment du nombre exact de
+		// cascades survenues pendant les 6 cycles de préparation.
+		final jakarta.persistence.EntityManager topUpEm = sEmf.createEntityManager();
+		try
+		{
+			topUpEm.getTransaction().begin();
+			final Game gameToTopUp = topUpEm.find(Game.class, gameId);
+			final com.fasterxml.jackson.databind.ObjectMapper topUpMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			final Map<String, Map<String, Integer>> piles = topUpMapper.readValue(
+					gameToTopUp.getSmartphoneCardPileJson(),
+					new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, Map<String, Integer>>>()
+					{
+					});
+			// +200, largement au-delà de tout besoin réaliste (pas seulement les
+			// 4 nécessaires au carré tresforte_0 lui-même) : le tirage aléatoire
+			// des modèles à la mise en place (Collections.shuffle, sans graine
+			// fixe) peut faire dépendre CET appel précis d'autres carrés "faible"
+			// intermédiaires (même repli dégénéré que moyenne/forte, mais entre
+			// DEUX modèles faible DIFFÉRENTS - jamais un noopSquare au sens de ce
+			// correctif, donc consommant eux aussi la pioche) - un essai avec
+			// seulement +4 s'est révélé non déterministe (a échoué environ 1 run
+			// sur 2 lors de la vérification), un tel écart de marge élimine le
+			// risque sans changer l'intention du scénario (vérifier qu'un carré
+			// dégénéré n'affame pas un autre carré réellement éligible, pas
+			// mesurer la taille exacte de la pioche nécessaire).
+			piles.get("faible").merge("faible_0", 200, Integer::sum); //$NON-NLS-1$ //$NON-NLS-2$
+			gameToTopUp.setSmartphoneCardPileJson(topUpMapper.writeValueAsString(piles));
+			topUpEm.getTransaction().commit();
+		}
+		finally
+		{
+			topUpEm.close();
+		}
 
 		// Place maintenant, EN MÊME TEMPS : un NOUVEAU carré moyenne_0 (qui va
 		// à coup sûr dégénérer à nouveau, la pioche forte restant épuisée) ET
 		// un carré tresforte_0 COMPLÈTEMENT DIFFÉRENT, à un niveau distinct,
 		// jamais touché jusqu'ici (pioche "tresforte" intacte - promotion
-		// saine attendue, en boucle vers "faible" - toujours de la place).
+		// saine attendue, en boucle vers "faible", garantie non vide par le
+		// correctif ci-dessus).
 		// tresforte_0 délibérément choisi plutôt que faible_0 (première
 		// version de ce test, insuffisante - voir ci-dessous) : la main de
 		// départ de p1 (dealStartingHandsForLibreIfNeeded) pioche TOUJOURS
