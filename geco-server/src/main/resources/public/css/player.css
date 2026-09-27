@@ -1045,9 +1045,36 @@ body {
    plus `object-fit: cover` sur l'image (voir .avatar-img, inchangé)
    garantissent qu'aucune valeur de largeur ne déforme jamais le ratio de
    l'avatar, quel que soit l'écran. Ombre portée entièrement retirée (voir
-   box-shadow ci-dessous, supprimé). */
+   box-shadow ci-dessous, supprimé).
+   BUG TROUVÉ (27/09/2026, relecture indépendante de l'ajustement
+   ci-dessus, mesuré au pixel près dans des captures Chromium headless) :
+   la POSITION `left: 49,9%; top: 48,9%` souffrait du même défaut que
+   l'ancien `width: 44%` - ce sont des fractions de l'ÉCRAN, alors que le
+   centre de l'anneau est à 49,9%/48,9% de l'IMAGE mise à l'échelle en
+   "cover". Dès que l'écran est plus large que l'image (ratio > 768/1376 =
+   0,558 : tablette, téléphone pliant déplié, écran carré, paysage...),
+   l'image déborde en HAUTEUR et le vrai centre de l'anneau remonte par
+   rapport à 48,9% de l'écran : mesuré 4,5px de décalage à 600x600, 7,9px
+   à 667x375 - avec la marge resserrée à ~99%, l'avatar mordait alors
+   visiblement sur le bas de l'anneau doré (-2,35px à 600x600, -5,6px à
+   667x375). Corrigé en calculant la position avec le même `max()` que la
+   largeur (reproduit `background-size: cover` + `background-position:
+   center`) : décalage du centre = (50% - 48,920%) x hauteur RENDUE de
+   l'image = max(1,934vw, 1,080vh) ; idem en largeur (49,943%, écart
+   minime). Valeurs mesurées par ajustement d'un cercle (moindres carrés,
+   72 directions) sur le bord intérieur de l'anneau dans
+   img/rebirth-background.webp : centre 383,56/673,14 px sur 768x1376,
+   rayon intérieur 177,3 px (soit 46,16% de largeur / 25,76% de hauteur
+   - un peu plus que les 45,8%/25,6% cités plus haut, qui correspondaient
+   à la direction la plus serrée). Strictement identique à l'ancien
+   comportement sur un téléphone en portrait classique (ratio < 0,558,
+   écart < 0,3px). */
 .rebirth-anim-avatar-circle {
-	position: absolute; left: 49.9%; top: 48.9%; transform: translate(-50%, -50%) scale(0.6);
+	position: absolute; transform: translate(-50%, -50%) scale(0.6);
+	left: calc(50% - max(0.057vw, 0.032vh));
+	left: calc(50% - max(0.057vw, 0.032dvh));
+	top: calc(50% - max(1.934vw, 1.080vh));
+	top: calc(50% - max(1.934vw, 1.080dvh));
 	/* `vh` classique en repli d'abord (compatibilité maximale), puis `dvh`
 	   ("dynamic viewport height", 27/09/2026, seconde relecture indépendante
 	   du 27/09/2026) qui suit la hauteur RÉELLEMENT visible - `vh` seul se
