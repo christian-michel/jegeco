@@ -1933,6 +1933,58 @@ Suite de tests automatisés (geco-engine + geco-server) : toujours 100%
 verte, aucune régression - cohérent avec le fait qu'aucun code serveur
 n'a été modifié pour cette fonctionnalité.
 
+**Seconde puis troisième relecture indépendantes** (demandées
+explicitement par l'utilisateur, comme pour "Mort du joueur") : la
+première (voir `docs/13`) a confirmé qu'aucun des trois bugs de "Mort du
+joueur" n'était revenu, corrigé un vrai bug propre à cette animation
+(avatar invisible en mode "animations réduites" - une opacité posée en
+ligne jamais retirée, masquée en usage normal par l'animation CSS mais
+pas quand celle-ci est désactivée) et signalé sans corriger le
+dimensionnement du cercle avatar sur écran étroit (corrigé ensuite dans
+cette même session, voir plus haut). La troisième (audit de la seconde) a
+confirmé chaque mesure en la remesurant elle-même, et trouvé un dernier
+défaut RÉEL avec une conséquence concrète non anticipée par la seconde
+relecture : si `playRebirthAnimation` (ou `playDeathAnimation`) lève une
+exception AVANT même d'entrer dans son propre `try` interne (élément DOM
+manquant, page désynchronisée de son JS), la boucle `while` de
+`drainDeathAnimQueue` était jusqu'ici purement et simplement ABANDONNÉE -
+un événement de mort DÉJÀ retiré de la file (`shift()`) ne rejouait
+jamais, mais un événement ULTÉRIEUR sans rapport rejouait alors DEUX
+cycles complets à la suite (~20 secondes au lieu de 10), sans le moindre
+message pour le joueur. Confirmé reproductible en conditions réelles
+(élément retiré du DOM avant déclenchement). Corrigé par un `try/catch`
+PAR ÉLÉMENT à l'intérieur de la boucle (journalise via `pushDebugLog` et
+continue, jamais un abandon silencieux) - même politique d'erreur que
+partout ailleurs dans ce fichier, cohérente avec le filet de sécurité déjà
+posé sur cette même boucle lors de la relecture de "Mort du joueur" (voir
+plus haut, entrée du 26/09/2026) qui ne couvrait, elle, que la remise à
+zéro du drapeau `mDeathAnimRunning`, pas la poursuite de la boucle
+elle-même. Vérifié par un test Playwright dédié reproduisant exactement
+le scénario signalé : les deux échecs simulés sont bien journalisés
+individuellement, aucune file ne reste bloquée, et un déclenchement propre
+suivant ne rejoue plus jamais qu'un seul cycle (~10s), jamais deux.
+
+**Amélioration complémentaire, non bloquante mais appliquée par
+prudence** : la troisième relecture a aussi noté (uniquement simulé dans
+le navigateur, jamais vérifié sur un vrai appareil) qu'un navigateur
+mobile avec sa barre d'adresse encore affichée calcule parfois `vh` sur la
+hauteur AVANT masquage de cette barre, ce qui pourrait légèrement
+surdimensionner l'avatar par rapport au cercle réellement visible.
+Ajout d'une déclaration CSS dupliquée avec l'unité `dvh` ("dynamic
+viewport height", qui suit la hauteur réellement visible) juste après la
+déclaration `vh` existante - un navigateur qui ne comprend pas `dvh`
+ignore silencieusement cette ligne et garde la précédente, aucun
+`@supports` nécessaire. Revérifié à l'identique (207px de diamètre à
+390×844, aucune régression) après cet ajout.
+
+Verdict final de cette troisième relecture : fonctionnalité prête, aucun
+défaut bloquant restant après ces deux derniers correctifs. Limites
+connues, non bloquantes (identiques en substance à celles déjà notées
+pour "Mort du joueur") : aucun test sur un vrai appareil iOS/Android
+(navigateur headless uniquement), avatar légèrement décentré sur un écran
+très large/court (paysage) - jamais par-dessus l'anneau doré, juste pas
+parfaitement centré - jugé cosmétique et non prioritaire.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

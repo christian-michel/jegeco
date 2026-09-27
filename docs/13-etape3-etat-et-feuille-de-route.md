@@ -195,6 +195,17 @@ comme pour l'exemple précédent."
   avec le repli emoji), aucune erreur console sur la séquence complète,
   un second joueur de la même partie ne voit ni l'une ni l'autre
   animation.
+- **Seconde puis troisième relecture indépendantes** (demandées
+  explicitement) : confirment qu'aucun des trois bugs de "Mort du joueur"
+  n'est revenu ; trouvent et corrigent un avatar invisible en mode
+  "animations réduites", un mauvais dimensionnement du cercle sur écran
+  étroit, et - trouvaille la plus significative de la troisième relecture,
+  audit de la seconde - une file d'attente qui pouvait rester bloquée puis
+  rejouer DEUX cycles complets à la suite (~20s au lieu de 10s) si une
+  exception survenait avant même le traitement normal d'un élément.
+  Verdict final : fonctionnalité prête, aucun défaut bloquant - voir
+  `03-architecture-technique.md`, entrées du 27/09/2026, pour le détail
+  complet.
 
 ### Monnaie libre + smartphone (retravaillée en profondeur le 09/09/2026)
 - **Calcul du DU conforme à la vraie formule de la Théorie Relative de la

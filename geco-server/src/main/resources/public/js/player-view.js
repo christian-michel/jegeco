@@ -2729,7 +2729,30 @@ async function drainDeathAnimQueue() {
 	try {
 		while (mDeathAnimQueue.length > 0) {
 			mDeathAnimQueue.shift();
-			await playDeathAnimation(); // toujours attendu en entier avant la suivante - jamais deux animations en même temps
+			// Correctif (27/09/2026, relecture indépendante de "Renaissance !",
+			// confirmée par une seconde relecture qui en a mesuré la vraie
+			// conséquence) : un try/catch PAR ÉLÉMENT, ici - le try/finally
+			// englobant ci-dessus protège bien mDeathAnimRunning, mais une
+			// exception levée AVANT le try INTERNE de playDeathAnimation/
+			// playRebirthAnimation (ex. un élément DOM introuvable) faisait
+			// jusqu'ici ABANDONNER toute la boucle `while` : l'élément déjà
+			// retiré de la file (`shift()` a déjà eu lieu) ne rejouait jamais,
+			// et un tout NOUVEL événement de mort ultérieur rejouait alors
+			// deux cycles complets à la suite (l'ancien resté implicitement
+			// "en cours" plus le nouveau) - mesuré en conditions réelles :
+			// ~20 secondes d'animations au lieu de 10, sans aucun message
+			// d'erreur pour le joueur. Même politique d'erreur que partout
+			// ailleurs dans ce fichier : journaliser via pushDebugLog et
+			// continuer, jamais un échec silencieux ni un abandon de la
+			// boucle.
+			try
+			{
+				await playDeathAnimation(); // toujours attendu en entier avant la suivante - jamais deux animations en même temps
+			}
+			catch (err)
+			{
+				pushDebugLog("ERREUR", "Animation \"Mort du joueur\" (file d'attente) interrompue :", err);
+			}
 			// Enchaînement "Renaissance !" (27/09/2026, demande utilisateur,
 			// confirmée explicitement - question posée, réponse actée) : ce
 			// moteur de jeu ne connaît qu'un seul événement DEATH qui
@@ -2740,7 +2763,14 @@ async function drainDeathAnimQueue() {
 			// playRebirthAnimation) - seul CET enchaînement précis, ici, les
 			// relie l'une à l'autre pour raconter les deux temps forts du
 			// même instant de jeu.
-			await playRebirthAnimation();
+			try
+			{
+				await playRebirthAnimation();
+			}
+			catch (err)
+			{
+				pushDebugLog("ERREUR", "Animation \"Renaissance !\" (file d'attente) interrompue :", err);
+			}
 		}
 	} finally {
 		mDeathAnimRunning = false;

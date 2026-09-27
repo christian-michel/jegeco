@@ -1025,7 +1025,18 @@ body {
    par-dessus, quel que soit le ratio de l'écran. */
 .rebirth-anim-avatar-circle {
 	position: absolute; left: 49.9%; top: 48.9%; transform: translate(-50%, -50%) scale(0.6);
-	width: max(44vw, 24.56vh); aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
+	/* `vh` classique en repli d'abord (compatibilité maximale), puis `dvh`
+	   ("dynamic viewport height", 27/09/2026, seconde relecture indépendante
+	   du 27/09/2026) qui suit la hauteur RÉELLEMENT visible - `vh` seul se
+	   base souvent sur la hauteur AVANT masquage de la barre d'adresse du
+	   navigateur mobile (non testé sur un vrai appareil, seulement simulé),
+	   ce qui pouvait légèrement surdimensionner l'avatar quand cette barre
+	   reste affichée. Une déclaration dupliquée volontaire : un navigateur
+	   qui ne comprend pas `dvh` ignore silencieusement cette seconde ligne
+	   et garde la première (`vh`), aucun `@supports` nécessaire. */
+	width: max(44vw, 24.56vh);
+	width: max(44vw, 24.56dvh);
+	aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
 	z-index: 1; opacity: 0; will-change: transform, opacity;
 	box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 10px 24px rgba(0, 0, 0, 0.45);
 }
