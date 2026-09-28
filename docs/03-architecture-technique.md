@@ -2612,6 +2612,122 @@ manuellement en conditions réelles (serveur démarré, partie dette +
 smartphone à 4 joueurs, capture d'écran de la section rendue - voir
 `docs/13-etape3-etat-et-feuille-de-route.md`).
 
+### Seconde relecture indépendante (27-28/09/2026) : deux bugs confirmés et corrigés, un troisième identifié pour la dette (non corrigé, décision utilisateur en attente)
+
+Un premier agent (relecture "auto", campagne 2/4/10 joueurs en HTTP réel,
+uniquement en LIBRE) a trouvé et corrigé deux bugs réels dans le rapport
+tout juste construit (commit `e1ebb92`) :
+1. **Valeurs d'échange en JETONS présentées comme "Unités monétaires"** -
+   `Transaction.totalCoinsValue()` compte des jetons faibles ; en libre,
+   le prix d'une carte est converti en jetons par division par "Valeur
+   d'une pièce faible" (`GameService.levelValue`), donc jetons ≠ unités
+   monétaires dès que ce réglage diffère de 1 (mesuré : ×2 avec une valeur
+   de 0,5). Corrigé par `StatsService.monetaryUnitsPerJeton` (libre :
+   `weakCoinValue` ; dette smartphone : toujours 1, "1 jeton = 1 unité"
+   par construction - voir `Event.applyEvent`, cas `NEW_CREDIT`, qui
+   crédite `jetonWeak` du principal tel quel).
+2. **Point "tour 1" de la masse détaillée = masse FINALE de la partie**
+   (mode libre + smartphone) - `Game.recomputeAll` ne remet jamais
+   `Player.jetonWeak` à zéro ; le tout premier `TURN` rejoué voit donc les
+   joueurs déjà suivis par smartphone et recalcule la masse depuis leurs
+   jetons de FIN de partie plutôt que de départ (mesuré : 14725 au lieu de
+   28 à 4 joueurs). Corrigé localement au rapport par
+   `resetJetonsToStartOfGameForReplay` (dotation de départ réelle avant le
+   rejeu, jetons restaurés juste après dans un `finally` - objet détaché,
+   jamais persisté, sans effet sur le rejeu utilisé par Annuler/éditer).
+
+Un second agent (relecture DE cette relecture, avec ses propres scripts et
+sa propre vérité terrain, jamais les fichiers de résultats du premier) a
+confirmé les deux correctifs ci-dessus comme corrects et sûrs - y compris
+sur des scénarios que le premier agent n'avait pas testés (un joueur qui
+rejoint en cours de partie avant/après le premier tour, la dette avec une
+"Valeur d'une pièce faible" ≠ 1, une vérification explicite que le rejeu
+temporaire de `resetJetonsToStartOfGameForReplay` ne fuit jamais vers une
+requête concurrente - `getGame()` ferme sa session EntityManager avant que
+le rapport ne s'exécute, donc chaque appel opère sur sa propre copie
+détachée). Il a aussi rejoué lui-même 0 → 47/56 échanges sur 3 parties
+fraîches (dette et libre, avec des valeurs de pièce non triviales) sans
+trouver le moindre écart.
+
+**Troisième bug identifié par ce second agent, spécifique à la DETTE +
+smartphone, non corrigé** : le point "tour N" de la masse détaillée
+affiche en réalité la masse **avant** les crédits accordés PENDANT le
+tour N, pas après - un décalage d'un tour complet. Cause : contrairement
+à la libre (le DU est distribué par des `WEALTH_CHECKPOINT` posés À LA
+FRONTIÈRE entre deux tours, juste avant l'événement `TURN` - voir plus
+haut, "Le calcul du DU"), un `NEW_CREDIT` en dette peut survenir À
+N'IMPORTE QUEL MOMENT du tour (un joueur emprunte quand il veut, pas
+seulement en début de tour) et incrémente `Game.moneyMass` immédiatement,
+en dehors de toute logique de tour (voir `Event.applyEvent`, cas
+`NEW_CREDIT` : `game.changeMoneyMass(principal)`, sans condition sur le
+système monétaire ni sur le moment du tour - à la différence du cas
+`TURN`, qui ne recalcule la masse que pour la libre). Le mécanisme de
+capture (un point par événement `TURN`, capturé juste après son
+application, donc AVANT tout événement suivant du même tour) donne donc
+la masse "à l'ouverture du tour N" pour les deux systèmes - une sémantique
+cohérente pour la libre (toute création monétaire du tour précédent est
+déjà là), mais fausse pour la dette dès qu'un crédit est accordé en cours
+de tour. Mesuré par le second agent sur une partie dette réelle :
+masse affichée au tour 1/2/3/4 = 0/74/138/162, masse réelle en fin de
+tour 1/2/3/4 = 74/138/162/206 - la valeur du dernier tour (+44) n'apparaît
+jamais.
+
+**Décision utilisateur en attente** (rejoint la limite déjà documentée
+plus haut sur `computeMoneyMassHistory`/`computeWealthOverTime`, même
+mécanisme de capture "à l'entrée du tour") : que doit représenter "la
+masse du tour N" pour la dette - la masse à l'OUVERTURE du tour (valeur
+actuelle, cohérente avec la libre mais visuellement surprenante :
+"tour 1" affiche 0) ou la masse à la FERMETURE du tour (inclurait les
+crédits du tour, mais pose la question du tout dernier tour, dont la
+fermeture n'a pas d'événement `TURN` suivant pour la capturer - faudrait-il
+alors un point supplémentaire posé à `END`) ? Non corrigé dans cette
+session, faute d'exemple chiffré confirmé par l'utilisateur sur le
+comportement attendu (méthode de travail habituelle de ce projet pour une
+règle ambiguë, voir plus haut "Méthode de travail qui a bien fonctionné").
+
+**Vulnérabilité de sécurité confirmée, HORS PÉRIMÈTRE de cette
+fonctionnalité mais découverte pendant cette relecture** : la route
+`POST /api/games/{id}/transactions` (l'ancien mécanisme direct
+carte-contre-jetons, antérieur au système d'offre QR
+`/trade-offers`/`/redeem` que `player-view.js` utilise exclusivement
+aujourd'hui - vérifié par grep, plus aucun appel direct à
+`/transactions` depuis ce fichier) reste exposée et fonctionnelle, sans
+PIN de partie (volontairement, pour être appelable par un joueur depuis
+son propre jeton), et - contrairement au flux `/trade-offers/{code}/redeem`
+qui la remplace (limitation de débit via `allowRequest`, offre
+consommée atomiquement, prix figé au moment de la création de l'offre) -
+sans vérification du consentement du vendeur, sans re-vérification que
+les échanges sont autorisés (`isTradingAllowed`), et sans prix
+serveur en dette (le champ `weakCoins` de la requête est pris tel quel).
+Reproduit en HTTP réel par le second agent : un acheteur a obtenu la
+carte d'un vendeur en dette pour 0 jeton (requête 201, inventaire du
+vendeur bien décrémenté). Cette route n'est protégée que par
+l'authentification globale de la partie (aucune si "Protection par
+code" est désactivée, réglage par défaut) - à corriger séparément, signalé
+à l'utilisateur, décision de correctif immédiat ou différé en attente.
+
+**Autres constats du second agent, confirmés mais non corrigés (hors
+périmètre ou existants avant cette fonctionnalité)** :
+- Un joueur qui rejoint une partie libre+smartphone EN COURS DE PARTIE ne
+  reçoit jamais de dotation de départ ni le DU des tours suivants (aucun
+  `WEALTH_CHECKPOINT` n'est jamais posé pour lui tant qu'il n'a pas sa
+  propre pioche) : ses jetons réels restent à 0 jusqu'à sa mort, alors que
+  la courbe "module Galilée" lui affiche une richesse non nulle (valeur
+  théorique du DU, jamais réellement créditée).
+- Une transaction dont l'offre QR affiche un prix devenu périmé (ex. une
+  révolution des prix survenue entre l'affichage et le scan) échoue avec
+  le message "Impossible de rendre la monnaie" plutôt que "Solde
+  insuffisant" - message trompeur mais fenêtre de temps très courte en
+  usage réel.
+- Sur écran étroit (téléphone, ~390px), les rangées à deux colonnes de
+  l'écran de rapport (`.charts-row`, y compris l'ancien histogramme
+  "Richesse finale par joueur") débordent horizontalement - `.charts-row`
+  n'a pas de règle petit écran dédiée.
+- Deux joueurs de même nom sont fusionnés dans `byPlayer` (clé = nom, pas
+  id) - cohérent avec le reste de `StatsService` (déjà le cas pour
+  `computeActivityReport`/`computeTrocStats`), pas une régression de cette
+  fonctionnalité.
+
 Voir `docs/13-etape3-etat-et-feuille-de-route.md` pour l'état d'avancement
 à jour de l'étape 3, et `CLAUDE.md` (racine du dépôt) pour les conventions
 condensées à destination d'une session Claude Code.

@@ -459,6 +459,26 @@ juste avant).
   graphique pré-existant "Évolution de la masse monétaire" et la courbe
   Galilée gardent ce défaut au tour 1 (point 4bis ci-dessous) - même
   correctif local applicable en une ligne, décision utilisateur attendue.
+  **Seconde relecture DE cette relecture (28/09/2026)** : confirme les
+  deux correctifs ci-dessus corrects et sûrs (rejoue elle-même 0 → 47/56
+  échanges sur 3 parties fraîches, dette et libre, valeurs de pièce non
+  triviales, joueur rejoignant en cours de partie - 0 écart), et identifie
+  un TROISIÈME défaut, spécifique à la dette+smartphone, non corrigé : le
+  point "tour N" de la masse détaillée montre en réalité la masse AVANT
+  les crédits accordés PENDANT le tour N (un crédit dette peut survenir à
+  tout moment du tour, contrairement au DU libre toujours distribué à la
+  frontière entre deux tours) - mesuré : masse affichée 0/74/138/162 aux
+  tours 1-4 contre 74/138/162/206 en fin de tour réel. Rejoint la décision
+  utilisateur déjà en attente sur le sens de "tour 1"/"tour t" pour ce
+  mécanisme de capture (voir `03-architecture-technique.md`, entrée du
+  27-28/09/2026, pour le détail complet et les options). A aussi confirmé
+  une VULNÉRABILITÉ DE SÉCURITÉ réelle, hors périmètre de cette
+  fonctionnalité : la route `POST /api/games/{id}/transactions` (mécanisme
+  direct pré-QR, plus utilisé par `player-view.js`) reste exposée sans
+  vérification de consentement du vendeur ni de prix serveur en dette -
+  reproduit un achat gratuit (0 jeton) en HTTP réel. Signalé à
+  l'utilisateur, correctif non encore appliqué (décision : maintenant ou
+  plus tard).
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
