@@ -359,4 +359,53 @@ class StatsServiceExchangeStatsTest
 				sService.listTransactions(gameId));
 		assertFalse(report.applicable(), "une partie libre classique (sans smartphone) n'a pas de vraies Transaction"); //$NON-NLS-1$
 	}
+
+	/**
+	 * Régression (29/09/2026, décision utilisateur suite à la relecture
+	 * indépendante du 27-28/09/2026) : en monnaie DETTE, un crédit accordé EN
+	 * COURS de tour (contrairement au DU libre, toujours distribué à la
+	 * frontière entre deux tours) doit apparaître dans la masse du tour où il
+	 * a été accordé, pas dans celle du tour suivant. Voir la Javadoc de
+	 * {@link StatsService.MoneyMassDetailPoint} pour le mécanisme complet
+	 * (capture à CHAQUE événement rejoué, pas seulement à l'événement TURN).
+	 */
+	@Test
+	void testDebtMassReflectsCreditsGrantedDuringTheSameTurn() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_DEBT, 4, "AnimTest", null, //$NON-NLS-1$
+				"Test masse dette en cours de tour", "2026-09-29", "Ceres", 1, 180, 1.0, false, 0, false, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final int gameId = game.getId();
+		final int playerId = sService.addPlayer(gameId, "Alice").getId(); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, catalog(6));
+
+		// Tour 1 : un crédit accordé EN COURS de tour (après le "T" qui l'ouvre,
+		// avant celui qui le clôt) - doit compter dans la masse du tour 1.
+		sService.recordEvent(gameId, "N", playerId, 50, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		// Tour 2 : un second crédit.
+		sService.recordEvent(gameId, "N", playerId, 30, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		// Tour 3 : aucun crédit - la masse doit rester stable (delta=0), pas
+		// remonter au niveau du tour précédent comme avec l'ancien mécanisme
+		// de capture (qui aurait affiché ici le "retard" du tour 2).
+
+		final Game freshGame = sService.getGame(gameId);
+		final ExchangeAndMoneyReport report = sStats.computeExchangeAndMoneyReport(freshGame,
+				sService.listTransactions(gameId));
+		assertTrue(report.applicable(), "dette + smartphone doit être applicable"); //$NON-NLS-1$
+		final List<MoneyMassDetailPoint> points = report.moneyMassDetail().points();
+		assertEquals(3, points.size());
+		assertEquals(50, points.get(0).moneyMass(),
+				"tour 1 : doit refléter le crédit accordé PENDANT ce même tour, pas 0"); //$NON-NLS-1$
+		assertEquals(50, points.get(0).massDelta());
+		assertEquals(80, points.get(1).moneyMass(), "tour 2 : 50 + 30"); //$NON-NLS-1$
+		assertEquals(30, points.get(1).massDelta());
+		assertEquals(80, points.get(2).moneyMass(), "tour 3 : aucun crédit, masse stable"); //$NON-NLS-1$
+		assertEquals(0, points.get(2).massDelta());
+	}
 }

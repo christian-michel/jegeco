@@ -942,8 +942,34 @@ public class GameService
 				actualMediumChange = solution[1][1];
 				actualStrongChange = solution[1][2];
 			}
-			else if (price > 0)
+			// BUG DE SÉCURITÉ TROUVÉ ET CORRIGÉ (remonté par une relecture
+			// indépendante de la campagne de test du 27-28/09/2026, confirmé par
+			// l'utilisateur le 29/09/2026 : "que l'on soit en partie monnaie
+			// dette classique ou en partie monnaie dette avec smartphone, la
+			// transaction doit toujours se faire contre autre chose. Elle ne
+			// peut pas être gratuite.") : `price` (ci-dessus, la somme de
+			// pWeakCoins/pMediumCoins/pStrongCoins fournis TELS QUELS par le
+			// client - voir le commentaire plus bas, "le prix dette est un
+			// montant FIXE... jamais négocié") n'était jamais revérifié positif
+			// - `else if (price > 0)` sautait ENTIÈREMENT la vérification de
+			// solde dès que le client envoyait un prix nul (ou négatif),
+			// laissant passer la transaction sans qu'aucun jeton ne change
+			// jamais de main. Reproduit en HTTP réel (achat à 0 jeton accepté,
+			// 201, inventaire du vendeur bien décrémenté) - via l'ancienne
+			// route directe POST /transactions ET via /trade-offers/{code}/redeem
+			// (les deux mènent ici, voir plus bas : recordTransaction est le
+			// SEUL point qui déplace réellement les jetons, la vérification du
+			// contrôleur `if (previewPrice > 0)` dans GecoServer n'est qu'une
+			// optimisation pour ne pas consommer un QR pour rien, jamais la
+			// frontière de sécurité). Portée volontairement limitée à la DETTE :
+			// le troc À L'ANCIENNE (buyerWeakGoods&co, voir plus bas) paie
+			// toujours en BIENS, jamais en jetons - `price` y vaut donc
+			// légitimement 0, ce n'est pas la même situation.
+			else if (game.getMoneySystem() == Game.MONEY_DEBT)
 			{
+				if (price <= 0)
+					throw new IllegalArgumentException(
+							"Le prix d'une carte doit toujours être positif - une transaction ne peut jamais être gratuite."); //$NON-NLS-1$
 				final int buyerBalance = computeTradeBalance(pGameId, pBuyerPlayerId);
 				if (buyerBalance < price)
 					throw new IllegalArgumentException("Solde insuffisant pour cet achat."); //$NON-NLS-1$

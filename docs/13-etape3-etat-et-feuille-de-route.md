@@ -479,6 +479,19 @@ juste avant).
   reproduit un achat gratuit (0 jeton) en HTTP réel. Signalé à
   l'utilisateur, correctif non encore appliqué (décision : maintenant ou
   plus tard).
+  **Les deux tranchées et corrigées le 29/09/2026** (voir
+  `03-architecture-technique.md`, entrée du 29/09/2026, pour le détail
+  complet) : (1) "tour N" pour la masse détaillée dette+smartphone
+  représente désormais tout ce qui s'est produit PENDANT ce tour (capture à
+  chaque événement rejoué, plus seulement à l'ouverture du tour) - vérifié
+  en HTTP réel (crédits de 50 puis 30 en cours de tour → masse 50/80/80,
+  plus 0/50/80) ; (2) une transaction dette à prix nul est désormais
+  refusée par le serveur (`GameService.recordTransactionUnlocked`), quelle
+  que soit la route utilisée pour l'atteindre - vérifié en HTTP réel (400,
+  "une transaction ne peut jamais être gratuite"). Le défaut équivalent du
+  tour 1 sur l'ancien graphique "Évolution de la masse monétaire" et la
+  courbe Galilée reste, lui, volontairement non touché (hors périmètre de
+  ce correctif, à reprendre séparément si souhaité).
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 

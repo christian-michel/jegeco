@@ -161,13 +161,30 @@ public class StatsService
 	 * jamais recalculée séparément par une seconde formule qui pourrait
 	 * diverger.
 	 * <p>
-	 * Précision de sens (27/09/2026, relecture indépendante) : le point du
-	 * "tour t" est capturé à l'événement TURN qui OUVRE ce tour - c'est donc la
-	 * masse EN CIRCULATION PENDANT le tour t (celle avec laquelle se font les
-	 * échanges du tour t, voir {@link ExchangeTurnPoint}), et {@code massDelta}
-	 * du tour t est la création/destruction survenue JUSTE AVANT lui (DU
-	 * distribué et morts/sorties de l'entre-deux-tours t-1 → t). Le tour 1
-	 * compte donc comme "création" la dotation de départ (7 unités par joueur).
+	 * Précision de sens (29/09/2026, décision utilisateur suite à la relecture
+	 * indépendante du 27-28/09/2026) : le point du "tour t" est la masse telle
+	 * qu'elle se présente APRÈS TOUT ce qui s'est produit PENDANT le tour t
+	 * (DU distribué, crédits accordés, morts/sorties - tout événement du tour
+	 * t, quel que soit son type), pas seulement ce qui existait à son
+	 * ouverture. Un point est donc mis à jour à CHAQUE événement rejoué
+	 * (jamais seulement à l'événement TURN), en ne conservant que la DERNIÈRE
+	 * valeur vue pour un numéro de tour donné - pour une partie EN COURS, le
+	 * tour courant (pas encore terminé) apparaît donc déjà avec sa masse la
+	 * plus à jour, affinée au fur et à mesure ("les stats affichent les
+	 * données au fur et à mesure des tours", remonté par l'utilisateur).
+	 * <p>
+	 * BUG TROUVÉ ET CORRIGÉ (27-28/09/2026, relecture indépendante) : la
+	 * version précédente ne capturait qu'à l'événement TURN qui OUVRE le tour
+	 * - juste avant tout événement du tour lui-même. Sans effet en monnaie
+	 * LIBRE (le DU y est toujours distribué à la FRONTIÈRE entre deux tours,
+	 * via WEALTH_CHECKPOINT, donc déjà reflété dès l'ouverture du tour
+	 * suivant), mais faux en monnaie DETTE : un crédit peut être accordé à
+	 * N'IMPORTE QUEL moment du tour (voir {@code Event.applyEvent}, cas
+	 * NEW_CREDIT, qui incrémente {@code Game.moneyMass} immédiatement, sans
+	 * condition de moment) - mesuré : masse affichée aux tours 1-4 = 0/74/138/
+	 * 162 au lieu de 74/138/162/206 (la valeur réelle de fin de tour), un
+	 * décalage d'un tour complet, avec un "tour 1" à 0 alors que 6 échanges
+	 * avaient déjà eu lieu avec les 74 unités créées ce même tour.
 	 */
 	public record MoneyMassDetailPoint(int turn, int moneyMass, int massDelta, int activePlayers,
 			double massPerPlayer)
@@ -752,28 +769,36 @@ public class StatsService
 	/**
 	 * Calcule {@link MoneyMassDetailReport} en rejouant l'historique complet
 	 * de la partie (même mécanisme que {@link #computeMoneyMassHistory}) :
-	 * capture, à chaque tour, la masse monétaire, sa VARIATION depuis le tour
-	 * précédent (création si positive, destruction si négative), le nombre de
-	 * joueurs actifs et le ratio masse/joueurs actifs ("l'accès à la
-	 * monnaie").
+	 * capture, pour chaque tour, la masse monétaire APRÈS tout ce qui s'y est
+	 * produit, sa VARIATION depuis le tour précédent (création si positive,
+	 * destruction si négative), le nombre de joueurs actifs et le ratio
+	 * masse/joueurs actifs ("l'accès à la monnaie"). Voir la Javadoc de
+	 * {@link MoneyMassDetailPoint} pour le raisonnement complet (correctif du
+	 * 29/09/2026, décision utilisateur) : capture à CHAQUE événement rejoué,
+	 * pas seulement à l'événement TURN, en ne gardant que la DERNIÈRE valeur
+	 * vue pour chaque numéro de tour - un événement qui ne change ni la masse
+	 * ni le nombre de joueurs actifs ne fait alors que réécrire la même
+	 * valeur (sans incidence), jamais besoin de connaître à l'avance la
+	 * liste exacte des types d'événements qui mutent la masse (TURN/DEATH
+	 * pour la libre stricte TRM, NEW_CREDIT/REIMB_CREDIT/... pour la dette).
 	 */
 	private MoneyMassDetailReport computeMoneyMassDetailHistory(final Game pGame)
 	{
-		final List<MoneyMassDetailPoint> points = new ArrayList<>();
-		final int[] previousMass = { 0 };
+		// turn -> [masse, joueurs actifs] au dernier événement rejoué de ce
+		// tour (TreeMap : parcouru dans l'ordre croissant des tours ensuite).
+		final Map<Integer, int[]> byTurn = new TreeMap<>();
 		final Map<Player, int[]> jetonsBeforeReplay = resetJetonsToStartOfGameForReplay(pGame);
 		try
 		{
 			pGame.recomputeAll(event -> {
-				if (event.getEvt() == EventType.TURN)
-				{
-					final int mass = pGame.getMoneyMass();
-					final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
-					final double massPerPlayer = activeCount == 0 ? 0 : (double) mass / activeCount;
-					points.add(new MoneyMassDetailPoint(pGame.getTurnNumber(), mass, mass - previousMass[0],
-							(int) activeCount, round1(massPerPlayer)));
-					previousMass[0] = mass;
-				}
+				final int turn = pGame.getTurnNumber();
+				// Rien à montrer avant le tout premier "nouveau tour" (même
+				// convention que computeExchangeStats.byTurn, qui démarre à 1).
+				if (turn <= 0)
+					return;
+				final int mass = pGame.getMoneyMass();
+				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
+				byTurn.put(turn, new int[] { mass, (int) activeCount });
 			});
 		}
 		finally
@@ -786,6 +811,18 @@ public class StatsService
 				e.getKey().setJetonMedium(e.getValue()[1]);
 				e.getKey().setJetonStrong(e.getValue()[2]);
 			}
+		}
+
+		final List<MoneyMassDetailPoint> points = new ArrayList<>();
+		int previousMass = 0;
+		for (final Map.Entry<Integer, int[]> e : byTurn.entrySet())
+		{
+			final int mass = e.getValue()[0];
+			final int activePlayers = e.getValue()[1];
+			final double massPerPlayer = activePlayers == 0 ? 0 : (double) mass / activePlayers;
+			points.add(new MoneyMassDetailPoint(e.getKey(), mass, mass - previousMass, activePlayers,
+					round1(massPerPlayer)));
+			previousMass = mass;
 		}
 
 		final List<Integer> sortedDeltas = points.stream().map(MoneyMassDetailPoint::massDelta).sorted().toList();

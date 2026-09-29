@@ -2775,3 +2775,111 @@ CORRIGÉ" dans `renderReport` (app.js) qui décrivait comme corrigé un bug
 dont l'hypothèse avait été infirmée. Deux tests de régression ajoutés à
 `StatsServiceExchangeStatsTest` (échouent sur le code d'avant : masse tour 1
 1610612733 au lieu de 21 ; valeur 6,0 au lieu de 3,0).
+
+## 29/09/2026 — Les deux points en suspens tranchés par l'utilisateur, corrigés et vérifiés
+
+### 1. Sémantique de "tour N" pour la masse détaillée (dette+smartphone)
+
+Décision utilisateur, en réponse à la question posée le 28/09/2026 : "selon
+la partie le nombre de tours peut varier. D'autre part, les stats affichent
+les données au fur et à mesure des tours. N représente le n° du tour (ex. :
+2ème tour, 8ème tour, 10ème tour, 12ème tour, etc)". Interprétation retenue :
+le point "tour N" doit refléter TOUT ce qui s'est produit PENDANT le tour N
+(DU, crédits, morts/sorties - quel que soit le moment du tour où ça arrive),
+mis à jour progressivement au fil de la partie - jamais seulement l'état à
+l'OUVERTURE du tour.
+
+**Correctif** (`StatsService.computeMoneyMassDetailHistory`) : la capture ne
+se fait plus uniquement sur l'événement `TURN` (l'ouverture du tour), mais à
+CHAQUE événement rejoué, en ne conservant que la DERNIÈRE valeur vue pour
+chaque numéro de tour (`Map<Integer, int[]>` plutôt qu'une liste construite
+au fil de l'eau). Un événement qui ne change ni la masse ni le nombre de
+joueurs actifs se contente de réécrire la même valeur (sans incidence) -
+plus besoin de connaître à l'avance la liste exacte des types d'événements
+qui mutent la masse (`TURN`/`DEATH` pour la libre stricte TRM,
+`NEW_CREDIT`/`REIMB_CREDIT`/... pour la dette, potentiellement d'autres à
+l'avenir). Bénéfice secondaire, non demandé mais correct par construction :
+une MORT en cours de tour (pas seulement à l'ouverture) est désormais elle
+aussi immédiatement reflétée dans la masse du tour où elle survient, pour
+les deux systèmes.
+
+Vérifié :
+- Nouveau test `StatsServiceExchangeStatsTest.testDebtMassReflectsCreditsGrantedDuringTheSameTurn` :
+  deux crédits (50 puis 30) accordés EN COURS de tour (pas à son ouverture)
+  sur 3 tours - masse attendue 50/80/80, delta 50/30/0. Échoue sur l'ancien
+  code (aurait donné 0/50/80, le décalage d'un tour complet mesuré par la
+  relecture indépendante).
+- Vérifié en HTTP réel sur un serveur fraîchement reconstruit (dette,
+  2 joueurs, crédits de 50 puis 30 en cours de tour 1 et 2) : mêmes valeurs
+  exactes retournées par `GET /api/games/{id}/exchange-stats`.
+- `StatsServiceExchangeStatsTest` (les 6 autres cas, libre) toujours vert
+  sans modification : en libre, le DU est toujours distribué à la frontière
+  entre deux tours (`WEALTH_CHECKPOINT` avant `TURN`), donc déjà couvert par
+  l'ancien mécanisme de capture - ce correctif n'y change rien
+  numériquement, seulement la robustesse du mécanisme.
+- `mvn clean package` complet vert (69 tests).
+
+Le graphique pré-existant "Évolution de la masse monétaire"
+(`computeMoneyMassHistory`) et la courbe Galilée (`computeWealthOverTime`)
+gardent leur propre défaut au tour 1 (capture uniquement à l'événement
+`TURN`, jamais étendue à "chaque événement" comme ici) : DÉLIBÉRÉMENT non
+touchés dans ce correctif, qui ne concerne que le nouveau rapport
+"Échanges monétaires"/"Masse monétaire détaillée" - à traiter séparément si
+l'utilisateur le souhaite (même mécanisme, adaptable de la même façon).
+
+### 2. Vulnérabilité de sécurité : transaction dette à prix nul
+
+Décision utilisateur : "corrige. Que l'on soit en partie monnaie dette
+classique ou en partie monnaie dette avec smartphone, la transaction doit
+toujours se faire contre autre chose. Elle ne peut pas être gratuite."
+
+**Cause précise** (`GameService.recordTransactionUnlocked`) : pour la
+monnaie DETTE, `else if (price > 0) { vérification de solde }` sautait
+ENTIÈREMENT la vérification dès que le client envoyait un prix nul (ou
+négatif) - `price` étant la somme de `pWeakCoins`/`pMediumCoins`/
+`pStrongCoins` fournis TELS QUELS par le client (le prix dette est un
+montant fixe, jamais recalculé/vérifié côté serveur contre un barème,
+contrairement à la libre - voir le commentaire plus haut dans ce fichier,
+"le prix dette est un montant FIXE... jamais négocié"). Un prix nul
+laissait donc la transaction s'exécuter normalement : carte transférée,
+aucun jeton déplacé. Reproduit en HTTP réel par la seconde relecture
+indépendante (achat à 0 jeton accepté, 201, inventaire du vendeur bien
+décrémenté), et confirmé touchant DEUX routes à la fois : l'ancienne route
+directe `POST /api/games/{id}/transactions` (que `player-view.js` n'appelle
+plus, remplacée par le système de QR) ET la route actuellement utilisée
+`POST /api/games/{id}/trade-offers/{code}/redeem` - les deux appellent la
+MÊME méthode `GameService.recordTransaction`, qui est le SEUL point qui
+déplace réellement les jetons. Le contrôle `if (previewPrice > 0)` dans
+`GecoServer.java` (route `/redeem`) n'est qu'une optimisation pour éviter
+de consommer un QR pour un achat voué à l'échec - jamais la frontière de
+sécurité réelle, qui doit vivre dans `recordTransactionUnlocked` lui-même.
+
+**Correctif** : `else if (game.getMoneySystem() == Game.MONEY_DEBT) { if
+(price <= 0) throw new IllegalArgumentException(...); vérification de solde
+inchangée }` - remplace le `else if (price > 0)` générique (qui s'appliquait
+à la fois à la dette ET au troc à l'ancienne, `buyerWeakGoods`&co, jamais de
+jetons par conception - voir `Transaction.isGoodsTrade()`). Portée
+volontairement limitée à la DETTE : le troc à l'ancienne continue
+légitimement à avoir `price == 0` (il paie en biens, pas en jetons), rien
+n'y change. La monnaie dette CLASSIQUE (sans smartphone) n'emprunte de
+toute façon jamais ce chemin (aucun `Player.jetonWeak` suivi dans ce mode) -
+la demande de l'utilisateur de corriger "que l'on soit en dette classique
+ou en dette smartphone" est donc satisfaite par construction : le principe
+("jamais gratuit") est vrai pour les deux, seule la dette smartphone avait
+un CODE qui pouvait le violer.
+
+Vérifié :
+- Nouveau fichier de test `GameServiceTransactionSecurityTest` (2 cas) :
+  une tentative à prix nul est refusée (`IllegalArgumentException`, aucune
+  `Transaction` persistée, carte toujours chez le vendeur en même quantité
+  qu'avant la tentative) ; une transaction à prix strictement positif reste
+  acceptée (contre-épreuve, pour ne pas casser le flux normal).
+- Vérifié en HTTP réel sur un serveur fraîchement reconstruit : la même
+  tentative à prix nul, via l'ancienne route directe `/transactions`,
+  renvoie désormais 400 avec le message "Le prix d'une carte doit toujours
+  être positif - une transaction ne peut jamais être gratuite." ; une
+  transaction à 3 jetons sur le même vendeur/acheteur réussit normalement
+  (201).
+- `mvn clean package` complet vert (69 tests) - aucun test existant
+  (troc, libre, dette à prix positif) n'utilisait un prix nul en dette,
+  aucune régression.
