@@ -89,17 +89,85 @@ done
 # https://maven.apache.org/download.cgi). Si un jar déjà compilé existe
 # (transmis depuis un autre poste, ex. via git/Cloud/e-mail - jamais besoin
 # de clé USB), Maven n'est même pas nécessaire pour simplement LANCER le jeu.
+# BUG TROUVÉ ET CORRIGÉ (29/09/2026, remonté par un utilisateur : "le script
+# d'installation ne trouve pas le dossier jdk-portable", constaté sur
+# Windows, macOS ET Linux avec exactement le même dossier "jdk-portable" à
+# côté de run.sh) : la détection cherchait EXCLUSIVEMENT
+# "jdk-portable/bin/java", une structure plate qui ne correspond en réalité
+# qu'à UN SEUL des cas réels rencontrés :
+#   - macOS : l'archive Temurin .tar.gz pour macOS est un bundle applicatif -
+#     le binaire vit dans "jdk-portable/Contents/Home/bin/java", JAMAIS
+#     directement dans "jdk-portable/bin/" (piège classique des JDK macOS,
+#     sans rapport avec ce projet en particulier).
+#   - Windows : l'archive Temurin pour Windows contient "bin/java.exe", pas
+#     "bin/java" tout court - le test "-x .../bin/java" ne trouve donc rien
+#     même si le dossier est correctement en place (testé sous Git Bash).
+#   - Les trois plateformes : erreur utilisateur fréquente (mais qu'il vaut
+#     mieux tolérer que faire échouer) consistant à EXTRAIRE l'archive DANS
+#     un dossier "jdk-portable" déjà créé plutôt que de RENOMMER le dossier
+#     obtenu par l'extraction - l'outil d'extraction ajoute alors un niveau
+#     de dossier supplémentaire (ex. "jdk-portable/jdk-21.0.5+11/bin/java").
+# find_portable_java_bin ci-dessous tolère ces trois cas (et leurs
+# combinaisons) au lieu de supposer une seule structure figée.
+find_portable_java_bin()
+{
+	local base="$1" candidate
+	for candidate in \
+		"$base/bin/java" \
+		"$base/bin/java.exe" \
+		"$base/Contents/Home/bin/java" \
+		"$base"/*/bin/java \
+		"$base"/*/bin/java.exe \
+		"$base"/*/Contents/Home/bin/java
+	do
+		if [ -x "$candidate" ]; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
 JAVA_BIN="java"
-if [ -x "$SCRIPT_DIR/jdk-portable/bin/java" ]; then
-	info "JDK portable détecté (jdk-portable/) - utilisé en priorité, votre Java système n'est pas touché."
-	export JAVA_HOME="$SCRIPT_DIR/jdk-portable"
-	export PATH="$SCRIPT_DIR/jdk-portable/bin:$PATH"
-	JAVA_BIN="$SCRIPT_DIR/jdk-portable/bin/java"
+JDK_PORTABLE_DIR="$SCRIPT_DIR/jdk-portable"
+if [ -d "$JDK_PORTABLE_DIR" ]; then
+	PORTABLE_JAVA="$(find_portable_java_bin "$JDK_PORTABLE_DIR" || true)"
+	if [ -n "$PORTABLE_JAVA" ]; then
+		PORTABLE_JAVA_BIN_DIR="$(dirname "$PORTABLE_JAVA")"
+		info "JDK portable détecté ($PORTABLE_JAVA) - utilisé en priorité, votre Java système n'est pas touché."
+		# JAVA_HOME est le dossier PARENT de "bin/" - fonctionne aussi bien pour
+		# la structure plate (.../bin/java -> JAVA_HOME=...) que pour le bundle
+		# macOS (.../Contents/Home/bin/java -> JAVA_HOME=.../Contents/Home).
+		export JAVA_HOME="$(dirname "$PORTABLE_JAVA_BIN_DIR")"
+		export PATH="$PORTABLE_JAVA_BIN_DIR:$PATH"
+		JAVA_BIN="$PORTABLE_JAVA"
+	fi
 fi
+
+# Même principe de tolérance qu'au-dessus pour "maven-portable" (l'archive
+# officielle Maven contient déjà "mvn" ET "mvn.cmd" dans le même bin/, sans
+# distinction par plateforme - seule l'erreur "extrait DANS plutôt que
+# renommé EN maven-portable" est donc réellement possible ici).
+find_portable_mvn_bin()
+{
+	local base="$1" candidate
+	for candidate in "$base/bin/mvn" "$base"/*/bin/mvn; do
+		if [ -x "$candidate" ]; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
 MVN_BIN="mvn"
-if [ -x "$SCRIPT_DIR/maven-portable/bin/mvn" ]; then
-	info "Maven portable détecté (maven-portable/) - utilisé en priorité."
-	MVN_BIN="$SCRIPT_DIR/maven-portable/bin/mvn"
+MAVEN_PORTABLE_DIR="$SCRIPT_DIR/maven-portable"
+if [ -d "$MAVEN_PORTABLE_DIR" ]; then
+	PORTABLE_MVN="$(find_portable_mvn_bin "$MAVEN_PORTABLE_DIR" || true)"
+	if [ -n "$PORTABLE_MVN" ]; then
+		info "Maven portable détecté ($PORTABLE_MVN) - utilisé en priorité."
+		MVN_BIN="$PORTABLE_MVN"
+	fi
 fi
 
 # --- 2. Détection du système : Linux (apt/dnf/pacman) ou macOS (brew) ---
@@ -160,12 +228,14 @@ java_ok()
 
 if java_ok; then
 	info "Java détecté : $("$JAVA_BIN" -version 2>&1 | grep 'version' | head -1)"
-elif [ "$JAVA_BIN" != "java" ]; then
-	# Le JDK portable existe mais ne convient pas (version trop ancienne,
-	# archive corrompue...) - jamais de repli automatique vers une
-	# installation système dans ce cas : mieux vaut prévenir clairement que
-	# de deviner. Remonté par un utilisateur : ne rien installer sans qu'il
-	# le sache, sur un poste où il n'a de toute façon pas les droits.
+elif [ -d "$JDK_PORTABLE_DIR" ]; then
+	# Le dossier jdk-portable/ existe mais aucun java valide n'y a été trouvé
+	# (version trop ancienne, archive corrompue, ou une structure interne que
+	# find_portable_java_bin ne reconnaît toujours pas) - jamais de repli
+	# automatique vers une installation système dans ce cas : mieux vaut
+	# prévenir clairement que de deviner. Remonté par un utilisateur : ne rien
+	# installer sans qu'il le sache, sur un poste où il n'a de toute façon pas
+	# les droits.
 	error "Le JDK portable détecté (jdk-portable/) ne semble pas valide (Java 21+ attendu)."
 	error "Vérifiez le contenu de ce dossier, ou téléchargez à nouveau l'archive depuis https://adoptium.net/"
 	exit 1

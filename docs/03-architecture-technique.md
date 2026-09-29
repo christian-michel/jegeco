@@ -2883,3 +2883,66 @@ Vérifié :
 - `mvn clean package` complet vert (69 tests) - aucun test existant
   (troc, libre, dette à prix positif) n'utilisait un prix nul en dette,
   aucune régression.
+
+## 29/09/2026 — run.sh : détection du JDK portable corrigée (Windows/macOS/Linux)
+
+Remonté par l'utilisateur, sur un second poste : "le script d'installation
+ne trouve pas le dossier jdk-portable... j'ai testé sur un pc sous windows
+et sur un mac et sur un pc sous linux". Message affiché : "Java 21 non
+détecté, et aucun droit d'installation n'est supposé" - alors que le
+dossier `jdk-portable/` avait bien été créé à côté de `run.sh`, comme
+demandé par les instructions du script lui-même.
+
+**Cause** : la détection ne cherchait qu'une seule structure figée,
+`jdk-portable/bin/java` - ne correspondant en réalité qu'À UN SEUL des cas
+réels rencontrés, jamais les trois à la fois :
+- **macOS** : l'archive Temurin `.tar.gz` pour macOS est un BUNDLE
+  applicatif, pas une simple arborescence plate - le binaire vit dans
+  `jdk-portable/Contents/Home/bin/java`, jamais directement sous
+  `jdk-portable/bin/`. Piège classique des JDK macOS, sans lien avec ce
+  projet en particulier, mais jamais anticipé par le script.
+- **Windows** : l'archive Temurin pour Windows contient `bin/java.exe`, pas
+  `bin/java` tout court - `[ -x .../bin/java ]` ne trouve donc rien même
+  avec un dossier correctement en place (vérifié sous Git Bash).
+- **Les trois plateformes** : une erreur utilisateur plausible (extraire
+  l'archive DANS un dossier "jdk-portable" déjà créé, plutôt que RENOMMER
+  le dossier obtenu par l'extraction EN "jdk-portable") ajoute un niveau de
+  dossier supplémentaire (ex. `jdk-portable/jdk-21.0.5+11/bin/java`) - à
+  tolérer plutôt qu'à faire échouer, puisque le résultat visuel (un dossier
+  "jdk-portable" contenant bien un JDK quelque part à l'intérieur) semble
+  correct à l'utilisateur.
+
+**Correctif** (`run.sh`) : nouvelle fonction `find_portable_java_bin()` qui
+essaie, dans l'ordre, la structure plate (`bin/java`, `bin/java.exe`), le
+bundle macOS (`Contents/Home/bin/java`), et leurs équivalents avec un
+niveau de dossier supplémentaire (glob `*/`) - les six combinaisons
+possibles, au lieu d'une seule supposée. `JAVA_HOME` est dérivé comme
+`dirname(dirname(chemin_du_binaire))`, une formule qui donne le bon
+résultat aussi bien pour la structure plate que pour le bundle macOS, sans
+branche séparée. Même traitement pour `maven-portable/` (fonction
+`find_portable_mvn_bin()`, plus simple : l'archive Maven officielle
+contient déjà `mvn` ET `mvn.cmd` dans le même `bin/`, aucune variation par
+plateforme à gérer - seule la tolérance "extrait dans" vs "renommé en"
+s'applique). La branche "JDK portable détecté mais invalide" (version trop
+ancienne, archive vraiment corrompue) est maintenant déclenchée par
+l'existence du DOSSIER `jdk-portable/` (`[ -d "$JDK_PORTABLE_DIR" ]`)
+plutôt que par une variable dont la valeur pouvait rester "java" même avec
+un dossier présent mais non reconnu - distinction importante pour ne
+jamais, dans ce cas, retomber silencieusement sur le message "Java non
+détecté, voulez-vous l'installer" qui aurait été trompeur.
+
+**Vérifié** : impossible de tester sur du matériel Windows/macOS réel
+depuis cet environnement (conteneur Linux) - la logique a donc été
+vérifiée par SIMULATION des six structures de dossier réelles (arborescence
+factice + binaire `java` factice imitant la sortie de `java -version`),
+avec extraction du bloc de détection exact de `run.sh` (pas une
+retranscription à la main, pour être certain de tester le code réellement
+livré) : les six cas (plat Linux, plat Windows `.exe`, bundle macOS, plat +
+niveau supplémentaire, bundle macOS + niveau supplémentaire, dossier
+présent mais vide) donnent chacun le résultat attendu, y compris le calcul
+de `JAVA_HOME`. Non-régression confirmée sur le cas normal (pas de dossier
+portable, Java système détecté) via une exécution réelle de
+`./run.sh --rebuild` dans cet environnement. `bash -n run.sh` (vérification
+de syntaxe) et relecture manuelle des points d'attention `set -euo
+pipefail` (globs non appariés, sous-commandes avec `|| true`) - aucun
+point de script qui s'arrêterait sur une erreur inattendue.
