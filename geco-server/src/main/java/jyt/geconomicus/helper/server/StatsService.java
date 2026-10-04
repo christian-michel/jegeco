@@ -34,8 +34,17 @@ public class StatsService
 	{
 	}
 
-	/** La richesse accumulée par un joueur au cours de la partie (voir {@link #computeWealthByPlayer}). */
-	public record PlayerWealth(String playerName, int wealth)
+	/**
+	 * La richesse accumulée par un joueur au cours de la partie (voir
+	 * {@link #computeWealthByPlayer}). {@code quitEarly} (04/10/2026, voir
+	 * Player.quit) : vrai si ce joueur a quitté la partie en cours de route
+	 * (libre+strict TRM+smartphone) - décision utilisateur : il continue de
+	 * toucher le Dividende Universel et reste donc compté normalement dans
+	 * cette richesse (jamais figé à sa valeur de sortie), mais ce champ
+	 * permet au client de le distinguer visuellement (toujours visible,
+	 * jamais masqué) d'un joueur qui a joué la partie jusqu'au bout.
+	 */
+	public record PlayerWealth(String playerName, int wealth, boolean quitEarly)
 	{
 	}
 
@@ -248,7 +257,14 @@ public class StatsService
 	{
 	}
 
-	public record PlayerWealthSeries(String playerName, List<PlayerWealthPoint> points)
+	/**
+	 * {@code quitEarly} (04/10/2026, voir Player.quit) : vrai si ce joueur a
+	 * quitté la partie en cours de route - sa série continue malgré tout de
+	 * recevoir un nouveau point à chaque tour (il continue de toucher le DU),
+	 * ce champ sert uniquement à ce que le client distingue visuellement sa
+	 * courbe (ex. ligne en pointillés) sans jamais la masquer.
+	 */
+	public record PlayerWealthSeries(String playerName, List<PlayerWealthPoint> points, boolean quitEarly)
 	{
 	}
 
@@ -357,7 +373,7 @@ public class StatsService
 		// référence pour la moyenne, l'écart-type et le seuil de pauvreté (mêmes
 		// valeurs déjà calculées ci-dessus, sur la même échelle que les barres).
 		final List<PlayerWealth> playerWealths = wealthByPlayer.entrySet().stream()
-				.map(e -> new PlayerWealth(e.getKey(), e.getValue()))
+				.map(e -> new PlayerWealth(e.getKey(), e.getValue(), isPlayerQuit(pGame, e.getKey())))
 				.sorted(Comparator.comparing(PlayerWealth::playerName)).toList();
 
 		return new FinalReport(totalPlayers, finalizedPlayers, notYetFinalized, pGame.getNbTurnsPlanned(),
@@ -545,6 +561,38 @@ public class StatsService
 			pointsByPlayer.put(p.getName(), new ArrayList<>());
 		}
 
+		// BUG TROUVÉ ET CORRIGÉ (04/10/2026, en écrivant les tests de la
+		// fonctionnalité "joueur qui quitte en cours de partie continue de
+		// toucher le DU", voir Player.quit) : le correctif du 13/09/2026
+		// ci-dessous (`turn = QUIT ? nbTurnsPlanned : turnCounter[0]`)
+		// supposait "QUIT ne survient JAMAIS qu'au tout dernier tour de la
+		// partie" - vrai jusqu'ici (seul l'assistant de FIN DE PARTIE postait
+		// des QUIT), mais plus du tout depuis qu'un joueur peut quitter
+		// n'importe quand en cours de route (openPlayerQuitDialog). Forcer
+		// SYSTÉMATIQUEMENT `turn = nbTurnsPlanned` pour un QUIT mid-partie
+		// plaçait son point au MAUVAIS tour (le dernier de la partie, pas
+		// celui où il a réellement quitté) - mesuré : une partie à 5 tours
+		// où Alice quitte au tour 1 lui donnait un point supplémentaire
+		// fantôme au tour 5, et son point légitime du tour 1 n'était jamais
+		// dédupliqué avec l'ouverture de ce même tour (comparaison de tours
+		// différents). Corrigé en précalculant ICI, une seule fois, l'ensemble
+		// des QUIT réellement "de fin de partie" (ceux qu'AUCUN TURN ne suit
+		// plus nulle part dans l'historique complet) - seuls CEUX-LÀ gardent
+		// le correctif du 13/09/2026 ; tout autre QUIT (mid-partie) utilise
+		// désormais le tour RÉEL où il survient, exactement comme DEATH.
+		final List<Event> allEventsByTime = new ArrayList<>(pGame.getEvents());
+		allEventsByTime.sort(Comparator.comparing(Event::getTstamp, Comparator.nullsLast(Comparator.naturalOrder())));
+		final java.util.Set<Event> endOfGameQuitEvents = new java.util.HashSet<>();
+		boolean turnSeenScanningFromEnd = false;
+		for (int i = allEventsByTime.size() - 1; i >= 0; i--)
+		{
+			final Event e = allEventsByTime.get(i);
+			if (e.getEvt() == EventType.TURN)
+				turnSeenScanningFromEnd = true;
+			else if ((e.getEvt() == EventType.QUIT) && !turnSeenScanningFromEnd)
+				endOfGameQuitEvents.add(e);
+		}
+
 		final int[] turnCounter = { 0 };
 		final int[] currentFactor = { 1 };
 		pGame.recomputeAll(event -> {
@@ -552,7 +600,12 @@ public class StatsService
 			{
 				turnCounter[0]++;
 				final int mass = pGame.getMoneyMass();
-				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
+				// Élargi à isQuit() (04/10/2026, voir Player.quit/Game.computeCurrentDU) :
+				// un joueur qui a quitté continue de toucher le DU et doit donc rester
+				// compté dans cette moyenne M(t)/N(t) - isQuit() reste toujours faux en
+				// dehors de ce cas précis (libre+strict TRM+smartphone), élargissement
+				// sans effet ailleurs (idem plus bas dans cette même méthode).
+				final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
 				final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
 				for (final Player p : pGame.getPlayers())
 				{
@@ -578,26 +631,33 @@ public class StatsService
 				final int assessedMonetary = computeMonetaryGain(pGame, event);
 				final int assessedCards = computeCardsGain(pGame, event, currentFactor[0]);
 				final int mass = pGame.getMoneyMass();
-				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
+				final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
 				final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
 				final double relative = average == 0 ? 0 : assessedMonetary / average;
 				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 13/09/2026, PDF avec
 				// captures d'écran - "ne pas montrer le point où le compte revient à
 				// zéro quand ils quittent la partie à la toute fin, la courbe doit
-				// s'arrêter sur leur score final") : QUIT ne survient JAMAIS qu'au tout
-				// dernier tour de la partie (voir renderEndGameInventory dans app.js -
-				// "à la fin du dernier tour, il n'y a jamais de mort" - QUIT y est posté
-				// pour TOUS les joueurs actifs, sans événement TURN derrière puisque la
-				// partie s'arrête là). turnCounter[0] restait donc encore égal au tour
-				// PRÉCÉDENT (aucun TURN ne l'avait incrémenté pour ce dernier tour) : ce
-				// point se retrouvait au MÊME tour que celui déjà posé par le TURN
-				// d'entrée dans ce dernier tour - deux points distincts au même x, un
-				// artefact visuel qui pouvait ressembler à une chute/un retour à zéro
-				// juste avant la fin de la courbe. DEATH, lui, ne survient jamais au
-				// dernier tour (mort/renaissance en cours de partie uniquement) et un
-				// TURN event suit toujours peu après pour incrémenter turnCounter
-				// normalement - turnCounter[0] y reste donc correct, inchangé.
-				final int turn = (event.getEvt() == EventType.QUIT) ? pGame.getNbTurnsPlanned() : turnCounter[0];
+				// s'arrêter sur leur score final") : un QUIT de FIN DE PARTIE (voir
+				// renderEndGameInventory dans app.js - "à la fin du dernier tour, il
+				// n'y a jamais de mort" - QUIT y est posté pour TOUS les joueurs
+				// actifs, sans événement TURN derrière puisque la partie s'arrête là)
+				// laissait turnCounter[0] encore égal au tour PRÉCÉDENT (aucun TURN ne
+				// l'avait incrémenté pour ce dernier tour) : ce point se retrouvait au
+				// MÊME tour que celui déjà posé par le TURN d'entrée dans ce dernier
+				// tour - deux points distincts au même x, un artefact visuel qui
+				// pouvait ressembler à une chute/un retour à zéro juste avant la fin
+				// de la courbe. DEATH, lui, ne survient jamais au dernier tour (mort/
+				// renaissance en cours de partie uniquement) et un TURN event suit
+				// toujours peu après pour incrémenter turnCounter normalement -
+				// turnCounter[0] y reste donc correct, inchangé.
+				// CORRECTIF ÉLARGI (04/10/2026, voir endOfGameQuitEvents précalculé
+				// plus haut) : cette correction supposait à tort "QUIT ne survient
+				// JAMAIS qu'au tout dernier tour" - plus vrai depuis qu'un joueur peut
+				// quitter en cours de partie (Player.quit) tout en continuant d'être
+				// rejoué ici. Seuls les QUIT vraiment "de fin de partie" (aucun TURN
+				// ne les suit plus nulle part) gardent ce correctif ; un QUIT mid-
+				// partie utilise désormais le tour RÉEL où il survient, comme DEATH.
+				final int turn = endOfGameQuitEvents.contains(event) ? pGame.getNbTurnsPlanned() : turnCounter[0];
 				// BUG TROUVÉ ET CORRIGÉ (04/10/2026, PDF "Retours_-_20261004.pdf") :
 				// "sur les courbes... il faut afficher les valeurs en fin de tour,
 				// juste avant qu'ils ne quittent la partie". Le correctif du
@@ -639,7 +699,7 @@ public class StatsService
 		});
 
 		final List<PlayerWealthSeries> series = pointsByPlayer.entrySet().stream()
-				.map(e -> new PlayerWealthSeries(e.getKey(), e.getValue())).toList();
+				.map(e -> new PlayerWealthSeries(e.getKey(), e.getValue(), isPlayerQuit(pGame, e.getKey()))).toList();
 		return new WealthOverTimeReport(series);
 	}
 
@@ -708,6 +768,22 @@ public class StatsService
 		for (final Player p : pGame.getPlayers())
 			if (p.getStartingCardsJson() != null)
 				return true;
+		return false;
+	}
+
+	/**
+	 * Vrai si le joueur de ce nom a quitté la partie en cours de route (voir
+	 * Player.quit, 04/10/2026) - utilisé pour marquer {@code quitEarly} dans
+	 * {@link PlayerWealth}/{@link PlayerWealthSeries}, afin que le client
+	 * puisse le distinguer visuellement sans jamais le masquer des stats.
+	 * Retombe sur faux pour un nom qui ne correspond à aucun joueur (ex. la
+	 * pseudo-entrée "Banque" ajoutée par {@link #computeFinalReport}).
+	 */
+	private boolean isPlayerQuit(final Game pGame, final String pPlayerName)
+	{
+		for (final Player p : pGame.getPlayers())
+			if (p.getName().equals(pPlayerName))
+				return p.isQuit();
 		return false;
 	}
 
@@ -899,7 +975,11 @@ public class StatsService
 				if (event.getEvt() == EventType.TURN)
 					suppressUntilNextTurn[0] = false;
 				final int mass = pGame.getMoneyMass();
-				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
+				// Élargi à isQuit() (04/10/2026) pour la même raison que
+				// computeWealthOverTime ci-dessus : la masse somme désormais aussi un
+				// joueur sorti (voir Game.computeMoneyMassFromActivePlayersJetons),
+				// "massPerPlayer" doit donc diviser par la même population.
+				final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
 				byTurn.put(turn, new int[] { mass, (int) activeCount });
 			});
 		}
@@ -1144,7 +1224,7 @@ public class StatsService
 		}
 
 		final List<PlayerWealth> playerWealths = wealthByPlayer.entrySet().stream()
-				.map(e -> new PlayerWealth(e.getKey(), e.getValue()))
+				.map(e -> new PlayerWealth(e.getKey(), e.getValue(), isPlayerQuit(pGame, e.getKey())))
 				.sorted(Comparator.comparingInt(PlayerWealth::wealth).reversed()).toList();
 
 		return new WealthDistribution(round1(top20Pct), round1(middle60Pct), round1(bottom20Pct), playerWealths);
@@ -1235,6 +1315,27 @@ public class StatsService
 
 		final Map<String, Integer> achievements = new TreeMap<>();
 		final Map<String, Integer> playerDebts = new HashMap<>();
+		// 04/10/2026 (voir Player.quit) : la valeur du DERNIER WEALTH_CHECKPOINT
+		// traité pour un joueur qui a quitté, servant de référence pour calculer
+		// un DELTA (voir le cas WEALTH_CHECKPOINT ci-dessous) - jamais addGain
+		// directement, qui ACCUMULE plutôt que REMPLACE : un même solde ouvert
+		// (celui du "dernier segment de vie", amorcé par l'événement QUIT lui-
+		// même) ne doit être compté qu'une fois en net, même rafraîchi à chaque
+		// tour.
+		// BUG TROUVÉ ET CORRIGÉ (04/10/2026, en écrivant les tests de cette
+		// fonctionnalité) : cette référence doit être UNIQUEMENT la composante
+		// MONÉTAIRE (computeMonetaryGain), jamais computeGain au complet
+		// (monnaie + cartes) - un WEALTH_CHECKPOINT ne représente JAMAIS de
+		// mouvement de cartes (toujours 0, voir Event.java), donc comparer un
+		// computeGain complet (avec les cartes réellement détenues au moment
+		// du QUIT) à un computeGain ultérieur (cartes toujours à 0)
+		// soustrairait à tort la valeur des cartes dès le premier
+		// WEALTH_CHECKPOINT qui suit - alors qu'elle a déjà été comptée UNE
+		// FOIS, correctement, par addGain ci-dessous à l'instant du QUIT. Les
+		// cartes d'un joueur sorti ne bougent plus jamais après coup (son
+		// inventaire est vidé, voir GameService) : seule la composante
+		// monétaire a besoin d'un suivi par delta.
+		final Map<String, Integer> openQuitSegmentMonetaryValue = new HashMap<>();
 		int currentFactor = 1;
 
 		for (final Event event : events)
@@ -1264,7 +1365,36 @@ public class StatsService
 				case DEATH:
 				case QUIT:
 					if (playerName != null)
+					{
 						addGain(pGame, event, playerName, achievements, currentFactor, false);
+						// Amorce le suivi delta ci-dessous : un joueur qui quitte en
+						// libre+strict TRM+smartphone (voir Player.quit) va continuer de
+						// recevoir des WEALTH_CHECKPOINT - sans cette valeur de référence,
+						// le premier d'entre eux recompterait depuis zéro une valeur déjà
+						// ajoutée ci-dessus par addGain. MONÉTAIRE SEULE (voir le
+						// commentaire détaillé sur openQuitSegmentMonetaryValue, plus haut) -
+						// les cartes qu'elle détenait à l'instant du QUIT viennent d'être
+						// comptées une fois pour toutes par addGain, jamais retouchées après.
+						if ((event.getEvt() == EventType.QUIT) && (event.getPlayer() != null)
+								&& event.getPlayer().isQuit())
+							openQuitSegmentMonetaryValue.put(playerName, computeMonetaryGain(pGame, event));
+					}
+					break;
+				case WEALTH_CHECKPOINT:
+					// Uniquement pour un joueur qui a QUITTÉ (voir Player.quit) : son DU
+					// continue, ce "segment de vie" resté ouvert par son événement QUIT
+					// doit donc rester à jour ici plutôt que figé à sa valeur de sortie.
+					// Un joueur encore ACTIF n'est volontairement PAS traité ici (voir la
+					// Javadoc de cette méthode : "pas encore comptabilisé tant qu'actif").
+					// MONÉTAIRE SEULE (computeMonetaryGain, jamais computeGain) : un
+					// WEALTH_CHECKPOINT ne représente jamais de mouvement de cartes.
+					if ((playerName != null) && (event.getPlayer() != null) && event.getPlayer().isQuit())
+					{
+						final int newValue = computeMonetaryGain(pGame, event);
+						final int previousValue = openQuitSegmentMonetaryValue.getOrDefault(playerName, 0);
+						achievements.merge(playerName, newValue - previousValue, Integer::sum);
+						openQuitSegmentMonetaryValue.put(playerName, newValue);
+					}
 					break;
 				case XTECHNOLOGICAL_BREAKTHROUGH:
 					currentFactor *= 2;

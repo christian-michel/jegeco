@@ -503,25 +503,50 @@ public class Event implements Serializable
 			// réglage) ni les cas REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON (propres à
 			// la monnaie dette, qui n'a pas ce mode).
 			//
-			// LIMITE TROUVÉE, NON CORRIGÉE (04/10/2026, seconde relecture indépendante
-			// de la campagne de test du même jour - voir
-			// docs/03-architecture-technique.md, entrée du 04/10/2026 "Seconde
-			// relecture...", pour la reproduction complète et les chiffres) : cette
-			// protection ("on saute ce retrait") ne tient que jusqu'au PROCHAIN TURN/
-			// DEATH - pour une partie libre+strict TRM+smartphone, les DEUX
-			// recalculent ensuite la masse comme
-			// Game.computeMoneyMassFromActivePlayersJetons(), qui ne somme QUE les
-			// joueurs encore actifs : tout ce qu'un joueur a QUITTÉ (jamais celui qui
-			// MEURT, lui reste compté via sa renaissance) est donc silencieusement
-			// perdu dès ce recalcul suivant, pouvant faire diminuer la masse officielle
-			// - contredisant directement l'intention documentée juste au-dessus.
-			// Reproduit : 2 joueurs, 7+7=14, un QUIT (7 jetons) suivi d'un TURN sans
-			// mort fait retomber moneyMass à 7. Correctif NON appliqué ici : la
-			// réparation correcte suppose une décision produit (ex. un accumulateur
-			// séparé pour la monnaie "échouée" des sortants, à ajouter en permanence
-			// au recalcul) plutôt qu'une règle de jeu déjà tranchée - remonté à
-			// l'utilisateur plutôt que deviné.
+			// LIMITE TROUVÉE (04/10/2026, seconde relecture indépendante de la
+			// campagne de test du même jour - voir docs/03-architecture-
+			// technique.md, entrée du 04/10/2026 "Seconde relecture...", pour la
+			// reproduction complète et les chiffres) : cette protection ("on
+			// saute ce retrait") ne tenait que jusqu'au PROCHAIN TURN/DEATH -
+			// pour une partie libre+strict TRM+smartphone, les DEUX recalculent
+			// ensuite la masse comme Game.computeMoneyMassFromActivePlayers
+			// Jetons(), qui ne sommait QUE les joueurs encore actifs : tout ce
+			// qu'un joueur avait QUITTÉ (jamais celui qui MEURT, lui reste
+			// compté via sa renaissance) était donc silencieusement perdu dès ce
+			// recalcul suivant, pouvant faire diminuer la masse officielle -
+			// contredisant directement l'intention documentée juste au-dessus.
+			// Reproduit : 2 joueurs, 7+7=14, un QUIT (7 jetons) suivi d'un TURN
+			// sans mort faisait retomber moneyMass à 7.
+			//
+			// CORRIGÉ (04/10/2026, décision utilisateur suite à la question posée
+			// par ce commentaire - "vaut-il mieux continuer à lui verser le
+			// dividende ou arrêter ?" - réponse : "garde-le visible mais
+			// distingué, vas-y") : un joueur qui QUITTE continue de toucher son
+			// DU à chaque tour comme s'il jouait encore (voir Player.quit,
+			// nouveau champ, et sa Javadoc pour le raisonnement complet - en
+			// résumé : c'est la seule option cohérente avec "la masse ne
+			// diminue jamais" déjà actée ci-dessus, et c'est ce que prévoit la
+			// TRM elle-même pour un membre vivant qui ne transige plus). Il
+			// reste bien `active=false` pour TOUT le reste (ne peut plus
+			// échanger de carte, ne peut plus mourir, ne reçoit plus de carte -
+			// aucun de ces comportements n'est touché par ce correctif), mais
+			// `Player.quit=true` le garde compté partout où la masse/le DU se
+			// calculent à partir des joueurs - voir
+			// Game.computeMoneyMassFromActivePlayersJetons et
+			// Game.computeCurrentDU, toutes deux élargies à `isActive() ||
+			// isQuit()`. Élimine comme effet de bord naturel le bug ci-dessus
+			// (la même incohérence "compté une fois, exclu ensuite" en était la
+			// cause) plutôt que par un correctif isolé/un cas particulier.
 			final boolean strictTrmExit = (game.getMoneySystem() == Game.MONEY_LIBRE) && game.isStrictTrm();
+			// Portée strictement limitée à QUIT (jamais DEATH, qui reste actif via
+			// sa renaissance et n'a donc pas besoin de ce traitement) et à un
+			// joueur RÉELLEMENT suivi par smartphone (startingCardsJson != null -
+			// encore vrai ici : GameService.recordEvent a déjà vidé son contenu en
+			// "{}" avant cet appel, mais ne l'a jamais remis à null, voir
+			// Player.startingCardsJson ; un joueur classique n'a de toute façon
+			// aucun jeton physique à faire grandir).
+			if (EventType.QUIT.equals(evt) && strictTrmExit && (player.getStartingCardsJson() != null))
+				player.setQuit(true);
 			if (!strictTrmExit)
 				game.changeMoneyMass(-interest-principal-(weakCoins + 2 * mediumCoins + 4 * strongCoins) * game.getMoneyCardsFactor());
 			if (EventType.REIMB_CREDIT.equals(evt))

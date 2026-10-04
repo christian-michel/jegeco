@@ -3344,3 +3344,144 @@ AFTER-fix.png`, visuellement conforme à la maquette fournie par
 l'utilisateur), `measure_rebirth_avatar_phone.py` (après correctif,
 téléphone classique, non-régression) - répertoire de travail temporaire,
 hors dépôt.
+
+## 04/10/2026 (suite) - Décision tranchée sur la limite QUIT+strict TRM du
+## même jour : le joueur sorti continue de toucher le DU (Player.quit)
+
+Suite directe de la "LIMITE TROUVÉE, NON CORRIGÉE" documentée plus haut
+(entrée "Seconde relecture indépendante...", 9b9d4b5→178964e) : l'utilisateur
+a répondu à la question posée ("vaut-il mieux continuer à lui verser le
+dividende ou arrêter ?") - **continuer**, avec les cartes déjà rendues à la
+pioche (comportement déjà en place depuis la correction du 20/09/2026) et
+l'affichage "visible mais distingué" (jamais masqué des stats/graphiques,
+toujours signalé par un badge/une ligne en pointillés).
+
+**Nouveau champ `Player.quit`** (geco-engine) : distinct de `active`
+(inchangé, reste faux après un QUIT - gouverne toujours l'éligibilité aux
+transactions/à la mort/à la pioche) - `quit` marque spécifiquement "ce
+joueur a quitté en libre+strict TRM+smartphone et continue d'être compté
+dans la population économique vivante". Mis à `true` dans `Event.java`, cas
+QUIT, sous trois conditions cumulatives (jamais ailleurs) :
+`EventType.QUIT.equals(evt) && strictTrmExit && (player.getStartingCardsJson()
+!= null)` - jamais DEATH (qui reste actif via sa renaissance), jamais hors
+libre+strict TRM, jamais un joueur non suivi par smartphone (son
+`startingCardsJson` reste à `null` toute la partie, voir Player.java).
+Remis à `false` par `Game.recomputeAll()` avant rejeu, comme `active`,
+reconstruit ensuite par le rejeu des QUIT réellement rencontrés - garantit
+un comportement identique en direct et en rejeu historique (même principe
+systématique que `jetonWeak`, voir l'entrée du 11/09/2026).
+
+**Partout où `isActive()` servait à compter "la population vivante" pour
+la masse/le DU strict TRM, élargi à `isActive() || isQuit()`** (jamais pour
+les 40+ autres usages de `active`, qui gardent leur sens inchangé -
+transactions, mort, pioche, "joueurs actifs" affichés) :
+- `Game.computeMoneyMassFromActivePlayersJetons()` - la somme des jetons
+  inclut désormais un joueur sorti, qui continue donc de compter dans la
+  masse (élimine, comme effet de bord naturel plutôt que par un correctif
+  isolé, le bug de la limite ci-dessus : son argent ne disparaissait du
+  calcul que parce qu'il était compté une fois puis exclu).
+- `Game.computeCurrentDU()` - le diviseur N inclut aussi ce joueur, sans
+  quoi son inclusion dans la distribution (voir app.js ci-dessous)
+  gonflerait indûment le DU des autres.
+- `StatsService.computeWealthOverTime` (2 occurrences, M(t)/N(t) pour le
+  module Galilée) et `computeMoneyMassDetailHistory` (ratio masse/joueur du
+  graphique "Création/destruction monétaire par tour").
+
+**Côté serveur web (app.js)** : la boucle qui distribue un WEALTH_CHECKPOINT
+à chaque tour (`wizFinish.onclick`) passe de `game.players.filter(pl =>
+pl.active)` à `pl.active || pl.quit`. **BUG TROUVÉ ET CORRIGÉ au passage**
+(`renderStepAllPlayersMoney`, étape 1 de l'assistant) : cette même fonction
+construit `allPlayersMoneyInventory` (le solde RÉEL pré-rempli de chaque
+joueur) en filtrant SEULEMENT `p.active` - un joueur sorti, absent de cette
+liste, voyait son entrée retomber sur le repli `{weak:0,...}` au moment
+d'ajouter le DU, ÉCRASANT son vrai solde au lieu de l'additionner dessus à
+chaque tour (perte totale de ce qu'il avait accumulé). Élargi à `p.active
+|| p.quit` également - sans ce correctif, la fonctionnalité "continuer le
+DU" aurait silencieusement remis le compteur d'un joueur sorti à zéro (plus
+le DU du tour) à CHAQUE tour au lieu de le faire grandir.
+
+**BUG TROUVÉ ET CORRIGÉ en écrivant les tests** (`StatsService.
+computeWealthOverTime`) : le correctif du 13/09/2026 forçait
+INCONDITIONNELLEMENT `turn = nbTurnsPlanned` pour TOUT événement QUIT,
+sur l'hypothèse "QUIT ne survient JAMAIS qu'au tout dernier tour de la
+partie" - vraie jusqu'ici (seul l'assistant de fin de partie postait des
+QUIT), plus du tout vraie depuis que Player.quit permet un abandon à
+N'IMPORTE QUEL tour. Un test (`StatsServiceQuitContinuesDuTest`, Alice
+quitte au tour 1 d'une partie à 5 tours) a immédiatement révélé le
+symptôme : sa série de richesse comptait 6 points au lieu de 5, avec un
+point fantôme plaqué au tour 5 au lieu de son vrai tour de sortie (1).
+Corrigé en précalculant, une seule fois avant le rejeu, l'ensemble des
+VRAIS QUIT "de fin de partie" (ceux qu'aucun TURN ne suit plus nulle part
+dans l'historique complet, obtenu par un balayage arrière de la liste
+triée des événements) - seuls ceux-là gardent le correctif du 13/09/2026 ;
+tout QUIT mid-partie utilise désormais le tour RÉEL où il survient, comme
+DEATH.
+
+**Second bug trouvé et corrigé en écrivant les tests**
+(`StatsService.computeWealthByPlayer`, rapport final/moyenne/médiane/Gini) :
+cette méthode ne traitait jusqu'ici QUE les événements DEATH/QUIT
+(`addGain`, qui ACCUMULE sur un total cumulé "production de valeurs à
+vie"), jamais WEALTH_CHECKPOINT - sans changement, la richesse "finalisée"
+d'un joueur sorti serait donc restée figée à sa valeur de sortie,
+contredisant directement l'objectif de la fonctionnalité. Ajout d'un
+nouveau cas `WEALTH_CHECKPOINT`, actif UNIQUEMENT pour un joueur
+`isQuit()==true` (jamais pour un joueur encore actif, qui reste "non
+finalisé" comme avant) : au lieu d'additionner naïvement chaque nouveau
+WEALTH_CHECKPOINT (ce qui compterait plusieurs fois le même argent), un
+suivi par DELTA (`openQuitSegmentMonetaryValue`) ne reporte que la
+DIFFÉRENCE avec le dernier point connu de ce "segment de vie resté
+ouvert" - amorcé à la valeur posée par addGain au moment même du QUIT.
+**Piège trouvé en écrivant le test lui-même** (`testFinalReportWealth
+AccumulatesAcrossDeathAndQuitWithoutDoubleCounting`) : la toute première
+version de ce suivi delta utilisait `computeGain` (monnaie + cartes)
+comme référence - or un WEALTH_CHECKPOINT ne porte JAMAIS de mouvement de
+cartes (toujours 0), donc comparer une référence posée au QUIT (avec la
+valeur RÉELLE des cartes qu'il détenait) à un `computeGain` ultérieur
+(cartes toujours à 0) soustrayait à tort cette valeur dès le premier
+WEALTH_CHECKPOINT suivant - alors qu'elle avait déjà été correctement
+comptée UNE FOIS par `addGain` à l'instant du QUIT. Corrigé en utilisant
+`computeMonetaryGain` SEULE (jamais `computeGain`) pour la référence et le
+suivi delta - les cartes, comptées une fois pour toutes à la sortie, ne
+sont plus jamais retouchées ensuite.
+
+**Affichage "visible mais distingué"** (décision explicite de
+l'utilisateur) : nouveau champ `quit`/`quitEarly` exposé par
+`PlayerDto`/`PlayerSelfViewDto` (serveur, côté joueur et animateur) et par
+`PlayerWealth`/`PlayerWealthSeries` (StatsService, rapport final et
+courbes de richesse dans le temps) - jamais une exclusion de ces joueurs
+des stats/graphiques, toujours une distinction visuelle :
+- Badge bleu neutre (`.status-quit`, volontairement différent des badges
+  d'alerte mort/prison/faillite) dans la liste des joueurs du tableau de
+  bord, dans les deux étapes concernées de l'assistant de fin de tour
+  (inventaire des soldes, prévisualisation du DU), et sur l'écran "Profil"
+  du smartphone du joueur lui-même ("vous continuez de toucher le
+  Dividende Universel").
+- Ligne en pointillés (`borderDash`) + suffixe "(sorti)" dans la légende
+  sur les 3 graphiques de richesse dans le temps (module Galilée, combiné,
+  cartes) et couleur de barre distincte + suffixe sur l'histogramme
+  "Richesse finale par joueur".
+
+**Vérifié** : 2 nouveaux tests unitaires (`FreeMoneySystemTest.
+testStrictTrmQuitPlayerKeepsReceivingDuAndStaysCountedInMass`, moteur pur -
+reproduit exactement le scénario 7+7=14 de la limite d'origine et
+confirme qu'il ne casse plus, PUIS que le DU continue de grandir et que N
+reste à 2 ; `StatsServiceQuitContinuesDuTest`, 2 méthodes côté serveur -
+série de richesse qui continue de croître après un QUIT mid-partie, et
+rapport final qui additionne chaque "vie" une seule fois, mort+sortie
+incluses, sans jamais recompter les cartes). Campagne HTTP réelle
+(`verify_quit_feature.py`, 3 joueurs, 8 tours, un QUIT au tour 1 suivi de
+7 WEALTH_CHECKPOINT consécutifs dont une mort d'un autre joueur en
+parallèle) : DU continu confirmé (jetonWeak 7→8→...→14, +1 par tour sans
+interruption), transaction explicitement refusée ("Ce joueur n'est plus
+actif dans la partie"), inventaire de cartes vide après la sortie, masse
+monétaire jamais décroissante sur toute la partie, masse finale = somme
+exacte des jetons (actifs + sortis comptés), courbes de richesse marquées
+`quitEarly=true` avec croissance continue après la sortie, croissance de
+la richesse finale strictement égale à la croissance de sa seule
+composante monétaire (preuve indépendante du catalogue de cartes qu'aucun
+double comptage n'a eu lieu). Vérification visuelle (Playwright,
+`verify_quit_ui.py`) : badge et lignes en pointillés bien rendus sur le
+tableau de bord et les 4 graphiques du rapport (captures `quit-feature-
+dashboard.png`/`quit-feature-report.png`, répertoire de travail
+temporaire, hors dépôt). Suite complète `mvn clean package` verte avant
+commit.

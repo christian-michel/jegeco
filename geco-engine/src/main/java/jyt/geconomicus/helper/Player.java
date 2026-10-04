@@ -51,6 +51,25 @@ public class Player implements Serializable
 
 	// True if the player is active in the game (has joined and did not quit), false otherwise.
 	private boolean active;
+	// Décision utilisateur (04/10/2026, suite à la limite documentée dans
+	// Event.java) : un joueur qui QUITTE en cours de partie libre+strict
+	// TRM+smartphone continue de toucher son Dividende Universel à chaque
+	// tour comme s'il jouait encore - ce champ distingue ce cas précis d'un
+	// simple `active=false` (qui, lui, reste inchangé : ce joueur ne peut
+	// plus échanger de carte ni mourir, et ne reçoit plus jamais de carte -
+	// voir GameService.recordEvent, le retour à la pioche de son inventaire
+	// au moment même de son abandon). Jamais vrai en dehors de ce cas précis
+	// (voir Event.java, cas QUIT) : toujours faux pour la monnaie dette/le
+	// troc, pour un abandon en mode classique (sans smartphone) ou en
+	// monnaie libre sans le réglage strict TRM. Permet de CONTINUER à
+	// compter ce joueur comme "vivant" partout où la masse monétaire/le DU
+	// se calculent à partir des joueurs (Game.computeMoneyMassFromActive
+	// PlayersJetons, Game.computeCurrentDU) sans jamais le réactiver pour le
+	// reste (transactions, mort, pioche) - élimine au passage, comme effet
+	// de bord naturel, le bug où l'argent d'un joueur sorti disparaissait
+	// silencieusement de la masse au tour suivant (même incohérence entre
+	// "compté une fois" et "exclu ensuite" qui causait ce bug).
+	private boolean quit;
 	// The current debt of the player towards the bank
 	private int curDebt;
 	// The current interest owed by the player towards the bank. Note that we could easily
@@ -291,6 +310,16 @@ public class Player implements Serializable
 	public void setActive(boolean pActive)
 	{
 		active = pActive;
+	}
+
+	public boolean isQuit()
+	{
+		return quit;
+	}
+
+	public void setQuit(boolean pQuit)
+	{
+		quit = pQuit;
 	}
 
 	public int getCurDebt()

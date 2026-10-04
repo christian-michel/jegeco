@@ -161,4 +161,73 @@ public class FreeMoneySystemTest
 		// défaut du jeu.
 		assertEquals(false, mGame.isStrictTrm(), "Le mode strict TRM doit être désactivé par défaut.");
 	}
+
+	@Test
+	public void testStrictTrmQuitPlayerKeepsReceivingDuAndStaysCountedInMass()
+	{
+		// Reproduction du bug corrigé le 04/10/2026 (voir docs/03-architecture-
+		// technique.md, entrée "Seconde relecture indépendante...") : 2 joueurs,
+		// 7+7=14, un QUIT (7 jetons) suivi d'un TURN sans mort faisait AVANT
+		// retomber moneyMass à 7 - la masse monétaire ne doit JAMAIS diminuer en
+		// strict TRM. Vérifie aussi la décision utilisateur qui a suivi (même
+		// jour, "vaut-il mieux continuer à lui verser le dividende ou arrêter ?"
+		// - réponse : continuer) : le joueur sorti continue de toucher le DU à
+		// chaque tour, et reste compté dans Game.computeCurrentDU()/
+		// computeMoneyMassFromActivePlayersJetons (voir Player.quit).
+		mGame.setStrictTrm(true);
+		final Player p1 = new Player(mGame, "Alice");
+		final Player p2 = new Player(mGame, "Bob");
+		// Simule une partie suivie par smartphone (voir isSmartphoneTrackedGame)
+		// - sans quoi la masse resterait sur l'ancien mécanisme "DU simple",
+		// jamais concerné ni par le bug ni par ce correctif.
+		p1.setStartingCardsJson("{}");
+		p2.setStartingCardsJson("{}");
+		new Event(mGame, EventType.JOIN, p1).applyEvent();
+		new Event(mGame, EventType.JOIN, p2).applyEvent();
+		// Simule la dotation de départ réellement distribuée par GameService en
+		// direct (7 jetons faibles chacun) - hors périmètre du moteur pur testé
+		// ici isolément.
+		p1.setJetonWeak(7);
+		p2.setJetonWeak(7);
+		assertEquals(14, mGame.getMoneyMass(), "Masse de départ : 7 + 7.");
+
+		// Alice quitte avec ses 7 jetons.
+		final Event quit = new Event(mGame, EventType.QUIT, p1);
+		quit.setWeakCoins(7);
+		quit.applyEvent();
+		assertEquals(14, mGame.getMoneyMass(),
+				"Juste après le QUIT, la masse doit rester inchangée (déjà correct avant ce correctif).");
+		assertEquals(true, p1.isQuit(),
+				"Alice doit être marquée Player.quit=true après un QUIT en libre+strict TRM+smartphone.");
+		assertEquals(false, p1.isActive(), "Alice ne doit en revanche plus être active (ne peut plus échanger/mourir).");
+
+		// Bob reçoit un DU simulé, puis un TURN sans mort survient.
+		p2.setJetonWeak(p2.getJetonWeak() + 1);
+		new Event(mGame, EventType.TURN, null).applyEvent();
+
+		// AVANT LE CORRECTIF : retombait à 7 (perte des jetons d'Alice). Désormais
+		// : doit rester la somme réelle des jetons, Alice (sortie) incluse -
+		// Alice (7) + Bob (8) = 15.
+		assertEquals(15, mGame.getMoneyMass(),
+				"La masse ne doit jamais diminuer : elle doit refléter la somme réelle des jetons, Alice (sortie) incluse.");
+
+		// Alice continue de toucher le DU à chaque tour (décision utilisateur du
+		// 04/10/2026) : un nouveau WEALTH_CHECKPOINT pour elle doit faire
+		// grandir la masse en conséquence, exactement comme pour un joueur actif.
+		final Event checkpoint = new Event(mGame, EventType.WEALTH_CHECKPOINT, p1);
+		checkpoint.setWeakCoins(9); // 7 + 2 de DU, par exemple
+		checkpoint.applyEvent();
+		assertEquals(9, p1.getJetonWeak(),
+				"Le WEALTH_CHECKPOINT doit mettre à jour le solde physique d'Alice, comme pour un joueur actif.");
+
+		new Event(mGame, EventType.TURN, null).applyEvent();
+		assertEquals(17, mGame.getMoneyMass(), "La masse doit refléter la croissance continue d'Alice (9) + Bob (8) = 17.");
+
+		// computeCurrentDU() doit aussi compter Alice dans N (nombre de joueurs
+		// vivants), pour ne pas gonfler indûment le DU de Bob - vérifié en
+		// comparant au calcul attendu avec N=2, pas N=1.
+		final double expectedDu = mGame.computeDuGrowthRatePerTurn() * mGame.getMoneyMass() / 2;
+		assertEquals(Math.round(expectedDu), mGame.computeCurrentDU(),
+				"Alice doit rester comptée dans N malgré son départ (DU calculé avec N=2, pas N=1).");
+	}
 }

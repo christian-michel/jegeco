@@ -496,6 +496,10 @@ public class Game implements Serializable
 			player.setCurDebt(0);
 			player.setCurInterest(0);
 			player.setActive(false);
+			// Même raisonnement que active juste au-dessus (04/10/2026, voir
+			// Player.quit) : remis à faux ici, reconstruit par le rejeu via
+			// Event.applyEvent() au fil des QUIT réellement rencontrés.
+			player.setQuit(false);
 			player.setVisitedBank(true);
 		}
 		interestGained = 0;
@@ -727,8 +731,14 @@ public class Game implements Serializable
 	public int computeCurrentDU()
 	{
 		int nbActivePlayers = 0;
+		// isQuit() élargit volontairement ce compte (04/10/2026, voir
+		// Player.quit/computeMoneyMassFromActivePlayersJetons ci-dessus) : un
+		// joueur qui continue de toucher le DU après avoir quitté doit aussi
+		// compter dans N, sinon sa part serait distribuée sans être comptée
+		// dans le diviseur - gonflant indûment le DU de tous les autres
+		// joueurs. isQuit() reste toujours faux en dehors de ce cas précis.
 		for (final Player p : players)
-			if (p.isActive())
+			if (p.isActive() || p.isQuit())
 				nbActivePlayers++;
 		if (nbActivePlayers == 0)
 			return 0;
@@ -831,8 +841,15 @@ public class Game implements Serializable
 	public int computeMoneyMassFromActivePlayersJetons()
 	{
 		double total = 0;
+		// isQuit() élargit volontairement cette somme (04/10/2026, voir
+		// Player.quit) : un joueur qui a QUITTÉ en libre+strict TRM+smartphone
+		// continue de toucher son DU et doit donc rester compté ici, sans quoi
+		// son argent disparaîtrait silencieusement de la masse au tour suivant
+		// (voir le commentaire détaillé dans Event.java, cas QUIT/DEATH).
+		// isQuit() reste toujours faux en dehors de ce cas précis (dette, troc,
+		// mode classique) - élargissement sans effet ailleurs.
 		for (final Player p : players)
-			if (p.isActive())
+			if (p.isActive() || p.isQuit())
 				total += p.getJetonWeak() * weakCoinValue;
 		return (int) Math.round(total);
 	}

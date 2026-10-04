@@ -457,6 +457,14 @@ body.money-libre .panel-actions .btn.active-mode { background: var(--accent-libr
 .status-bankrupt { background: #fdeaea; color: var(--danger); }
 .status-bank { background: #fdeaea; color: var(--danger); }
 .status-credit { background: #fff7e6; color: #92610a; }
+/* 04/10/2026 (voir Player.quit) : un joueur sorti en cours de partie
+   (libre+strict TRM+smartphone) continue de toucher le DU - jamais masqué
+   des listes/graphiques, mais toujours visuellement distingué d'un joueur
+   encore en jeu (décision utilisateur : "garde-le visible mais distingué").
+   Couleur neutre (bleu), volontairement différente des badges d'alerte
+   ci-dessus (mort/prison/faillite/crédit) - ce n'est pas un problème, juste
+   un statut différent. */
+.status-quit { background: #e8eefc; color: #3b5bb5; }
 
 /* ============ Étape "Bilan des joueurs endettés" (assistant fin de tour) ============ */
 .wizard-checklist li[data-player-id] { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }

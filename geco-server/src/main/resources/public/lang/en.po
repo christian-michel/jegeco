@@ -409,6 +409,12 @@ msgstr "Turn {turn} / {total}"
 msgid "game.status_dead"
 msgstr "Dead — reborn next turn"
 
+msgid "game.status_quit_still_receiving_du"
+msgstr "Left — still receiving the UD"
+
+msgid "game.status_quit_short"
+msgstr "left"
+
 msgid "game.status_prison"
 msgstr "Prison — skips this turn"
 
@@ -1617,6 +1623,9 @@ msgstr "Playing"
 
 msgid "playerView.status_inactive"
 msgstr "Waiting / not playing"
+
+msgid "playerView.status_quit_still_receiving_du"
+msgstr "Left — you keep receiving the Universal Dividend"
 
 msgid "playerView.goods_count"
 msgstr "{n} goods"

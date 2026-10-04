@@ -620,7 +620,12 @@ async function resolveCardName(cardTypeId) {
 // ============================================================
 async function renderProfile() {
 	el("profileName").textContent = state.player.name;
-	el("profileStatus").textContent = state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
+	// state.player.quit (04/10/2026, voir Player.quit) : un joueur qui a quitté
+	// en libre+strict TRM+smartphone continue de toucher le DU - message
+	// distinct du simple "hors jeu" générique, pour qu'il comprenne pourquoi
+	// son solde continue de grandir malgré son statut "inactif".
+	el("profileStatus").textContent = state.player.quit ? t("playerView.status_quit_still_receiving_du")
+		: state.player.active ? t("playerView.status_active") : t("playerView.status_inactive");
 	el("profileAvatarWrapper").innerHTML = buildProfileAvatarHtml(state.player.avatarConfigJson);
 	// Remonté par l'utilisateur (08/09/2026) : même simplification que
 	// renderDashboard() - la décomposition par dénomination n'a plus d'intérêt.

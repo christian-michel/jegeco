@@ -27,7 +27,7 @@ public class Dtos
 	public record PlayerDto(Integer id, String name, boolean active, int curDebt, int curInterest,
 			boolean visitedBank, int age, Integer declaredAge, String favoriteColor, String avatarConfigJson,
 			int goodsCount, String accessToken, int weakGoods, int mediumGoods, int strongGoods,
-			boolean hasStartingAllocation, int jetonWeak, int jetonMedium, int jetonStrong)
+			boolean hasStartingAllocation, int jetonWeak, int jetonMedium, int jetonStrong, boolean quit)
 	{
 		static PlayerDto from(final Player p, final int pAge)
 		{
@@ -55,7 +55,12 @@ public class Dtos
 					// computeTokenBreakdown côté client, désormais réservé à la seule
 					// distribution d'une NOUVELLE création monétaire, jamais à
 					// l'affichage d'un solde déjà existant).
-					p.getJetonWeak(), p.getJetonMedium(), p.getJetonStrong());
+					p.getJetonWeak(), p.getJetonMedium(), p.getJetonStrong(),
+					// quit : ajouté le 04/10/2026 (voir Player.quit) - permet au client
+					// de distinguer visuellement un joueur qui continue de toucher le DU
+					// après avoir quitté (classement, graphiques de richesse) d'un
+					// simple joueur inactif ordinaire.
+					p.isQuit());
 		}
 	}
 
@@ -70,7 +75,7 @@ public class Dtos
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
 			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused, int jetonWeak,
 			int jetonMedium, int jetonStrong, int currentDuValue, double weakCardValueInDU,
-			boolean hasStartingAllocation, int revolutionCount)
+			boolean hasStartingAllocation, int revolutionCount, boolean quit)
 	{
 		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
 				final boolean pTradingAllowed, final double pWeakCoinValue, final boolean pIsPaused,
@@ -95,7 +100,12 @@ public class Dtos
 					// voir Game.revolutionCount/cardPriceInDU) - nécessaire pour que
 					// cardPriceInDuTable() côté player-view.js reste synchronisé avec
 					// le serveur, même principe que weakCardValueInDU juste au-dessus.
-					pRevolutionCount);
+					pRevolutionCount,
+					// quit : ajouté le 04/10/2026 (voir Player.quit, PlayerDto plus
+					// haut) - permet à player-view.js d'afficher un message distinct
+					// ("vous continuez de toucher le DU") plutôt que le simple
+					// "partie terminée pour vous" d'un joueur inactif ordinaire.
+					p.isQuit());
 		}
 	}
 

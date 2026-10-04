@@ -411,6 +411,12 @@ msgstr "Tour {turn} / {total}"
 msgid "game.status_dead"
 msgstr "Mort — renaît au prochain tour"
 
+msgid "game.status_quit_still_receiving_du"
+msgstr "Sorti — touche encore le DU"
+
+msgid "game.status_quit_short"
+msgstr "sorti"
+
 msgid "game.status_prison"
 msgstr "Prison — passe ce tour"
 
@@ -1621,6 +1627,9 @@ msgstr "En jeu"
 
 msgid "playerView.status_inactive"
 msgstr "En attente / hors jeu"
+
+msgid "playerView.status_quit_still_receiving_du"
+msgstr "Sorti — vous continuez de toucher le Dividende Universel"
 
 msgid "playerView.goods_count"
 msgstr "{n} biens"

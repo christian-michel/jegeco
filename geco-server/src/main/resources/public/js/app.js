@@ -2709,7 +2709,15 @@ async function renderGameDetail(gameId) {
 	const sortedPlayers = [...game.players].sort((a, b) => a.name.localeCompare(b.name, "fr"));
 	for (const p of sortedPlayers) {
 		const li = document.createElement("li");
-		const status = isDebt ? getPlayerStatusBadge(p, game) : null;
+		// p.quit (04/10/2026, voir Player.quit) prioritaire sur les badges dette
+		// ci-dessous - jamais vrai pour une partie dette (voir Event.java, cas
+		// QUIT, scopé à libre+strict TRM+smartphone), donc sans effet pour elles.
+		// Décision utilisateur : "garde-le visible mais distingué" - jamais
+		// masqué de la liste, toujours ce badge neutre plutôt qu'un badge
+		// d'alerte (il n'a rien fait de mal, il a juste quitté la partie).
+		const status = p.quit
+			? { text: "🔄 " + t("game.status_quit_still_receiving_du"), cls: "status-quit" }
+			: isDebt ? getPlayerStatusBadge(p, game) : null;
 		const meta = isTroc
 			? t("game.player_meta_troc", { goods: p.goodsCount })
 			: isDebt
@@ -3432,13 +3440,18 @@ function renderGalileeChart(wealthOverTime, mode) {
 	// a un sens théorique (la TRM porte sur la monnaie, jamais sur la valeur
 	// des cartes détenues) - les deux autres graphiques (richesse combinée,
 	// cartes seules) n'ont donc jamais de bascule "valeur relative".
+	// quitEarly (04/10/2026, voir StatsService.PlayerWealthSeries/Player.quit) :
+	// un joueur qui a quitté continue de toucher le DU, sa courbe reste donc
+	// pleinement affichée (jamais masquée) - distinguée en pointillés plutôt
+	// que retirée, décision utilisateur ("garde-le visible mais distingué").
 	const datasets = wealthOverTime.series.map((s, i) => ({
-		label: s.playerName,
+		label: s.playerName + (s.quitEarly ? ` (${t("game.status_quit_short")})` : ""),
 		data: s.points.map((p) => ({ x: p.turn, y: mode === "relative" ? p.relativeToAverage : p.monetaryValue })),
 		borderColor: GALILEE_PALETTE[i % GALILEE_PALETTE.length],
 		backgroundColor: "transparent",
 		tension: 0.25,
 		pointRadius: 2,
+		borderDash: s.quitEarly ? [6, 4] : undefined,
 	}));
 
 	// En mode relatif, une ligne pointillée à 1.0 matérialise "la moyenne" vers
@@ -3499,13 +3512,16 @@ function renderSimpleWealthChart(wealthOverTime, pChartKey, pCanvasId, pValueFie
 
 	if (reportCharts[pChartKey]) reportCharts[pChartKey].destroy();
 
+	// quitEarly : même distinction en pointillés que renderGalileeChart
+	// ci-dessus, pour les mêmes raisons (04/10/2026, voir Player.quit).
 	const datasets = wealthOverTime.series.map((s, i) => ({
-		label: s.playerName,
+		label: s.playerName + (s.quitEarly ? ` (${t("game.status_quit_short")})` : ""),
 		data: s.points.map((p) => ({ x: p.turn, y: p[pValueField] })),
 		borderColor: GALILEE_PALETTE[i % GALILEE_PALETTE.length],
 		backgroundColor: "transparent",
 		tension: 0.25,
 		pointRadius: 2,
+		borderDash: s.quitEarly ? [6, 4] : undefined,
 	}));
 
 	reportCharts[pChartKey] = trackChart(el(pCanvasId), {
@@ -3696,15 +3712,20 @@ async function renderReport(gameId, includeBank = false) {
 	// à la demande explicite de l'utilisateur), via un graphique Chart.js mixte
 	// barres + lignes plutôt que le dessin Graphics2D bas niveau de l'original.
 	const meanMinusStdDev = Math.max(0, report.average - report.stdDev);
+	// quitEarly (04/10/2026, voir Player.quit) : une couleur de barre distincte
+	// plutôt qu'un simple suffixe de texte - plus visible au premier coup d'œil
+	// sur un histogramme que sur une courbe (décision utilisateur : "garde-le
+	// visible mais distingué").
+	const QUIT_BAR_COLOR = "#8aa5e8";
 	reportCharts.histogram = trackChart(el("chartHistogram"), {
 		data: {
-			labels: report.playerWealths.map((p) => p.playerName),
+			labels: report.playerWealths.map((p) => p.playerName + (p.quitEarly ? ` (${t("game.status_quit_short")})` : "")),
 			datasets: [
 				{
 					type: "bar",
 					label: t("report.legend_wealth"),
 					data: report.playerWealths.map((p) => p.wealth),
-					backgroundColor: accent,
+					backgroundColor: report.playerWealths.map((p) => (p.quitEarly ? QUIT_BAR_COLOR : accent)),
 					order: 3,
 				},
 				{
@@ -4555,7 +4576,17 @@ async function openEndOfTurnWizard() {
 	// les deux étaient mélangés dans la même étape.
 	function renderStepAllPlayersMoney() {
 		hideGenericButtons();
-		const activePlayers = sortByName(game.players.filter((p) => p.active));
+		// BUG TROUVÉ ET CORRIGÉ (04/10/2026, voir PlayerDto.quit) : un joueur qui
+		// a quitté en libre+strict TRM+smartphone continue de toucher le DU
+		// chaque tour (décision utilisateur) - exclu d'ici (p.active seul), son
+		// solde RÉEL n'était jamais lu dans allPlayersMoneyInventory, repliant
+		// silencieusement sur {weak:0,...} au moment d'ajouter le DU plus bas
+		// (voir wizFinish.onclick) : son solde réel était alors ÉCRASÉ par le
+		// seul montant du DU du tour, au lieu de s'y ajouter - perdant tout ce
+		// qu'il avait accumulé jusque-là à chaque tour. Élargi à `p.active ||
+		// p.quit` pour que son fieldset (et donc son vrai solde pré-rempli)
+		// reste présent dans cette étape, comme n'importe quel joueur actif.
+		const activePlayers = sortByName(game.players.filter((p) => p.active || p.quit));
 		allPlayersMoneyInventory = {};
 
 		// BUG TROUVÉ ET CORRIGÉ (13/09/2026, PDF "Retours_-_20260913_2.pdf") :
@@ -4617,7 +4648,7 @@ async function openEndOfTurnWizard() {
 				// modifié à la main on reconvertit la valeur saisie comme avant.
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
-				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}</legend>
+				<legend>${escapeHtml(p.name)}${selectedDeathIds.includes(p.id) ? ` <span class="status-badge status-bank">${t("wiz.mandatory_dying_badge")}</span>` : ""}${p.quit ? ` <span class="status-badge status-quit">${t("game.status_quit_still_receiving_du")}</span>` : ""}</legend>
 				<label>${t(isSmartphoneLibre ? "wiz.field_monetary_units_simple" : "wiz.field_tokens_simple")}</label>
 				<input type="number" class="amWeak" value="${displayValue}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}" data-true-weak="${prefill.weak}" data-prefill-display="${displayValue}">
 			</fieldset>`;
@@ -4888,7 +4919,12 @@ async function openEndOfTurnWizard() {
 	function renderStepOtherDU() {
 		hideGenericButtons();
 		const du = computeCurrentDU();
-		const staying = sortByName(game.players.filter((p) => p.active && !selectedDeathIds.includes(p.id)));
+		// Élargi à p.quit (04/10/2026, voir PlayerDto.quit, même raisonnement que
+		// renderStepAllPlayersMoney ci-dessus) : un joueur sorti continue de
+		// toucher le DU, l'animateur doit donc voir sa prévision ici aussi -
+		// jamais dans selectedDeathIds (il ne peut plus mourir, voir renderStep2).
+		const staying = sortByName(
+			game.players.filter((p) => (p.active || p.quit) && !selectedDeathIds.includes(p.id)));
 
 		el("dlgTitle").textContent = t("wiz.other_du_title");
 		// BUG TROUVÉ ET CORRIGÉ (11/09/2026, retour utilisateur sur une partie
@@ -4927,7 +4963,7 @@ async function openEndOfTurnWizard() {
 				const breakdown = { weak: coins.weak + duBreakdown.weak, medium: coins.medium, strong: coins.strong };
 				return `
 			<fieldset class="death-inventory-player" data-player-id="${p.id}">
-				<legend>${escapeHtml(p.name)}</legend>
+				<legend>${escapeHtml(p.name)}${p.quit ? ` <span class="status-badge status-quit">${t("game.status_quit_still_receiving_du")}</span>` : ""}</legend>
 				<p class="du-result" style="font-size:0.82rem;color:var(--text-dim);">
 					${escapeHtml(t("wiz.du_result", { currentValue, du: duBreakdown.weak, total }))}<br>
 					${t("wiz.death_du_breakdown", { weak: breakdown.weak })}
