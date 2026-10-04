@@ -829,6 +829,58 @@ public class StatsService
 		// tour (TreeMap : parcouru dans l'ordre croissant des tours ensuite).
 		final Map<Integer, int[]> byTurn = new TreeMap<>();
 		final Map<Player, int[]> jetonsBeforeReplay = resetJetonsToStartOfGameForReplay(pGame);
+		// BUG TROUVÉ ET CORRIGÉ (04/10/2026, campagne de test HTTP réelle 4/8/20
+		// joueurs, libre+smartphone strict TRM, 12 tours) : pour CHAQUE tour
+		// comportant une mort, ce point affichait une masse monétaire TROP
+		// BASSE (et le tour suivant une "création" artificiellement gonflée en
+		// compensation) - mesuré sur les deux campagnes : écart de -48 à -131
+		// unités sur une partie de 4 joueurs selon le tour, et un écart
+		// significatif à QUASIMENT CHAQUE tour sur une partie de 8 joueurs (où
+		// une mort est programmée presque à chaque tour, voir
+		// docs/03-architecture-technique.md, entrée du 04/10/2026, pour le
+		// relevé complet). Dans un cas extrême (un joueur très riche meurt
+		// alors que la croissance naturelle du tour est encore faible), ce
+		// mécanisme pourrait même afficher une barre ROUGE ("destruction
+		// monétaire") alors que la masse stricte TRM ne doit JAMAIS diminuer -
+		// contredisant visuellement la garantie pédagogique centrale de ce
+		// mode (voir FreeMoneySystemTest.testStrictTrmNeverDecreasesMoneyMassAtDeath,
+		// qui vérifie la masse elle-même, jamais ce graphique dérivé).
+		// <p>
+		// Cause : un DEATH, en libre strict TRM suivi par smartphone, recalcule
+		// IMMÉDIATEMENT game.moneyMass à partir des jetons courants (voir
+		// Event.applyEvent, cas DEATH) - mais à cet instant, le point de
+		// contrôle WEALTH_CHECKPOINT qui distribue le DU du tour EN COURS à
+		// tous les joueurs (y compris celui qui vient de renaître) n'a pas
+		// encore eu lieu : app.js enregistre toujours D (pour les joueurs
+		// mourants) PUIS W (pour tous les joueurs actifs, DU inclus) PUIS
+		// seulement T (voir openEndOfTurnWizard/renderStep4) - exactement
+		// l'ordre rejoué ici. Or WEALTH_CHECKPOINT ne touche JAMAIS
+		// game.moneyMass (volontairement, voir son propre cas plus bas) : seul
+		// l'événement TURN suivant recalcule la masse complète (jetons post-DU
+		// inclus) - mais SOUS LE NUMÉRO DE TOUR SUIVANT, puisque TURN
+		// incrémente le compteur de tour AVANT de recalculer. Un premier
+		// correctif (ignorer seulement la capture du DEATH lui-même) s'est
+		// révélé INSUFFISANT, vérifié en relançant la même campagne : les
+		// WEALTH_CHECKPOINT qui suivent le DEATH, bien que ne modifiant jamais
+		// la masse, restent capturés normalement et ré-écrivent quand même la
+		// valeur incomplète (déjà physiquement appliquée par Event.applyEvent,
+		// qu'on l'enregistre ou non dans ce rapport) sous le même numéro de
+		// tour.
+		// <p>
+		// Corrigé en SUSPENDANT toute capture pour le numéro de tour courant
+		// dès qu'un tel DEATH survient, jusqu'au prochain TURN (inclus - qui,
+		// lui, capture toujours, et lève la suspension) : le tour de la mort
+		// garde ainsi la valeur COMPLÈTE déjà posée par la transition TURN qui
+		// l'a fait démarrer (identique à n'importe quel autre tour), au lieu
+		// d'être écrasée par l'état intermédiaire du DEATH puis "confirmée"
+		// telle quelle par les WEALTH_CHECKPOINT qui suivent. Portée
+		// volontairement étroite (uniquement ce cas précis, jamais un filtre
+		// par type d'événement général) pour ne pas réintroduire le besoin de
+		// connaître à l'avance la liste des événements qui mutent la masse
+		// pour les AUTRES systèmes monétaires (ex. NEW_CREDIT en dette, qui
+		// doit lui rester capturé immédiatement - rien ne le "corrige" plus
+		// tard comme le fait TURN ici).
+		final boolean[] suppressUntilNextTurn = { false };
 		try
 		{
 			pGame.recomputeAll(event -> {
@@ -837,6 +889,15 @@ public class StatsService
 				// convention que computeExchangeStats.byTurn, qui démarre à 1).
 				if (turn <= 0)
 					return;
+				final boolean isDeathDeferringMass = (event.getEvt() == EventType.DEATH)
+						&& (pGame.getMoneySystem() == Game.MONEY_LIBRE) && pGame.isStrictTrm()
+						&& isSmartphoneTrackedGame(pGame);
+				if (isDeathDeferringMass)
+					suppressUntilNextTurn[0] = true;
+				if (suppressUntilNextTurn[0] && (event.getEvt() != EventType.TURN))
+					return; // en attente du TURN qui apportera l'état complet de ce tour
+				if (event.getEvt() == EventType.TURN)
+					suppressUntilNextTurn[0] = false;
 				final int mass = pGame.getMoneyMass();
 				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
 				byTurn.put(turn, new int[] { mass, (int) activeCount });

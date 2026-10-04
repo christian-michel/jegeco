@@ -509,6 +509,27 @@ juste avant).
   (460px) sur iPad en mode paysage, le fond de page bleu-violet restant
   visible de chaque côté - les quatre overlays plein écran reprennent
   désormais le même plafond/centrage que `.mobile-container`.
+- **Campagne de test à grande échelle (04/10/2026, 4/8/20 joueurs, 12
+  tours simulés, libre+smartphone strict TRM, pilotée en HTTP réel)** -
+  voir `03-architecture-technique.md`, entrée du 04/10/2026, pour le
+  détail complet. Trouvé et corrigé : le graphique "Création/destruction
+  monétaire par tour" (`StatsService.computeMoneyMassDetailHistory`,
+  ajouté le 29/09/2026) affichait une masse TROP BASSE pour tout tour
+  comportant une mort (jusqu'à -131 unités sur 4 joueurs ; quasiment
+  chaque tour faussé sur 8 joueurs, où une mort survient presque à
+  chaque tour) - au point de pouvoir afficher une fausse "destruction
+  monétaire" (barre rouge) alors que la masse stricte TRM ne diminue
+  jamais. Corrigé en suspendant la capture du tour courant le temps
+  qu'un DEATH mi-tour soit "rattrapé" par le TURN suivant (seul
+  événement qui recalcule la masse complète en strict TRM smartphone).
+  Revérifié : les trois parties (4/8/20 joueurs) concordent désormais
+  exactement avec une vérité terrain tenue indépendamment par le script
+  de test, à chaque tour. Aucun blocage ni lenteur anormale constatée sur
+  `GameService.withGameLock` même à 20 joueurs (446 échanges, 20 morts,
+  20 sorties en ~127s) ; pioche/carré testés sans anomalie à 20 joueurs
+  (catalogue à 26 modèles/niveau, largement suffisant pour `N+1`=21).
+  Conservation vérifiée strictement (masse finale exportée = masse
+  attendue sur les trois parties, aucune carte dupliquée/perdue).
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
@@ -555,7 +576,22 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    envisagée non appliquée : ajuster les jetons ACTUELS par la différence
    entre rejouer avec/sans l'événement retiré. Bug mineur lié : le
    graphique "masse monétaire" affiche pour "Tour 1" la masse finale de la
-   partie au lieu de la masse réelle à ce tour.
+   partie au lieu de la masse réelle à ce tour. Bug mineur lié,
+   distinct, identifié le 04/10/2026 lors de la campagne de test à
+   grande échelle : le graphique "Création/destruction monétaire par
+   tour" (celui-là corrigé pour le cas des morts mi-tour, voir plus
+   haut) affiche, pour son tout DERNIER point (numéro de tour =
+   nombre de tours prévu), `activePlayers=0` et une "masse par joueur"
+   à 0 au lieu du nombre réel de joueurs actifs pendant ce tour - les
+   sorties de fin de partie (QUIT) désactivent les joueurs un par un
+   sous CE MÊME numéro de tour, sans TURN suivant pour les "rattraper"
+   comme le fait le correctif ci-dessus pour une mort en cours de
+   partie. La masse totale elle-même reste exacte (le retrait strict
+   TRM à la sortie est neutre sur la masse) - seul ce ratio final perd
+   son sens. Pas de correctif appliqué : décider ce qu'un point final
+   doit représenter (juste avant les sorties, ou après) est une
+   question de présentation, pas une ambiguïté de règle du jeu, mais
+   reste une décision produit à prendre plutôt qu'à deviner.
 4. **Retirer les traces de diagnostic temporaires** une fois un test
    concluant confirmé (voir le code pour les commentaires "[DIAG]" restants
    éventuels — la plupart ont déjà été retirées ou pérennisées via le

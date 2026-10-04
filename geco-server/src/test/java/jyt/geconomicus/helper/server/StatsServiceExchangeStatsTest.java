@@ -408,4 +408,73 @@ class StatsServiceExchangeStatsTest
 		assertEquals(80, points.get(2).moneyMass(), "tour 3 : aucun crédit, masse stable"); //$NON-NLS-1$
 		assertEquals(0, points.get(2).massDelta());
 	}
+
+	/**
+	 * Régression (04/10/2026, campagne de test HTTP réelle 4/8/20 joueurs -
+	 * voir docs/03-architecture-technique.md, entrée du 04/10/2026) : en libre
+	 * strict TRM suivi par smartphone, une MORT en cours de tour recalcule
+	 * {@code game.moneyMass} IMMÉDIATEMENT à partir des jetons courants (voir
+	 * Event.applyEvent, cas DEATH) - mais AVANT que le point de contrôle
+	 * WEALTH_CHECKPOINT (qui distribue le DU de ce même tour à tous les
+	 * joueurs, y compris celui qui vient de renaître) n'ait eu lieu. Comme
+	 * WEALTH_CHECKPOINT ne touche jamais la masse (volontairement - seul le
+	 * TURN suivant la recalcule en entier), le point du tour de la mort se
+	 * retrouvait à tort "gelé" sur cette valeur INCOMPLÈTE (mesuré en
+	 * campagne : jusqu'à -131 unités d'écart sur une partie de 4 joueurs, et
+	 * un écart à QUASIMENT CHAQUE tour sur une partie de 8 joueurs où une
+	 * mort est programmée presque à chaque tour) au lieu de la valeur
+	 * complète que seul le TURN suivant peut fournir - au risque, dans un cas
+	 * extrême, d'afficher une fausse "destruction monétaire" (delta négatif)
+	 * contredisant la garantie strict TRM (la masse ne diminue jamais, voir
+	 * FreeMoneySystemTest.testStrictTrmNeverDecreasesMoneyMassAtDeath).
+	 * <p>
+	 * Scénario volontairement minimal et déterministe : 2 joueurs, chacun
+	 * reçoit sa dotation de départ (7 unités, donc masse=14 au tour 1), Alice
+	 * meurt EN COURS de tour 1 avec une renaissance délibérément PETITE (3,
+	 * très inférieure à son solde de départ) - si le bug n'était pas corrigé,
+	 * le point du tour 1 chuterait à 10 (3 + les 7 de Bob, inchangés),
+	 * MOINS que les 14 initiaux, un delta négatif à lui tout seul. Les
+	 * WEALTH_CHECKPOINT qui suivent (valeurs arbitraires choisies pour ce
+	 * test, pas une vraie formule de DU) ne doivent jamais apparaître sous le
+	 * tour 1 : seul le TURN qui clôt le tour 1 les capture, sous le tour 2.
+	 */
+	@Test
+	void testLibreMoneyMassPointIgnoresIncompleteDeathRecomputeMidTurn() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 6, "AnimTest", null, //$NON-NLS-1$
+				"Test masse libre, mort en cours de tour", "2026-10-04", "Ceres", 1, 180, 1.0, false, 4, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final int gameId = game.getId();
+		final int aliceId = sService.addPlayer(gameId, "Alice").getId(); //$NON-NLS-1$
+		final int bobId = sService.addPlayer(gameId, "Bob").getId(); //$NON-NLS-1$
+
+		// Tour 1 : mise en place (7 unités chacun -> masse = 14).
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, catalog(6));
+
+		// Alice meurt EN COURS de tour 1, renaissance volontairement PETITE (3) -
+		// recompute intermédiaire (buggé) = 3 + 7 (Bob, inchangé) = 10 < 14.
+		sService.recordEvent(gameId, "D", aliceId, 0, 0, 0, 0, 0, null, 0, 0, 3, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		// Point de contrôle du tour 1 pour les DEUX joueurs (valeurs arbitraires -
+		// ce test porte sur le MÉCANISME de capture, pas sur la formule du DU) :
+		// ne doivent jamais apparaître comme masse du tour 1, seulement du tour 2.
+		sService.recordEvent(gameId, "W", aliceId, 0, 0, 0, 0, 0, null, 0, 0, 8, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "W", bobId, 0, 0, 0, 0, 0, null, 0, 0, 12, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		final Game freshGame = sService.getGame(gameId);
+		final ExchangeAndMoneyReport report = sStats.computeExchangeAndMoneyReport(freshGame,
+				sService.listTransactions(gameId));
+		assertTrue(report.applicable(), "libre + smartphone doit être applicable"); //$NON-NLS-1$
+		final List<MoneyMassDetailPoint> points = report.moneyMassDetail().points();
+		assertEquals(2, points.size());
+		assertEquals(14, points.get(0).moneyMass(),
+				"tour 1 : masse de la mise en place (7+7), jamais la valeur intermédiaire incomplète (10) de la mort"); //$NON-NLS-1$
+		assertEquals(14, points.get(0).massDelta());
+		assertEquals(2, points.get(0).activePlayers(), "Alice reste active après sa renaissance"); //$NON-NLS-1$
+		assertEquals(20, points.get(1).moneyMass(), "tour 2 : masse complète (8+12) une fois le DU du tour 1 distribué"); //$NON-NLS-1$
+		assertEquals(6, points.get(1).massDelta(), "20 - 14"); //$NON-NLS-1$
+	}
 }

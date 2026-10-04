@@ -3070,3 +3070,100 @@ pendant l'animation - désormais identique (gauche/droite/largeur) à
 celui de `.mobile-container`, jamais celui du viewport. Captures d'écran
 à l'appui (mort et renaissance, toutes deux correctement boîtées avec le
 fond indigo visible de chaque côté).
+
+## 04/10/2026 — Campagne de test à grande échelle (4/8/20 joueurs, 12 tours) : masse monétaire par tour faussée à chaque mort
+
+Suite aux trois correctifs du 04/10/2026 ci-dessus, campagne de test
+supplémentaire pilotée en HTTP réel (voir
+`campaign.py`, déjà utilisé lors des relectures précédentes) : trois
+parties libre+smartphone strict TRM, 12 tours de 8 min simulés, 4/8/20
+joueurs, morts et échanges répartis sur toute la partie (pas seulement au
+début/à la fin). Objectif : vérifier la montée en charge (pioche/carré à
+20 joueurs), l'absence de blocage dans `GameService.withGameLock`, la
+cohérence animateur/smartphone et la conservation stricte de la masse
+monétaire.
+
+**Bug trouvé et corrigé** : `StatsService.computeMoneyMassDetailHistory`
+(alimente le graphique "masse monétaire" par tour de l'onglet "Échanges
+monétaires", ajouté le 29/09/2026) affichait, pour CHAQUE tour comportant
+une mort, une masse monétaire TROP BASSE - et le tour suivant une
+"création" compensatoire artificiellement gonflée. Mesuré par comparaison
+avec une vérité terrain tenue indépendamment par le script de campagne :
+écarts de -48 à -131 unités selon le tour sur la partie à 4 joueurs (une
+mort programmée tous les ~2-3 tours), et un écart à QUASIMENT CHAQUE tour
+sur la partie à 8 joueurs (où une mort est programmée presque à chaque
+tour) - par exemple tour 5 : serveur 545 contre 604 réel, tour 9 : serveur
+4972 contre 5310 réel. Dans un cas plus extrême (un joueur très riche
+meurt alors que la croissance naturelle du tour est encore faible), ce
+mécanisme pourrait même afficher une barre ROUGE ("destruction monétaire")
+alors que la masse stricte TRM ne doit JAMAIS diminuer - contredisant
+visuellement la garantie pédagogique centrale de ce mode.
+
+Cause : un DEATH, en libre strict TRM suivi par smartphone, recalcule
+IMMÉDIATEMENT `game.moneyMass` à partir des jetons courants (voir
+`Event.applyEvent`, cas DEATH) - mais à cet instant, le point de contrôle
+WEALTH_CHECKPOINT qui distribue le DU du tour EN COURS à tous les joueurs
+(y compris celui qui vient de renaître) n'a pas encore eu lieu : `app.js`
+enregistre toujours D (joueurs mourants) PUIS W (tous les joueurs actifs,
+DU inclus) PUIS seulement T (voir `openEndOfTurnWizard`/`renderStep4`).
+Or WEALTH_CHECKPOINT ne touche JAMAIS `game.moneyMass` (volontairement) :
+seul l'événement TURN suivant recalcule la masse complète (jetons post-DU
+inclus) - mais SOUS LE NUMÉRO DE TOUR SUIVANT, puisque TURN incrémente le
+compteur de tour avant de recalculer. Le mécanisme "dernière valeur gagne
+par tour" (introduit le 29/09/2026 précisément pour rester agnostique du
+système monétaire, voir la Javadoc de `MoneyMassDetailPoint`) retenait
+donc, pour le tour de la mort, la capture INTERMÉDIAIRE du DEATH plutôt
+que l'état complet - qui, lui, n'arrive jamais sous ce numéro de tour,
+seulement sous le suivant. Un premier correctif (ignorer seulement
+l'événement DEATH lui-même) s'est révélé insuffisant : les
+WEALTH_CHECKPOINT qui suivent, bien que ne modifiant jamais la masse,
+restent capturés normalement et ré-écrivent quand même cette même valeur
+incomplète (déjà physiquement appliquée par `Event.applyEvent`, qu'on
+l'enregistre ou non dans ce rapport) sous le même numéro de tour.
+
+Corrigé en SUSPENDANT toute capture pour le tour courant dès qu'un tel
+DEATH survient, jusqu'au prochain TURN (inclus - qui capture toujours et
+lève la suspension) : le tour de la mort garde ainsi la valeur COMPLÈTE
+déjà posée par la transition TURN qui l'a fait démarrer, exactement comme
+n'importe quel autre tour. Portée volontairement étroite (uniquement ce
+cas précis - DEATH, libre, strict TRM, smartphone - jamais un filtre par
+type d'événement général) pour ne jamais réintroduire le besoin de
+connaître à l'avance la liste des événements qui mutent la masse pour les
+AUTRES systèmes monétaires (ex. NEW_CREDIT en dette, qui reste capturé
+immédiatement - rien ne le "corrige" plus tard comme le fait TURN ici,
+voir `StatsServiceExchangeStatsTest.testDebtMassReflectsCreditsGrantedDuringTheSameTurn`,
+toujours vert). Nouveau test
+`testLibreMoneyMassPointIgnoresIncompleteDeathRecomputeMidTurn`
+(scénario déterministe, 2 joueurs). Revérifié en relançant les deux
+parties réelles (4 et 8 joueurs) contre le serveur corrigé : tous les
+points du graphique "masse monétaire" concordent désormais exactement
+avec la vérité terrain du script de campagne, sur les deux parties.
+
+**Limite connue, NON corrigée** (même mécanisme de rejeu, distincte du
+bug ci-dessus) : le TOUT DERNIER point du graphique (numéro de tour =
+`nbTurnsPlanned`) affiche `activePlayers=0` et `massPerPlayer=0` au lieu
+du nombre réel de joueurs actifs pendant ce tour - parce que les
+événements QUIT de fin de partie (qui désactivent les joueurs un par un)
+partagent le MÊME numéro de tour que le dernier tour joué (aucun TURN
+supplémentaire ne vient ensuite les en démêler, contrairement au cas des
+morts en cours de partie). La masse totale elle-même reste exacte (le
+retrait stricte TRM à la sortie est neutre sur la masse) - seul le ratio
+"masse par joueur" du tout dernier point perd son sens. Pas de correctif
+proposé ici (nécessiterait de décider ce qu'un point final doit
+représenter : l'instant juste avant les sorties, ou après - une question
+de présentation plutôt qu'une ambiguïté de règle du jeu, mais qui reste
+une décision produit).
+
+**Campagne de test, résultats** : parties A (4 joueurs), B (8 joueurs) et
+C (20 joueurs), 12 tours de 8 min simulés chacune, échanges et morts
+répartis sur toute la partie. Zéro écart en direct sur les trois parties
+(vérité terrain comparée au serveur à chaque mort/tour/transaction
+pendant le déroulé, avant même de regarder les rapports a posteriori) -
+confirme que `GameService.withGameLock` protège correctement la
+concurrence sans jamais faire dévier l'état réel, y compris à 20 joueurs
+(pioche à 26 modèles par niveau au catalogue, `N+1` = 21 modèles
+sélectionnés pour 20 joueurs, sous le plafond). Pas de blocage ni de
+lenteur anormale observés sur le verrou par partie aux trois tailles
+testées (chaque partie reste indépendante : `ConcurrentHashMap<Integer,
+ReentrantLock>` par `gameId`, jamais un verrou global). Détail complet
+(temps d'exécution, nombre d'échanges/rejets) dans le rapport de session.
