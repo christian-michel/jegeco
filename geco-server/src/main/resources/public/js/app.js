@@ -5819,9 +5819,25 @@ async function openEndOfTurnWizard() {
 			// aussi, le pré-remplissage du PROCHAIN tour lirait à tort cette valeur
 			// pré-mort comme "dernier solde connu". Leur renaissance se fait avec
 			// le DU seul (voir plugins/libre/manifest.json, "onRebirth").
+			// BUG TROUVÉ ET CORRIGÉ (04/10/2026, seconde relecture indépendante du
+			// commit 8006d14 - voir Player.quit) : CETTE boucle précise est celle qui
+			// poste RÉELLEMENT le WEALTH_CHECKPOINT (Api.recordEvent plus bas) qui
+			// fait grandir le solde d'un joueur à chaque tour - le commit 8006d14
+			// avait élargi `renderStepAllPlayersMoney`/`renderStepOtherDU` (étapes
+			// d'AFFICHAGE/prévisualisation de ce même assistant) à `p.active ||
+			// p.quit`, mais avait laissé CETTE boucle de POSTE réel filtrée sur
+			// `pl.active` seul. Conséquence mesurée : un joueur qui quitte continuait
+			// d'apparaître avec son bon badge et sa bonne prévision dans l'assistant,
+			// mais ne recevait plus jamais, dans l'usage RÉEL via l'interface (pas via
+			// un appel direct à l'API comme le faisait verify_quit_feature.py), le
+			// moindre WEALTH_CHECKPOINT - son jetonWeak restait donc figé pour
+			// toujours à sa valeur au moment du QUIT, à l'exact opposé de l'objectif
+			// de cette fonctionnalité ("continue de toucher le DU"). Élargi à
+			// `pl.active || pl.quit`, en miroir des deux autres étapes de ce même
+			// assistant.
 			if (!isDebt && !isTroc) {
 				const du = computeCurrentDU();
-				for (const p of game.players.filter((pl) => pl.active)) {
+				for (const p of game.players.filter((pl) => pl.active || pl.quit)) {
 					let breakdown;
 					if (selectedDeathIds.includes(p.id)) {
 						breakdown = computeDuBreakdown(du);

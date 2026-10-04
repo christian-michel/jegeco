@@ -202,6 +202,91 @@ class StatsServiceQuitContinuesDuTest
 				"la richesse finale doit sommer chaque vie UNE SEULE FOIS (mort + sortie + croissance monétaire continue), sans jamais recompter les cartes"); //$NON-NLS-1$
 	}
 
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (04/10/2026, seconde relecture indépendante du
+	 * commit 8006d14, AVANT tout push) : le test {@code
+	 * testFinalReportWealthAccumulatesAcrossDeathAndQuitWithoutDoubleCounting}
+	 * ci-dessus ne pose AUCUN WEALTH_CHECKPOINT pour Alice entre sa
+	 * renaissance (tour 1) et son QUIT (tour 2) - un scénario qui, dans un
+	 * usage RÉEL, ne se produit QUE si le joueur quitte au tour qui suit
+	 * immédiatement sa mort. Or en usage réel normal, un joueur libre+
+	 * smartphone reçoit déjà un WEALTH_CHECKPOINT à CHAQUE tour qu'il joue
+	 * EN TANT QUE JOUEUR ACTIF (mécanisme pré-existant, voir app.js/
+	 * wizFinish) - un joueur qui quitte APRÈS avoir joué plusieurs tours
+	 * (le cas le plus courant, pas une exception) accumule donc PLUSIEURS
+	 * WEALTH_CHECKPOINT reçus alors qu'il était encore actif, AVANT son
+	 * propre événement QUIT. La version d'origine de {@code
+	 * computeWealthByPlayer} (cas WEALTH_CHECKPOINT) testait
+	 * {@code event.getPlayer().isQuit()} - qui reflète l'état FINAL
+	 * (actuel) du joueur, pas son état au moment précis de CET événement -
+	 * si bien que CES WEALTH_CHECKPOINT antérieurs au QUIT (reçus quand le
+	 * joueur était encore parfaitement actif) étaient eux aussi traités
+	 * comme faisant partie de son "segment de sortie", ajoutant leur valeur
+	 * EN PLUS de ce que addGain(QUIT) compte déjà intégralement (une valeur
+	 * ABSOLUE qui inclut déjà toute la croissance jusqu'au QUIT, y compris
+	 * celle déjà vue par ces WEALTH_CHECKPOINT antérieurs) - un DOUBLE
+	 * COMPTAGE. Mesuré par une campagne HTTP réelle (voir le rapport de
+	 * l'agent de contrôle, 04/10/2026) : +64 unités (+5,8%) sur la richesse
+	 * finale d'un joueur ayant joué 5 tours actifs avant de quitter.
+	 * Corrigé en suivant la chronologie RÉELLE du rejeu (un ensemble dédié,
+	 * rempli uniquement au moment où le QUIT de CE joueur est effectivement
+	 * traité dans la boucle, jamais avant) plutôt que l'état final du
+	 * joueur - voir {@code quitSoFarInReplay} dans
+	 * {@code computeWealthByPlayer}.
+	 */
+	@Test
+	void testFinalReportDoesNotDoubleCountWealthCheckpointsReceivedWhileStillActiveBeforeQuitting() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 6, "AnimTest", null, //$NON-NLS-1$
+				"Test non-double-comptage WEALTH_CHECKPOINT pre-QUIT", "2026-10-04", "Ceres", 1, 180, 1.0, false, 4, //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				true, 0.5);
+		final int gameId = game.getId();
+		final int bobId = sService.addPlayer(gameId, "Bob").getId(); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, catalog(6));
+
+		// Tours 1 et 2 : Bob joue ACTIVEMENT (jamais mort, jamais sorti) -
+		// reçoit un WEALTH_CHECKPOINT à CHAQUE tour, exactement comme n'importe
+		// quel joueur libre+smartphone en cours de partie (mécanisme PAS
+		// spécifique aux joueurs sortis). Ces deux WEALTH_CHECKPOINT ne doivent
+		// RIEN ajouter à computeWealthByPlayer (Bob encore actif, "pas encore
+		// comptabilisé tant qu'actif" - voir la Javadoc de cette méthode).
+		sService.recordEvent(gameId, "W", bobId, 0, 0, 0, 0, 0, null, 0, 0, 10, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "W", bobId, 0, 0, 0, 0, 0, null, 0, 0, 13, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		// Tour 3 : Bob quitte enfin, avec 16 jetons (sa valeur ABSOLUE
+		// cumulée, qui inclut déjà toute la croissance vue par les deux
+		// WEALTH_CHECKPOINT ci-dessus - addGain(QUIT) la compte UNE SEULE FOIS).
+		final Map<String, Integer> invAtQuit = sService.computePlayerCardInventory(gameId, bobId);
+		final int cardsValueAtQuit = cardsValueFromInventory(invAtQuit);
+		sService.recordEvent(gameId, "Q", bobId, 0, 0, 0, 0, 0, null, 0, 0, 16, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		// Tour 4 : Bob continue de toucher le DU (post-QUIT) - 19 jetons.
+		sService.recordEvent(gameId, "W", bobId, 0, 0, 0, 0, 0, null, 0, 0, 19, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		final Game freshGame = sService.getGame(gameId);
+		final FinalReport report = sStats.computeFinalReport(freshGame, false);
+		final PlayerWealth bobWealth = report.playerWealths().stream().filter(p -> p.playerName().equals("Bob")) //$NON-NLS-1$
+				.findFirst().orElseThrow();
+
+		// Attendu : 16/3=5 (QUIT, valeur ABSOLUE incluant déjà toute la
+		// croissance pré-QUIT) + cardsValueAtQuit + (19/3=6 - 16/3=5 = 1, la
+		// SEULE croissance post-QUIT) = 5 + cardsValueAtQuit + 1 - JAMAIS les
+		// WEALTH_CHECKPOINT à 10 et 13 jetons (reçus alors que Bob était
+		// encore actif), qui ajouteraient à tort 10/3=3 (voire plus) si le
+		// bug corrigé ci-dessus réapparaissait.
+		final int expected = 5 + cardsValueAtQuit + 1;
+		assertEquals(expected, bobWealth.wealth(), "les WEALTH_CHECKPOINT recus par Bob AVANT son QUIT (alors qu'il " //$NON-NLS-1$
+				+ "etait encore actif) ne doivent JAMAIS etre comptes - seule la valeur ABSOLUE au QUIT et la " //$NON-NLS-1$
+				+ "croissance APRES le QUIT doivent compter"); //$NON-NLS-1$
+	}
+
 	/** (faible + 2×moyenne + 4×forte/tresforte) - même formule que computeCardsGain, facteur technologique=1 ici. */
 	private int cardsValueFromInventory(final Map<String, Integer> pInventory)
 	{

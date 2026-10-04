@@ -1336,6 +1336,32 @@ public class StatsService
 		// inventaire est vidé, voir GameService) : seule la composante
 		// monétaire a besoin d'un suivi par delta.
 		final Map<String, Integer> openQuitSegmentMonetaryValue = new HashMap<>();
+		// BUG TROUVÉ ET CORRIGÉ (04/10/2026, seconde relecture indépendante du
+		// commit 8006d14) : la condition d'origine ci-dessous, pour le cas
+		// WEALTH_CHECKPOINT, testait `event.getPlayer().isQuit()` - CE CHAMP
+		// REFLÈTE L'ÉTAT FINAL (ACTUEL) DU JOUEUR, PAS SON ÉTAT AU MOMENT DE
+		// CET ÉVÉNEMENT PRÉCIS. Puisque CHAQUE joueur actif en libre+smartphone
+		// reçoit déjà un WEALTH_CHECKPOINT à CHAQUE tour (mécanisme pré-existant,
+		// voir app.js/wizFinish - pas spécifique aux joueurs sortis), un joueur
+		// qui finit par quitter APRÈS avoir joué plusieurs tours actifs se
+		// retrouvait avec TOUS ses WEALTH_CHECKPOINT antérieurs à son QUIT
+		// (reçus alors qu'il était encore parfaitement actif) traités à tort
+		// comme faisant partie de son "segment de sortie" - ajoutant leur valeur
+		// en PLUS de ce que addGain(QUIT) compte déjà intégralement (qui est une
+		// valeur ABSOLUE incluant toute la croissance entre sa renaissance/son
+		// arrivée et son QUIT, donc DÉJÀ ces mêmes WEALTH_CHECKPOINT antérieurs).
+		// Mesuré par une campagne HTTP réelle (3 joueurs, l'un meurt puis rejoue
+		// 5 tours actifs avant de quitter tardivement) : richesse finale gonflée
+		// de 64 unités (1171 au lieu de 1107, +5,8%) rien que pour ce joueur -
+		// un biais qui grandit avec le nombre de tours joués avant la sortie,
+		// donc avec le cas le PLUS courant en usage réel (quitter après avoir
+		// joué un moment, pas au tour 1). Corrigé en suivant la chronologie
+		// RÉELLE du rejeu (les événements sont déjà triés par horodatage
+		// juste au-dessus) plutôt que l'état final du joueur : un ensemble
+		// dédié, rempli UNIQUEMENT au moment où l'on traite effectivement le
+		// QUIT de ce joueur dans cette boucle (jamais avant), remplace désormais
+		// `event.getPlayer().isQuit()` pour ce cas précis.
+		final java.util.Set<String> quitSoFarInReplay = new java.util.HashSet<>();
 		int currentFactor = 1;
 
 		for (final Event event : events)
@@ -1377,18 +1403,30 @@ public class StatsService
 						// comptées une fois pour toutes par addGain, jamais retouchées après.
 						if ((event.getEvt() == EventType.QUIT) && (event.getPlayer() != null)
 								&& event.getPlayer().isQuit())
+						{
 							openQuitSegmentMonetaryValue.put(playerName, computeMonetaryGain(pGame, event));
+							// Marque CE joueur comme "sorti à partir de MAINTENANT" dans la
+							// relecture chronologique (voir le commentaire détaillé sur
+							// quitSoFarInReplay, plus haut) - jamais avant ce point précis,
+							// même si event.getPlayer().isQuit() (l'état FINAL du joueur) est
+							// déjà vrai pour tout événement antérieur relu ici.
+							quitSoFarInReplay.add(playerName);
+						}
 					}
 					break;
 				case WEALTH_CHECKPOINT:
-					// Uniquement pour un joueur qui a QUITTÉ (voir Player.quit) : son DU
-					// continue, ce "segment de vie" resté ouvert par son événement QUIT
-					// doit donc rester à jour ici plutôt que figé à sa valeur de sortie.
-					// Un joueur encore ACTIF n'est volontairement PAS traité ici (voir la
-					// Javadoc de cette méthode : "pas encore comptabilisé tant qu'actif").
-					// MONÉTAIRE SEULE (computeMonetaryGain, jamais computeGain) : un
-					// WEALTH_CHECKPOINT ne représente jamais de mouvement de cartes.
-					if ((playerName != null) && (event.getPlayer() != null) && event.getPlayer().isQuit())
+					// Uniquement pour un joueur qui a DÉJÀ quitté À CE POINT PRÉCIS DE LA
+					// RELECTURE CHRONOLOGIQUE (quitSoFarInReplay, jamais event.getPlayer().
+					// isQuit() - voir le commentaire détaillé plus haut sur ce correctif du
+					// 04/10/2026) : son DU continue, ce "segment de vie" resté ouvert par
+					// son événement QUIT doit donc rester à jour ici plutôt que figé à sa
+					// valeur de sortie. Un joueur encore ACTIF (y compris un futur sortant
+					// pas encore quitté à ce stade de la relecture) n'est volontairement
+					// PAS traité ici (voir la Javadoc de cette méthode : "pas encore
+					// comptabilisé tant qu'actif"). MONÉTAIRE SEULE (computeMonetaryGain,
+					// jamais computeGain) : un WEALTH_CHECKPOINT ne représente jamais de
+					// mouvement de cartes.
+					if ((playerName != null) && quitSoFarInReplay.contains(playerName))
 					{
 						final int newValue = computeMonetaryGain(pGame, event);
 						final int previousValue = openQuitSegmentMonetaryValue.getOrDefault(playerName, 0);
