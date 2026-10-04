@@ -933,9 +933,20 @@ body {
    utile si l'animation se déclenche pendant que le joueur a défilé plus
    bas dans un onglet). Les calculs de `background-size: cover`/positions
    déjà précisément mesurés (zoom, cercle doré de renaissance...) restent
-   corrects sans aucun changement : ils sont tous exprimés en pourcentage
-   de la boîte de CET élément, pas du viewport - rétrécir sa largeur ne
-   change que l'échelle de "cover", déjà gérée par ces calculs.
+   corrects sans aucun changement pour LE FOND lui-même (`.death-anim-zoom`/
+   `.rebirth-anim-zoom`, en `background-size: cover` - un pourcentage de la
+   boîte de CET élément, jamais du viewport, rétrécir sa largeur ne change
+   que l'échelle de "cover", déjà gérée par ces calculs).
+   CORRECTIF APPORTÉ APRÈS COUP (04/10/2026, même jour - voir le commentaire
+   détaillé sur .rebirth-anim-avatar-circle plus bas) : cette affirmation
+   était en réalité FAUSSE pour l'avatar de renaissance lui-même
+   (.rebirth-anim-avatar-circle) - ses `left`/`top`/`width` étaient
+   exprimés en `vw`/`vh` (TOUJOURS relatifs au viewport, jamais à cette
+   boîte plafonnée), pas en pourcentage comme annoncé ici - avatar affiché
+   2,5× trop grand sur un écran large, repéré par l'utilisateur en
+   comparant à la maquette fournie. Corrigé en `cqw`/`cqh` (container
+   query). Les autres éléments cités ci-dessus (fonds en `background-size:
+   cover`, positions en `%`) n'avaient pas ce défaut, seul l'avatar l'avait.
    ============================================================ */
 .death-anim-overlay {
 	position: fixed; top: 0; bottom: 0; left: 50%; width: 100%; max-width: 460px;
@@ -1023,6 +1034,29 @@ body {
 	display: flex; align-items: center; justify-content: center;
 	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
 	overflow: hidden; background: #0a1f0f;
+	/* BUG TROUVÉ ET CORRIGÉ (04/10/2026, retour utilisateur avec capture
+	   d'écran de l'animation réelle comparée à la maquette fournie) : le
+	   correctif du même jour plafonnant cet overlay à 460px (voir le
+	   commentaire ci-dessus) a plafonné ZOOM ET SURFACE, mais
+	   .rebirth-anim-avatar-circle (ci-dessous) calcule toujours sa
+	   position/taille en `vw`/`vh` - des unités TOUJOURS relatives au
+	   VIEWPORT RÉEL de l'appareil, jamais à cette boîte plafonnée. Sur un
+	   écran plus large que 460px (iPad en paysage, 1194px mesuré), l'avatar
+	   se retrouvait calculé pour un cercle de ~541px (45,3% de 1194px) au
+	   lieu des ~211px attendus (45,3% de 460px) - un avatar 2,5× TROP GRAND,
+	   rogné par cet `overflow: hidden` sur ses bords gauche/droit (vérifié
+	   par mesure DOM exacte : bounding box de 540,9px de large pour une
+	   boîte de 211px attendue). Exactement ce que l'utilisateur a repéré en
+	   comparant à la maquette - l'avatar ne "ressemble pas" au modèle sur un
+	   écran large. Corrigé en établissant ICI un contexte de "container
+	   query" (`container-type: size`, même technique déjà utilisée dans ce
+	   fichier pour .geco-card-sm/.geco-card-lg) : .rebirth-anim-avatar-circle
+	   utilise désormais `cqw`/`cqh` (% de la largeur/hauteur de CETTE boîte,
+	   jamais du viewport) à la place de `vw`/`vh` - strictement équivalent
+	   sur un téléphone normal (où la largeur de cette boîte = la largeur du
+	   viewport, le plafond de 460px n'ayant alors aucun effet), mais
+	   désormais correct aussi sur un écran plus large. */
+	container-type: size;
 }
 .rebirth-anim-overlay.active { opacity: 1; pointer-events: auto; }
 
@@ -1105,21 +1139,19 @@ body {
    écart < 0,3px). */
 .rebirth-anim-avatar-circle {
 	position: absolute; transform: translate(-50%, -50%) scale(0.6);
-	left: calc(50% - max(0.057vw, 0.032vh));
-	left: calc(50% - max(0.057vw, 0.032dvh));
-	top: calc(50% - max(1.934vw, 1.080vh));
-	top: calc(50% - max(1.934vw, 1.080dvh));
-	/* `vh` classique en repli d'abord (compatibilité maximale), puis `dvh`
-	   ("dynamic viewport height", 27/09/2026, seconde relecture indépendante
-	   du 27/09/2026) qui suit la hauteur RÉELLEMENT visible - `vh` seul se
-	   base souvent sur la hauteur AVANT masquage de la barre d'adresse du
-	   navigateur mobile (non testé sur un vrai appareil, seulement simulé),
-	   ce qui pouvait légèrement surdimensionner l'avatar quand cette barre
-	   reste affichée. Une déclaration dupliquée volontaire : un navigateur
-	   qui ne comprend pas `dvh` ignore silencieusement cette seconde ligne
-	   et garde la première (`vh`), aucun `@supports` nécessaire. */
-	width: max(45.3vw, 25.3vh);
-	width: max(45.3vw, 25.3dvh);
+	/* BUG TROUVÉ ET CORRIGÉ (04/10/2026, voir le commentaire détaillé sur
+	   .rebirth-anim-overlay ci-dessus) : `vw`/`vh` remplacés par `cqw`/`cqh`
+	   (% de la largeur/hauteur de .rebirth-anim-overlay, qui porte
+	   désormais `container-type: size`) - mêmes valeurs mesurées
+	   ci-dessus, strictement inchangées, seule l'unité change. Plus besoin
+	   du repli `vh`→`dvh` ("barre d'adresse mobile qui se masque") : `cqh`
+	   suit déjà la hauteur RÉELLEMENT rendue de cette boîte (recalculée par
+	   le navigateur à chaque changement de layout, exactement comme le
+	   ferait `dvh` pour le viewport) - aucune ambiguïté statique/dynamique
+	   pour une unité de container query. */
+	left: calc(50% - max(0.057cqw, 0.032cqh));
+	top: calc(50% - max(1.934cqw, 1.080cqh));
+	width: max(45.3cqw, 25.3cqh);
 	aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
 	z-index: 1; opacity: 0; will-change: transform, opacity;
 }

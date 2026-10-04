@@ -530,6 +530,25 @@ juste avant).
   (catalogue à 26 modèles/niveau, largement suffisant pour `N+1`=21).
   Conservation vérifiée strictement (masse finale exportée = masse
   attendue sur les trois parties, aucune carte dupliquée/perdue).
+- **Avatar de renaissance 2,5× trop grand sur iPad en mode paysage
+  (04/10/2026)** — remonté par l'utilisateur, capture d'écran réelle
+  comparée à la maquette fournie ("je m'interroge sur le dimensionnement de
+  l'avatar"). Le correctif du cadre plein écran (point ci-dessus) avait
+  plafonné `.rebirth-anim-overlay` à 460px, mais
+  `.rebirth-anim-avatar-circle` continuait de calculer sa taille/position en
+  `vw`/`vh` - des unités TOUJOURS relatives au vrai viewport de l'appareil,
+  jamais à cette boîte plafonnée. Sur iPad en paysage (1194px mesurés),
+  l'avatar se calculait pour un cercle de 541px (45,3% de 1194px) au lieu
+  des 211px attendus (45,3% de 460px) - un avatar 2,56× trop grand, rogné
+  par le `overflow: hidden` de l'overlay. Corrigé avec la même technique de
+  "container query" déjà utilisée ailleurs dans ce fichier CSS
+  (`.geco-card-sm`/`.geco-card-lg`, `cqw`) : `container-type: size` sur
+  l'overlay, `vw`/`vh` remplacés par `cqw`/`cqh` sur le cercle avatar -
+  mesuré au pixel près après correctif, 211,0px exactement attendus contre
+  211,0px obtenus (erreur 0,0%) sur iPad paysage, et toujours exact sur un
+  téléphone classique (aucune régression, voir
+  `03-architecture-technique.md`, entrée du 04/10/2026, pour le détail des
+  mesures).
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 

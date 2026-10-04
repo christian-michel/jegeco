@@ -3266,3 +3266,81 @@ Scripts, résultats et captures d'écran : voir le rapport de session pour
 les chemins complets (répertoire de travail temporaire, hors du dépôt -
 jamais committés, comme il se doit pour du matériel de vérification
 ponctuel).
+
+## 04/10/2026 (suite) - Avatar de renaissance 2,5× trop grand sur iPad en
+## mode paysage : le correctif de cadrage du même jour avait un angle mort
+
+Remonté par l'utilisateur avec une capture d'écran réelle de l'animation
+"Renaissance !" comparée à la maquette fournie : "J'ai un doute quant à
+l'image de l'avatar et à son dimensionnement". Vérifié par mesure DOM
+exacte (Playwright, `getBoundingClientRect()`) plutôt que par simple
+inspection visuelle - la bonne habitude payée immédiatement : le
+diagnostic visuel initial ("avatar minuscule") s'est avéré FAUX, la
+mesure a révélé l'inverse.
+
+**Cause précise** : le correctif du même jour qui plafonne les quatre
+overlays plein écran à 460px (voir l'entrée précédente, "Animation
+mort/renaissance débordait du cadre de jeu sur iPad en mode paysage") a
+bien résolu le débordement du FOND (`.rebirth-anim-zoom`, en
+`background-size: cover`, exprimé en pourcentage de SA PROPRE boîte -
+correctement recalé). Mais `.rebirth-anim-avatar-circle` (le cercle qui
+accueille le vrai avatar du joueur, voir `buildProfileAvatarHtml`) calcule
+sa position/taille avec `calc(50% - max(Xvw, Yvh))` - un mélange de `%`
+(relatif à l'ancêtre positionné, donc déjà correctement recalé sur la
+boîte de 460px) et de `vw`/`vh` (TOUJOURS relatifs au VRAI viewport de
+l'appareil, quel que soit l'ancêtre - jamais affectés par un plafond de
+largeur sur un parent). Le commentaire ajouté au moment du correctif de
+cadrage affirmait "ils sont tous exprimés en pourcentage de la boîte de
+CET élément, pas du viewport" - FAUX pour ce cas précis (vrai seulement
+pour le fond en `background-size: cover`), une erreur de cette session
+elle-même, corrigée dans le commentaire en même temps que le code.
+
+**Mesure AVANT correctif** (iPad Pro 11" paysage, 1194×834, Chromium
+headless, `getBoundingClientRect()` sur `#rebirthAnimAvatarCircle` après
+la fin de l'animation "stamp-in") :
+```
+boîte overlay (plafonnée)  : left=367 top=0 width=460 height=834
+cercle avatar (mesuré)     : width=540.9px (attendu : 211.0px)
+écart : +329.9px, soit +156.3% - l'avatar est 2,56× TROP GRAND, rogné par
+        le overflow:hidden de l'overlay sur ses bords gauche/droit
+```
+`max(45.3vw, 25.3dvh)` avec un viewport RÉEL de 1194px de large calcule
+45,3% de 1194px = 540,9px, au lieu des 45,3% de la boîte RÉELLE (460px) =
+208,4px (puis max avec la hauteur -> 211,0px). Sur un téléphone normal, ce
+défaut passait inaperçu car largeur de l'overlay = largeur du viewport
+(le plafond de 460px n'a alors aucun effet) - le bug n'existe donc QUE sur
+un écran plus large que 460px, exactement le cas introduit par le
+correctif du jour même.
+
+**Corrigé** en établissant un contexte de "container query" CSS sur
+`.rebirth-anim-overlay` (`container-type: size`) - même technique déjà
+utilisée ailleurs dans ce fichier pour un besoin similaire
+(`.geco-card-sm`/`.geco-card-lg`, texte proportionnel à la carte plutôt
+qu'à l'écran, voir leur commentaire). `.rebirth-anim-avatar-circle` utilise
+désormais `cqw`/`cqh` (% de la largeur/hauteur de CETTE boîte précise,
+jamais du viewport) à la place de `vw`/`vh` - mêmes valeurs numériques
+mesurées historiquement (27/09/2026), seule l'unité change. Avantage
+secondaire : plus besoin du repli `vh`→`dvh` ("barre d'adresse mobile qui
+se masque/réapparaît") - `cqh` suit déjà la hauteur RÉELLEMENT rendue de
+la boîte container, recalculée par le navigateur à chaque changement de
+layout exactement comme `dvh` le fait pour le viewport ; aucune ambiguïté
+statique/dynamique ne se pose pour une unité de container query.
+
+**Mesure APRÈS correctif** (même script, même viewport) :
+```
+cercle avatar (mesuré) : width=211.0px (attendu : 211.0px, erreur 0.0%)
+centre mesuré  : (596.7, 408.0) - centre attendu : (596.8, 408.1)
+```
+Exact au dixième de pixel près. Revérifié sur un téléphone classique
+(390×844, aucun plafond actif) : 213,5px mesurés pour 213,5px attendus,
+erreur 0,0% également - confirme l'absence de régression sur le cas
+normal (déjà correct avant, toujours correct après, car `cqw`≈`vw` quand
+la boîte container fait exactement la largeur du viewport).
+
+Scripts de mesure et captures : `measure_rebirth_avatar.py` (avant
+correctif, iPad paysage), `measure_rebirth_avatar_after.py` (après
+correctif, iPad paysage + capture mi-animation `measure-rebirth-avatar-
+AFTER-fix.png`, visuellement conforme à la maquette fournie par
+l'utilisateur), `measure_rebirth_avatar_phone.py` (après correctif,
+téléphone classique, non-régression) - répertoire de travail temporaire,
+hors dépôt.
