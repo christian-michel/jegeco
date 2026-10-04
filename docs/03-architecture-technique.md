@@ -3167,3 +3167,102 @@ lenteur anormale observés sur le verrou par partie aux trois tailles
 testées (chaque partie reste indépendante : `ConcurrentHashMap<Integer,
 ReentrantLock>` par `gameId`, jamais un verrou global). Détail complet
 (temps d'exécution, nombre d'échanges/rejets) dans le rapport de session.
+
+## 04/10/2026 — Seconde relecture indépendante (Agent 2) du correctif 9b9d4b5 : confirmé correct, mais une LIMITE SUPPLÉMENTAIRE trouvée (QUIT en strict TRM)
+
+Revue à deux niveaux demandée explicitement par l'utilisateur suite au
+correctif ci-dessus (9b9d4b5) : un second agent, sans accès au raisonnement
+ni aux scripts du premier, rejoue lui-même une campagne indépendante plutôt
+que de se fier aux résultats sauvegardés. Méthode : relecture du diff réel
+(`git show 9b9d4b5`), inversion temporaire du correctif pour confirmer que
+le nouveau test `testLibreMoneyMassPointIgnoresIncompleteDeathRecomputeMidTurn`
+le détecte bien (échec confirmé sans le correctif : tour 1 à 10 au lieu de
+14 attendu - le test teste réellement ce qu'il prétend), puis une partie
+libre+smartphone strict TRM à 8 joueurs/12 tours rejouée en HTTP réel contre
+un serveur reconstruit depuis zéro (`mvn clean package`), sur une base H2
+et un port entièrement ISOLÉS de ceux utilisés par le premier agent (jamais
+le même process, jamais le même fichier `~/geco.h2` - voir
+`-Duser.home=.../agent2-h2home`, port 7001), avec une vérité terrain tenue
+indépendamment (script propre, pas une réutilisation de `campaign.py`).
+
+**Correctif 9b9d4b5 : CONFIRMÉ CORRECT.** Portée exactement scopée à DEATH +
+libre + strict TRM + smartphone (vérifié ligne à ligne, aucune condition ne
+déborde sur dette/troc/classique). `mvn clean package` vert avant et après
+(72 tests, 0 échec). Partie de 8 joueurs rejouée : 88 échanges, 8 morts,
+0 écart entre le graphique "Création/destruction monétaire par tour" et la
+vérité terrain tenue indépendamment, aucun delta négatif. Complété par une
+partie de démonstration à 3 joueurs capturée à l'écran (Playwright) avec une
+mort au tour 1 : le graphique affiche bien deux barres VERTES (21 puis 73),
+jamais de fausse barre rouge - cohérent avec le correctif. Contention RÉELLE
+(pas seulement séquentielle rapide comme `campaign.py`, qui boucle joueur
+par joueur) vérifiée séparément : 20 threads Python envoient 300 requêtes
+HTTP réellement simultanées (ThreadPoolExecutor, jamais une boucle `for`)
+sur la même partie à 20 joueurs en 1,7s - 217 transactions réussies, 0
+erreur serveur inattendue (seules des exceptions "Solde insuffisant"
+attendues, journalisées normalement - jamais de trace Java non gérée), 0
+modèle de carte en surnombre, masse monétaire serveur = somme exacte des
+jetons des joueurs. Garde-fou "une révolution par appel"
+(`GameService.checkAndCashInSquares`, `revolutionAlreadyHappenedThisCall`)
+relu et confirmé présent, documenté, inchangé par ce correctif.
+
+**LIMITE SUPPLÉMENTAIRE TROUVÉE** (hors du périmètre du bug corrigé par
+9b9d4b5, non corrigée ici - voir le commentaire daté dans `Event.java`,
+cas QUIT/DEATH, juste avant `strictTrmExit`) : la campagne à 8 joueurs
+incluait, en plus des morts, UNE sortie volontaire en cours de partie
+(`Q`, tour 6, jamais testée par la campagne du premier agent qui ne
+semble avoir utilisé `quit_plan` qu'en toute fin de partie, jamais en
+cours de route - voir `campaign.py`, le paramètre existe mais n'a
+apparemment pas été exercé en cours de partie dans les 3 parties
+documentées). Ce test a révélé que la garantie "la masse monétaire ne
+doit jamais diminuer" (documentée explicitement dans `Event.java`, cas
+QUIT/DEATH : "ce qu'il possédait reste compté dans la masse globale...
+on saute donc ce retrait") ne tient que JUSQU'AU PROCHAIN `TURN`/`DEATH` :
+les deux recalculent ensuite la masse comme
+`Game.computeMoneyMassFromActivePlayersJetons()`, qui ne somme QUE les
+joueurs encore ACTIFS - un joueur qui MEURT reste compté (sa renaissance
+le garde actif), mais un joueur qui QUITTE disparaît purement et
+simplement du calcul, et ce qu'il "laissait dans la masse globale,
+juste devenu inaccessible" n'est jamais réintégré nulle part : c'est
+silencieusement PERDU dès le recalcul suivant.
+
+Reproduction minimale et déterministe (script dédié,
+`repro_quit_bug.py`, 2 joueurs) :
+1. Mise en place : Alice et Bob reçoivent chacun 7 unités -> `moneyMass` = 14.
+2. Alice QUITTE avec ses 7 jetons -> `moneyMass` reste 14 (comportement
+   voulu, documenté, vérifié correct À CET INSTANT précis).
+3. Un tour s'écoule (`W` pour Bob, puis `T`), SANS aucune mort -> `moneyMass`
+   retombe à **7** - la masse a été EXACTEMENT DIVISÉE PAR DEUX, alors que
+   le réglage "strict TRM" garantit explicitement qu'elle ne doit JAMAIS
+   diminuer.
+
+Dans la campagne réelle à 8 joueurs, cet effet était présent mais MASQUÉ
+par la croissance du DU (suffisamment forte à ce stade de la partie pour
+compenser largement la perte, 492 unités de croissance contre 90 perdues
+au tour concerné) - c'est précisément pour cette raison que la campagne de
+test du premier agent, qui ne semble pas avoir exercé de sortie volontaire
+EN COURS de partie, n'avait aucune chance de le remarquer : avec
+suffisamment de joueurs restants et une masse déjà importante, le symptôme
+(une diminution VISIBLE) ne se manifeste que dans des conditions
+particulières (sortie d'un joueur relativement riche, tôt dans la partie,
+quand la croissance TRM est encore faible) - exactement le genre de
+situation qu'un animateur réel rencontre couramment (un participant qui
+doit partir avant la fin). Non corrigé ici : la réparation correcte
+suppose une décision de règle du jeu (comment comptabiliser durablement,
+au-delà du tour de sa sortie, la monnaie laissée par un joueur qui
+quitte en strict TRM - par exemple un accumulateur séparé, réintégré à
+chaque recalcul, plutôt qu'une simple non-soustraction ponctuelle) que
+cette session ne tranche pas elle-même, conformément à la consigne de ne
+jamais deviner une règle de jeu ambiguë. Un commentaire daté pointe vers
+cette entrée directement dans `Event.java` pour quiconque reprend ce
+chantier.
+
+**Conservation des cartes** : vérifiée empiriquement sur la partie à 8
+joueurs (aucun modèle en surnombre à aucun instant, tous les joueurs à 0
+carte après leur sortie/mort) et sur le test de contention à 20 joueurs -
+cohérent avec les 8 tests dédiés déjà existants
+(`GameServicePileConservationTest`), non remis en cause.
+
+Scripts, résultats et captures d'écran : voir le rapport de session pour
+les chemins complets (répertoire de travail temporaire, hors du dépôt -
+jamais committés, comme il se doit pour du matériel de vérification
+ponctuel).

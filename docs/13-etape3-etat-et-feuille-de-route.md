@@ -566,6 +566,27 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
      même une VRAIE révolution (rotation des prix) et une carte gratuite à
      chaque fois - à documenter comme un comportement voulu, ou à limiter
      dans ce cas précis ?
+3ter. **La masse monétaire strict TRM peut DIMINUER après la sortie
+   volontaire (QUIT, pas DEATH) d'un joueur en cours de partie** (trouvé
+   le 04/10/2026, seconde relecture indépendante du correctif ci-dessous -
+   voir `03-architecture-technique.md`, entrée du 04/10/2026 "Seconde
+   relecture indépendante", et le commentaire daté dans `Event.java`, cas
+   QUIT/DEATH). La garantie documentée ("la masse ne doit jamais diminuer
+   à la sortie d'un joueur, ce qu'il possédait reste compté... on saute
+   ce retrait") ne tient que jusqu'au TURN/DEATH suivant, qui recalcule la
+   masse à partir des SEULS joueurs encore actifs - un joueur qui quitte
+   (contrairement à un joueur qui meurt, qui reste actif via sa
+   renaissance) en disparaît purement et simplement, sans que ce qu'il
+   "laissait dans la masse globale" soit jamais réintégré. Reproduit de
+   façon déterministe (2 joueurs, 7+7=14, un QUIT de 7 jetons puis un TURN
+   sans mort fait retomber la masse à 7, soit une division par deux).
+   Invisible dans la campagne de test du 04/10/2026 du premier agent car
+   masqué par la croissance du DU (suffisante à ce stade de ses parties
+   pour compenser la perte) - se manifeste surtout si un joueur
+   relativement riche quitte tôt dans la partie. Pas de correctif
+   appliqué : la réparation correcte (ex. accumulateur séparé pour la
+   monnaie laissée par les sortants, réintégré à chaque recalcul) est une
+   décision de règle du jeu, pas une ambiguïté à deviner.
 4bis. **Redesign du rejeu d'événements (undo/delete/edit) pour ne plus
    perdre d'argent** (identifié le 27/09/2026, campagne de test) : un
    achat/vente smartphone n'est pas un événement, donc n'est jamais rejoué

@@ -502,6 +502,25 @@ public class Event implements Serializable
 			// N'affecte jamais la monnaie dette/le troc (seule la monnaie libre a ce
 			// réglage) ni les cas REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON (propres à
 			// la monnaie dette, qui n'a pas ce mode).
+			//
+			// LIMITE TROUVÉE, NON CORRIGÉE (04/10/2026, seconde relecture indépendante
+			// de la campagne de test du même jour - voir
+			// docs/03-architecture-technique.md, entrée du 04/10/2026 "Seconde
+			// relecture...", pour la reproduction complète et les chiffres) : cette
+			// protection ("on saute ce retrait") ne tient que jusqu'au PROCHAIN TURN/
+			// DEATH - pour une partie libre+strict TRM+smartphone, les DEUX
+			// recalculent ensuite la masse comme
+			// Game.computeMoneyMassFromActivePlayersJetons(), qui ne somme QUE les
+			// joueurs encore actifs : tout ce qu'un joueur a QUITTÉ (jamais celui qui
+			// MEURT, lui reste compté via sa renaissance) est donc silencieusement
+			// perdu dès ce recalcul suivant, pouvant faire diminuer la masse officielle
+			// - contredisant directement l'intention documentée juste au-dessus.
+			// Reproduit : 2 joueurs, 7+7=14, un QUIT (7 jetons) suivi d'un TURN sans
+			// mort fait retomber moneyMass à 7. Correctif NON appliqué ici : la
+			// réparation correcte suppose une décision produit (ex. un accumulateur
+			// séparé pour la monnaie "échouée" des sortants, à ajouter en permanence
+			// au recalcul) plutôt qu'une règle de jeu déjà tranchée - remonté à
+			// l'utilisateur plutôt que deviné.
 			final boolean strictTrmExit = (game.getMoneySystem() == Game.MONEY_LIBRE) && game.isStrictTrm();
 			if (!strictTrmExit)
 				game.changeMoneyMass(-interest-principal-(weakCoins + 2 * mediumCoins + 4 * strongCoins) * game.getMoneyCardsFactor());
