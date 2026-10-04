@@ -1223,6 +1223,18 @@ msgstr "Valeur relative (moyenne = 1)"
 msgid "report.galilee_explainer"
 msgstr "En valeur relative, chaque compte tend vers 1 (la moyenne) au fil des tours — cliquez sur un nom dans la légende pour isoler/masquer sa courbe et comparer."
 
+msgid "report.wealth_combined_title"
+msgstr "Unités monétaires + cartes dans le temps"
+
+msgid "report.wealth_combined_explainer"
+msgstr "Richesse totale de chaque joueur (unités monétaires et cartes valeurs additionnées, converties en unités monétaires) — cliquez sur un nom dans la légende pour isoler/masquer sa courbe."
+
+msgid "report.wealth_cards_title"
+msgstr "Valeur des cartes dans le temps"
+
+msgid "report.wealth_cards_explainer"
+msgstr "Valeur des cartes détenues par chaque joueur, converties en unités monétaires, jamais les unités monétaires elles-mêmes — cliquez sur un nom dans la légende pour isoler/masquer sa courbe."
+
 # ============ Échanges monétaires + masse détaillée (étape 3, smartphone) ============
 msgid "report.exchange_section_title"
 msgstr "Échanges monétaires"

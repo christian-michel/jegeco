@@ -1221,6 +1221,18 @@ msgstr "Relative value (average = 1)"
 msgid "report.galilee_explainer"
 msgstr "In relative value, each account tends towards 1 (the average) over the turns — click a name in the legend to isolate/hide its curve and compare."
 
+msgid "report.wealth_combined_title"
+msgstr "Monetary units + cards over time"
+
+msgid "report.wealth_combined_explainer"
+msgstr "Each player's total wealth (monetary units and card values added together, converted to monetary units) — click a name in the legend to isolate/hide its curve."
+
+msgid "report.wealth_cards_title"
+msgstr "Card value over time"
+
+msgid "report.wealth_cards_explainer"
+msgstr "The value of cards held by each player, converted to monetary units, never the monetary units themselves — click a name in the legend to isolate/hide its curve."
+
 # ============ Monetary exchanges + detailed money mass (step 3, smartphone) ============
 msgid "report.exchange_section_title"
 msgstr "Monetary exchanges"

@@ -492,6 +492,23 @@ juste avant).
   tour 1 sur l'ancien graphique "Évolution de la masse monétaire" et la
   courbe Galilée reste, lui, volontairement non touché (hors périmètre de
   ce correctif, à reprendre séparément si souhaité).
+  **Retours d'une vraie partie (04/10/2026, PDF "Retours_-_20261004.pdf",
+  8 tours de 3 min, 4 joueurs + animateur, libre+smartphone - "l'ensemble
+  des échanges était fluide et il n'y avait pas d'erreur bloquante")** :
+  trois correctifs, voir `03-architecture-technique.md`, entrée du
+  04/10/2026, pour le détail complet - (1) écart mobile/desktop sur les
+  unités monétaires à la sortie des joueurs (0,5 unité manquante côté
+  assistant), corrigé par le même mécanisme anti-dérive que l'étape
+  équivalente en cours de partie ; (2) courbe de richesse unique éclatée
+  en 3 graphiques distincts (unités monétaires seules "module Galilée",
+  unités monétaires + cartes, cartes seules) ; (3) chute artificielle de
+  la courbe juste avant la sortie des joueurs (en réalité un doublon de
+  point au même tour, pas un vrai retour à zéro) - déduplication des
+  points DEATH/QUIT. Également corrigé (même session, signalé en dehors
+  du PDF) : l'animation mort/renaissance débordait du cadre de jeu
+  (460px) sur iPad en mode paysage, le fond de page bleu-violet restant
+  visible de chaque côté - les quatre overlays plein écran reprennent
+  désormais le même plafond/centrage que `.mobile-container`.
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 

@@ -845,7 +845,10 @@ body {
    dans l'app (--bg/--bg-gradient-end) plutôt qu'un fond noir générique.
    ============================================================ */
 .square-anim-overlay {
-	position: fixed; inset: 0; z-index: 3000;
+	/* position/largeur : voir le commentaire détaillé sur .death-anim-overlay
+	   plus bas dans ce fichier (correctif du 04/10/2026, même cause). */
+	position: fixed; top: 0; bottom: 0; left: 50%; width: 100%; max-width: 460px;
+	transform: translateX(-50%); z-index: 3000;
 	background: radial-gradient(120% 90% at 50% -10%, var(--bg-gradient-end), var(--bg) 60%);
 	display: flex; flex-direction: column; align-items: center; justify-content: center;
 	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
@@ -906,9 +909,37 @@ body {
    joueur, un chevauchement avec un carré en cours n'est donc pas
    attendu en pratique, mais autant trancher l'ordre explicitement plutôt
    que de laisser un cas limite indéterminé.
+
+   BUG TROUVÉ ET CORRIGÉ (04/10/2026, remonté par l'utilisateur sur iPad en
+   mode paysage) : "le jeu est bon (avec son fond bleu-violet de chaque
+   côté) mais l'animation ne fonctionne pas pareil. Il faudrait qu'elle
+   soit dans le même espace que l'écran de jeu." Cause : `.mobile-container`
+   (l'écran de jeu normal) est plafonné à 460px de large et centré - sur un
+   écran plus large que ça (iPad en paysage, grand écran de bureau...), le
+   fond de la PAGE (dégradé indigo/violet) reste visible de chaque côté,
+   l'app elle-même restant étroite. `.death-anim-overlay`/
+   `.rebirth-anim-overlay`/`.anim-flash-overlay`/`.square-anim-overlay`
+   utilisaient `position: fixed; inset: 0`, qui couvre TOUJOURS le
+   viewport RÉEL quel que soit l'ancêtre (même imbriqués dans
+   `.mobile-container`, `position: fixed` ignore ce parent sauf s'il porte
+   lui-même un `transform` - ce qui n'est pas le cas ici) : l'animation
+   s'étalait donc sur toute la largeur de l'iPad, débordant visuellement
+   du cadre de 460px où se déroule le reste du jeu. Corrigé en reprenant
+   EXACTEMENT le même plafond/centrage que `.mobile-container`
+   (`max-width: 460px` + centrage par `left: 50%; transform:
+   translateX(-50%)`) plutôt que `inset: 0` - jamais `position: absolute`
+   calé sur `.mobile-container` (qui aurait perdu le comportement
+   "toujours visible quel que soit le défilement" de `position: fixed`,
+   utile si l'animation se déclenche pendant que le joueur a défilé plus
+   bas dans un onglet). Les calculs de `background-size: cover`/positions
+   déjà précisément mesurés (zoom, cercle doré de renaissance...) restent
+   corrects sans aucun changement : ils sont tous exprimés en pourcentage
+   de la boîte de CET élément, pas du viewport - rétrécir sa largeur ne
+   change que l'échelle de "cover", déjà gérée par ces calculs.
    ============================================================ */
 .death-anim-overlay {
-	position: fixed; inset: 0; z-index: 3050;
+	position: fixed; top: 0; bottom: 0; left: 50%; width: 100%; max-width: 460px;
+	transform: translateX(-50%); z-index: 3050;
 	display: flex; align-items: center; justify-content: center;
 	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
 	overflow: hidden; background: #05070d;
@@ -985,7 +1016,10 @@ body {
    renaissance 3060).
    ============================================================ */
 .rebirth-anim-overlay {
-	position: fixed; inset: 0; z-index: 3060;
+	/* position/largeur : voir le commentaire détaillé sur .death-anim-overlay
+	   plus haut dans ce fichier (correctif du 04/10/2026, iPad en paysage). */
+	position: fixed; top: 0; bottom: 0; left: 50%; width: 100%; max-width: 460px;
+	transform: translateX(-50%); z-index: 3060;
 	display: flex; align-items: center; justify-content: center;
 	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
 	overflow: hidden; background: #0a1f0f;
@@ -1129,7 +1163,10 @@ body {
    (3050/3060) pour toujours les recouvrir, quelle que soit la scène en
    cours. */
 .anim-flash-overlay {
-	position: fixed; inset: 0; z-index: 3070; pointer-events: none;
+	/* position/largeur : voir le commentaire détaillé sur .death-anim-overlay
+	   plus haut dans ce fichier (correctif du 04/10/2026, iPad en paysage). */
+	position: fixed; top: 0; bottom: 0; left: 50%; width: 100%; max-width: 460px;
+	transform: translateX(-50%); z-index: 3070; pointer-events: none;
 	opacity: 0; transition: opacity 150ms ease-out;
 }
 .anim-flash-overlay.active { opacity: 1; }

@@ -820,9 +820,19 @@
 					</div>
 				</div>
 
+				<!-- Étape 3, 04/10/2026 (remonté par un utilisateur, PDF
+				     "Retours_-_20261004.pdf") : "l'affichage de la richesse sous
+				     forme de courbes semble comptabiliser les valeurs y compris
+				     les cartes converties en unités monétaires... je souhaiterais
+				     3 graphiques à la place" - éclate l'ancien graphique unique
+				     (qui mélangeait jetons + cartes) en trois courbes distinctes,
+				     voir StatsService.PlayerWealthPoint. Les trois partagent la
+				     même donnée (wealthOverTime), récupérée une seule fois par
+				     renderReport - voir renderGalileeChart/renderWealthCardsOnlyChart/
+				     renderWealthCombinedChart dans app.js. -->
 				<div class="panel-card">
 					<div class="panel-header">
-						<h3 class="chart-title" data-i18n="report.galilee_title">Richesse des joueurs dans le temps
+						<h3 class="chart-title" data-i18n="report.galilee_title">Unités monétaires dans le temps
 							<span class="docs-online-badge" data-i18n-title="report.galilee_badge_title"
 								title="Convergence des comptes vers la moyenne, principe du module Galilée de la TRM" data-i18n="report.galilee_badge">module Galilée</span>
 						</h3>
@@ -834,6 +844,22 @@
 					<p class="galilee-explainer" data-i18n="report.galilee_explainer">En valeur relative, chaque compte tend vers 1 (la moyenne) au fil des
 						tours — cliquez sur un nom dans la légende pour isoler/masquer sa courbe et comparer.</p>
 					<div class="chart-container"><canvas id="chartGalilee"></canvas></div>
+				</div>
+
+				<div class="panel-card">
+					<div class="panel-header">
+						<h3 class="chart-title" data-i18n="report.wealth_combined_title">Unités monétaires + cartes dans le temps</h3>
+					</div>
+					<p class="galilee-explainer" data-i18n="report.wealth_combined_explainer">Richesse totale de chaque joueur (unités monétaires et cartes valeurs additionnées, converties en unités monétaires) — cliquez sur un nom dans la légende pour isoler/masquer sa courbe.</p>
+					<div class="chart-container"><canvas id="chartWealthCombined"></canvas></div>
+				</div>
+
+				<div class="panel-card">
+					<div class="panel-header">
+						<h3 class="chart-title" data-i18n="report.wealth_cards_title">Valeur des cartes dans le temps</h3>
+					</div>
+					<p class="galilee-explainer" data-i18n="report.wealth_cards_explainer">Valeur des cartes détenues par chaque joueur, converties en unités monétaires, jamais les unités monétaires elles-mêmes — cliquez sur un nom dans la légende pour isoler/masquer sa courbe.</p>
+					<div class="chart-container"><canvas id="chartWealthCards"></canvas></div>
 				</div>
 			</section>
 

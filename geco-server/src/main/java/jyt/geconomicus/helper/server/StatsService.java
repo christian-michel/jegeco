@@ -219,15 +219,32 @@ public class StatsService
 	}
 
 	/**
-	 * Un point de la courbe de richesse d'un joueur : sa valeur accumulée à la fin
-	 * du tour donné, et cette même valeur exprimée relativement à la moyenne de la
-	 * masse monétaire par joueur actif à cet instant (M(t)/N(t)) - c'est cette
-	 * seconde grandeur qui, selon la Théorie Relative de la Monnaie (module
-	 * Galilée), converge vers 1.0 pour tout joueur au fil du temps en monnaie
-	 * libre : un compte qui démarre à 0 rejoint la moyenne aux alentours de la
-	 * moitié de l'espérance de vie simulée.
+	 * Un point de la courbe de richesse d'un joueur au tour donné, désormais
+	 * ÉCLATÉ en trois grandeurs distinctes (remonté par un utilisateur,
+	 * 04/10/2026, PDF "Retours_-_20261004.pdf" : "l'affichage de la richesse
+	 * sous forme de courbes semble comptabiliser les valeurs y compris les
+	 * cartes converties en unités monétaires... je souhaiterais 3 graphiques
+	 * à la place") :
+	 * <ul>
+	 * <li>{@code monetaryValue} - unités monétaires (jetons) SEULES, jamais
+	 * les cartes. C'est cette seule grandeur, rapportée à la moyenne de la
+	 * masse monétaire par joueur actif à cet instant (M(t)/N(t), voir
+	 * {@code relativeToAverage}), qui correspond au "module Galilée" de la
+	 * Théorie Relative de la Monnaie : elle seule converge vers 1.0 pour
+	 * tout joueur au fil du temps en monnaie libre (un compte qui démarre à
+	 * 0 rejoint la moyenne aux alentours de la moitié de l'espérance de vie
+	 * simulée) - la théorie porte sur la MONNAIE, jamais sur la valeur des
+	 * cartes détenues.</li>
+	 * <li>{@code cardsValue} - valeur des cartes détenues SEULE, convertie en
+	 * unités monétaires (même formule que {@code computeGain}, jamais les
+	 * jetons/unités monétaires réels.</li>
+	 * <li>{@code combinedValue} - les deux grandeurs ci-dessus additionnées
+	 * (= l'ancienne et unique valeur de ce point avant ce correctif,
+	 * toujours disponible pour qui veut la vue d'ensemble).</li>
+	 * </ul>
 	 */
-	public record PlayerWealthPoint(int turn, int value, double relativeToAverage)
+	public record PlayerWealthPoint(int turn, int monetaryValue, int cardsValue, int combinedValue,
+			double relativeToAverage)
 	{
 	}
 
@@ -510,11 +527,14 @@ public class StatsService
 	 */
 	public WealthOverTimeReport computeWealthOverTime(final Game pGame)
 	{
-		final Map<String, Integer> lastKnownValue = new java.util.LinkedHashMap<>();
+		// [0]=monétaire, [1]=cartes - voir la Javadoc de PlayerWealthPoint
+		// (éclatement des deux grandeurs demandé par un utilisateur le
+		// 04/10/2026).
+		final Map<String, int[]> lastKnownValue = new java.util.LinkedHashMap<>();
 		final Map<String, List<PlayerWealthPoint>> pointsByPlayer = new java.util.LinkedHashMap<>();
 		for (final Player p : pGame.getPlayers())
 		{
-			lastKnownValue.put(p.getName(), 0);
+			lastKnownValue.put(p.getName(), new int[] { 0, 0 });
 			// Remonté par l'utilisateur (13/09/2026) : "la courbe ne doit pas inclure
 			// le tour 0, elle doit démarrer au début du tour 1" - plus de point de
 			// départ artificiel à (0, 0) ici, le premier point réel de chaque joueur
@@ -536,9 +556,11 @@ public class StatsService
 				final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
 				for (final Player p : pGame.getPlayers())
 				{
-					final int value = lastKnownValue.getOrDefault(p.getName(), 0);
-					final double relative = average == 0 ? 0 : value / average;
-					pointsByPlayer.get(p.getName()).add(new PlayerWealthPoint(turnCounter[0], value, round2(relative)));
+					final int[] known = lastKnownValue.getOrDefault(p.getName(), new int[] { 0, 0 });
+					final double relative = average == 0 ? 0 : known[0] / average;
+					pointsByPlayer.get(p.getName())
+							.add(new PlayerWealthPoint(turnCounter[0], known[0], known[1], known[0] + known[1],
+									round2(relative)));
 				}
 			}
 			else if (event.getEvt() == EventType.XTECHNOLOGICAL_BREAKTHROUGH)
@@ -553,11 +575,12 @@ public class StatsService
 				// ci-dessus). On l'enregistre comme point immédiatement (le tour courant
 				// n'a pas forcément encore de point TURN à ce stade), puis on renaît à 0
 				// pour la suite - conformément à la règle du jeu.
-				final int assessedValue = computeGain(pGame, event, currentFactor[0]);
+				final int assessedMonetary = computeMonetaryGain(pGame, event);
+				final int assessedCards = computeCardsGain(pGame, event, currentFactor[0]);
 				final int mass = pGame.getMoneyMass();
 				final long activeCount = pGame.getPlayers().stream().filter(Player::isActive).count();
 				final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
-				final double relative = average == 0 ? 0 : assessedValue / average;
+				final double relative = average == 0 ? 0 : assessedMonetary / average;
 				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 13/09/2026, PDF avec
 				// captures d'écran - "ne pas montrer le point où le compte revient à
 				// zéro quand ils quittent la partie à la toute fin, la courbe doit
@@ -575,8 +598,26 @@ public class StatsService
 				// TURN event suit toujours peu après pour incrémenter turnCounter
 				// normalement - turnCounter[0] y reste donc correct, inchangé.
 				final int turn = (event.getEvt() == EventType.QUIT) ? pGame.getNbTurnsPlanned() : turnCounter[0];
-				pointsByPlayer.get(name).add(new PlayerWealthPoint(turn, assessedValue, round2(relative)));
-				lastKnownValue.put(name, 0);
+				// BUG TROUVÉ ET CORRIGÉ (04/10/2026, PDF "Retours_-_20261004.pdf") :
+				// "sur les courbes... il faut afficher les valeurs en fin de tour,
+				// juste avant qu'ils ne quittent la partie". Le correctif du
+				// 13/09/2026 ci-dessus force bien le POINT DEATH/QUIT au bon tour,
+				// mais un point TURN avait souvent déjà été posé pour CE MÊME tour
+				// (à son ouverture, avec la valeur d'AVANT les échanges du tour -
+				// voir le bloc TURN ci-dessus) : deux points distincts au même x,
+				// reliés par une ligne, donnaient l'impression d'une chute/un pic
+				// artificiel juste avant la fin de la courbe - exactement ce que
+				// l'utilisateur décrivait comme "les comptes qui retombent à 0"
+				// (aucun zéro n'était réellement tracé, mais l'effet visuel y
+				// ressemblait). Corrigé en remplaçant ce point d'ouverture de tour,
+				// désormais obsolète, par le bilan RÉEL DEATH/QUIT - un seul point
+				// par joueur et par tour, toujours le plus à jour.
+				final List<PlayerWealthPoint> playerPoints = pointsByPlayer.get(name);
+				if (!playerPoints.isEmpty() && (playerPoints.get(playerPoints.size() - 1).turn() == turn))
+					playerPoints.remove(playerPoints.size() - 1);
+				playerPoints.add(new PlayerWealthPoint(turn, assessedMonetary, assessedCards,
+						assessedMonetary + assessedCards, round2(relative)));
+				lastKnownValue.put(name, new int[] { 0, 0 });
 			}
 			else if ((event.getEvt() == EventType.WEALTH_CHECKPOINT) && (event.getPlayer() != null)
 					&& lastKnownValue.containsKey(event.getPlayer().getName()))
@@ -592,8 +633,8 @@ public class StatsService
 				// juste après lira cette valeur fraîchement mise à jour via
 				// lastKnownValue.getOrDefault(...) ci-dessus, sans code
 				// supplémentaire nécessaire à cet endroit précis.
-				final int checkpointValue = computeGain(pGame, event, currentFactor[0]);
-				lastKnownValue.put(event.getPlayer().getName(), checkpointValue);
+				lastKnownValue.put(event.getPlayer().getName(), new int[] { computeMonetaryGain(pGame, event),
+						computeCardsGain(pGame, event, currentFactor[0]) });
 			}
 		});
 
@@ -1188,16 +1229,19 @@ public class StatsService
 	}
 
 	/**
-	 * Calcul du gain apporté par un événement pour le joueur concerné (portage de
-	 * {@code StatsFrame.addFromEvent}), extrait en fonction pure indépendante de tout
-	 * état accumulé - réutilisée à la fois par {@link #addGain} (calcul "à la mort",
-	 * pour la répartition des richesses) et par {@link #computeWealthOverTime}
-	 * (accumulation continue, tour par tour, pour le graphique de convergence façon
-	 * module Galilée).
-	 */
-	/**
-	 * Richesse d'un JOUEUR à sa mort/sortie (voir computeWealthByPlayer /
-	 * computeWealthOverTime).
+	 * Calcul du gain (richesse) apporté par un événement pour le joueur
+	 * concerné (portage de {@code StatsFrame.addFromEvent}), extrait en
+	 * fonction pure indépendante de tout état accumulé - réutilisée à la fois
+	 * par {@link #addGain} (calcul "à la mort", pour la répartition des
+	 * richesses de {@link #computeWealthByPlayer}/{@link #computeFinalReport})
+	 * et par {@link #computeWealthOverTime} (accumulation continue, tour par
+	 * tour, pour le graphique de convergence façon module Galilée). Depuis le
+	 * 04/10/2026 (demande utilisateur, voir la Javadoc de
+	 * {@link PlayerWealthPoint}), ce n'est plus qu'une simple SOMME de deux
+	 * composantes désormais calculables séparément - {@link #computeMonetaryGain}
+	 * (jetons/unités monétaires) et {@link #computeCardsGain} (cartes) - pour
+	 * que {@code computeWealthOverTime} puisse les tracer sur des courbes
+	 * distinctes sans jamais dupliquer la formule elle-même.
 	 * <p>
 	 * ⚠️ Historique (24/08/2026) : une tentative d'alignement sur un tableur
 	 * transmis par l'utilisateur (geconomicus_money.ods) avait fait passer la
@@ -1217,31 +1261,53 @@ public class StatsService
 	 */
 	private int computeGain(final Game pGame, final Event pEvent, final int pCurrentFactor)
 	{
-		// Troc (voir plugins/troc/manifest.json, wealthFormula) - changement de
-		// règle le 28/08/2026, remonté par l'utilisateur : "il faut reprendre le
-		// système de valeur 4x pour que les joueurs cherchent encore à faire des
-		// carrés, comme dans les autres parties des autres plugins". Avant cette
-		// date, un objet comptait pour 1 quel que soit son niveau (règle 7 de
-		// docs/10-etape-plugins-troc.md, désormais périmée - voir la mise à jour
-		// du 28/08/2026 dans ce même document) : un carré (4 objets d'un niveau →
-		// 1 objet du niveau supérieur) n'avait alors aucun intérêt économique,
-		// seulement un intérêt de "rareté"/négociation. Désormais pondéré 1/4/16
-		// (faible/moyen/fort) - le même rapport ×4 par niveau que celui déjà
-		// utilisé pour le taux d'échange smartphone (voir Transaction.java) -
-		// pour qu'un carré soit exactement neutre en richesse (4×1 = 1×4),
-		// cohérent avec ce que dette/libre offrent déjà à travers leurs propres
-		// cartes valeur.
+		return computeMonetaryGain(pGame, pEvent) + computeCardsGain(pGame, pEvent, pCurrentFactor);
+	}
+
+	/**
+	 * Composante MONÉTAIRE (jetons) du gain ci-dessus - voir la Javadoc de
+	 * {@link PlayerWealthPoint} (éclaté du 04/10/2026, demande utilisateur) :
+	 * extraite de {@link #computeGain} en préservant EXACTEMENT le même calcul
+	 * (aucune régression pour {@link #computeWealthByPlayer}/
+	 * {@link #computeFinalReport}, qui continuent d'appeler {@link #computeGain}
+	 * tel quel). Toujours nulle en troc (aucune monnaie dans ce système - voir
+	 * {@link #computeCardsGain} pour sa seule grandeur de valeur, les objets
+	 * échangés).
+	 */
+	private int computeMonetaryGain(final Game pGame, final Event pEvent)
+	{
+		if (pGame.getMoneySystem() == Game.MONEY_TROC)
+			return 0;
+		if (pGame.getMoneySystem() == Game.MONEY_DEBT)
+			return pEvent.getPrincipal() + pEvent.getInterest();
+		return (pEvent.getWeakCoins() + 2 * pEvent.getMediumCoins() + 4 * pEvent.getStrongCoins()) / 3;
+	}
+
+	/**
+	 * Composante CARTES du gain ci-dessus - voir la Javadoc de
+	 * {@link PlayerWealthPoint}. En troc (voir plugins/troc/manifest.json,
+	 * wealthFormula) - changement de règle le 28/08/2026, remonté par
+	 * l'utilisateur : "il faut reprendre le système de valeur 4x pour que les
+	 * joueurs cherchent encore à faire des carrés, comme dans les autres
+	 * parties des autres plugins". Avant cette date, un objet comptait pour 1
+	 * quel que soit son niveau (règle 7 de docs/10-etape-plugins-troc.md,
+	 * désormais périmée - voir la mise à jour du 28/08/2026 dans ce même
+	 * document) : un carré (4 objets d'un niveau → 1 objet du niveau
+	 * supérieur) n'avait alors aucun intérêt économique, seulement un intérêt
+	 * de "rareté"/négociation. Désormais pondéré 1/4/16 (faible/moyen/fort) -
+	 * le même rapport ×4 par niveau que celui déjà utilisé pour le taux
+	 * d'échange smartphone (voir Transaction.java) - pour qu'un carré soit
+	 * exactement neutre en richesse (4×1 = 1×4), cohérent avec ce que
+	 * dette/libre offrent déjà à travers leurs propres cartes valeur (pondérées
+	 * 1/2/4 × facteur technologique × facteur carte/monnaie, une formule
+	 * DIFFÉRENTE du troc - jamais mélangées).
+	 */
+	private int computeCardsGain(final Game pGame, final Event pEvent, final int pCurrentFactor)
+	{
 		if (pGame.getMoneySystem() == Game.MONEY_TROC)
 			return pEvent.getWeakCards() + (4 * pEvent.getMediumCards()) + (16 * pEvent.getStrongCards());
-
-		int gained;
-		if (pGame.getMoneySystem() == Game.MONEY_DEBT)
-			gained = pEvent.getPrincipal() + pEvent.getInterest();
-		else
-			gained = (pEvent.getWeakCoins() + 2 * pEvent.getMediumCoins() + 4 * pEvent.getStrongCoins()) / 3;
-		gained += (pEvent.getWeakCards() + 2 * pEvent.getMediumCards() + 4 * pEvent.getStrongCards()) * pCurrentFactor
+		return (pEvent.getWeakCards() + 2 * pEvent.getMediumCards() + 4 * pEvent.getStrongCards()) * pCurrentFactor
 				* pGame.getMoneyCardsFactor();
-		return gained;
 	}
 
 	/**

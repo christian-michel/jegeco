@@ -2946,3 +2946,127 @@ portable, Java système détecté) via une exécution réelle de
 de syntaxe) et relecture manuelle des points d'attention `set -euo
 pipefail` (globs non appariés, sous-commandes avec `|| true`) - aucun
 point de script qui s'arrêterait sur une erreur inattendue.
+
+## 04/10/2026 — Retours d'une vraie partie libre+smartphone (PDF "Retours_-_20261004.pdf") : trois correctifs
+
+Partie réelle jouée par l'utilisateur : 8 tours de 3 min, 4 joueurs +
+animateur, monnaie libre + smartphone. "L'ensemble des échanges était
+fluide et il n'y avait pas d'erreur bloquante", mais trois points
+remontés avec captures d'écran à l'appui.
+
+### 1. Écart entre l'affichage mobile et l'affichage desktop des unités monétaires, à la sortie des joueurs
+
+Capture d'écran : téléphone affiche "208"/"2574", assistant affiche
+"207,5"/"2573,5" pour les MÊMES joueurs, au MÊME instant. Cause : l'étape
+de fin de partie `renderEndGameInventory` (app.js, branche libre+
+smartphone) utilisait un simple `round2()`, jamais le même arrondi "vers
+le haut sur une moitié d'unité EXACTE" (`roundUpIfExactlyHalf`) déjà
+appliqué par le téléphone du joueur (`PlayerView.statCoins`) ET par
+l'étape ÉQUIVALENTE en cours de partie (`renderStepAllPlayersMoney`,
+WEALTH_CHECKPOINT) - seule cette étape de FIN de partie (QUIT) avait été
+oubliée lors de l'introduction de cet arrondi le 21/09/2026. Corrigé en
+reprenant EXACTEMENT le même mécanisme anti-dérive que
+`renderStepAllPlayersMoney` (`data-true-weak`/`data-prefill-display`
+mémorisent le vrai compte de jetons et la valeur affichée d'origine, pour
+ne reconvertir l'arrondi en jetons QUE si l'animateur l'a lui-même
+modifié) - jamais de monnaie créée/détruite par la seule présentation.
+Vérifié en HTTP réel (serveur reconstruit, scénario avec les valeurs
+EXACTES du PDF, 415 et 5147 jetons à weakCoinValue=0,5) : téléphone et
+assistant affichent désormais tous deux "208"/"2574" ; en laissant le
+champ tel quel et en validant, la transaction persistée reste bien 415
+jetons (jamais 416) - zéro dérive monétaire.
+
+### 2. Courbe de richesse mélangeant unités monétaires et cartes
+
+"L'affichage de la richesse sous forme de courbes semble comptabiliser
+les valeurs y compris les cartes converties en unités monétaires au
+moment de l'inventaire de la mort du joueur. Je souhaiterais 3
+graphiques à la place" - unités monétaires seules (module Galilée),
+unités monétaires + cartes (l'ancienne courbe unique), cartes seules.
+
+`StatsService.PlayerWealthPoint` passe de `(turn, value,
+relativeToAverage)` à `(turn, monetaryValue, cardsValue, combinedValue,
+relativeToAverage)`. `computeGain` (déjà vérifié contre l'app Swing
+d'origine, voir son historique du 24/08/2026 dans ce document) est
+désormais une simple somme de deux nouvelles fonctions pures,
+`computeMonetaryGain`/`computeCardsGain`, qui en extraient chacune une
+composante SANS changer la formule elle-même (zéro régression pour
+`computeWealthByPlayer`/`computeFinalReport`, qui continuent d'appeler
+`computeGain` tel quel). `relativeToAverage` reste calculé à partir de
+`monetaryValue` SEUL (jamais la valeur combinée ni les cartes) : la
+convergence vers 1,0 du module Galilée est une propriété de la THÉORIE
+RELATIVE DE LA MONNAIE, qui porte sur la monnaie, jamais sur la valeur
+des cartes détenues - les deux nouveaux graphiques n'ont donc jamais de
+bascule "valeur relative", contrairement au premier. Trois graphiques
+distincts côté front (`renderGalileeChart`/nouvelle fonction partagée
+`renderSimpleWealthChart`), chacun avec son propre `<canvas>` et son
+explicatif i18n.
+
+### 3. Chute artificielle de la courbe juste avant la sortie des joueurs
+
+"À la fin de la partie... les joueurs quittent la partie. On fait alors
+leur inventaire et on remet les valeurs à 0... il faut afficher les
+valeurs en fin de tour, juste avant qu'ils ne quittent la partie."
+
+Investigation : AUCUN zéro n'était réellement tracé (le bilan QUIT,
+correctif du 13/09/2026, pose bien le point avec la valeur réelle avant
+sortie) - mais le tour FINAL avait souvent DEUX points : celui posé à
+l'OUVERTURE de ce tour (par l'événement TURN, avec la valeur d'AVANT les
+échanges du tour) ET celui posé par le bilan QUIT (la valeur RÉELLE de
+fin de tour), tous deux au MÊME numéro de tour. Deux points au même x,
+reliés par une ligne, donnent visuellement l'impression d'une chute (ou
+d'un pic) juste avant la fin - exactement ce que l'utilisateur décrivait.
+Touche aussi DEATH en cours de partie (pas seulement QUIT en fin de
+partie), un cas non couvert par le correctif du 13/09/2026, qui ne
+visait que l'écart de NUMÉRO de tour, jamais ce doublon.
+
+Corrigé dans `computeWealthOverTime` : avant d'ajouter le point DEATH/QUIT,
+si le dernier point déjà posé pour ce joueur est au MÊME tour (son point
+d'ouverture, désormais obsolète), il est retiré avant d'ajouter le bilan
+réel - un seul point par joueur et par tour, toujours le plus à jour.
+
+Vérifié par deux nouveaux tests
+(`StatsServiceWealthOverTimeTest`) : un scénario à 1 tour/1 joueur où une
+ouverture de tour ET un QUIT tombent au même tour (doit donner 1 point,
+pas 2, avec les valeurs du QUIT) ; une contre-épreuve à 3 tours sans
+aucune mort/sortie (doit donner exactement 3 points, aucune suppression
+indue). Vérifié en HTTP réel (3 joueurs, 4 tours, une mort au tour 2, une
+sortie de tous au tour 4) : exactement 1 point par joueur et par tour
+dans les trois graphiques, courbes lisses sans zigzag à la fin (voir
+capture d'écran envoyée à l'utilisateur).
+
+## 04/10/2026 — Animation mort/renaissance débordait du cadre de jeu sur iPad en mode paysage
+
+Remonté par l'utilisateur : "le jeu est bon (avec son fond bleu-violet de
+chaque côté) mais l'animation ne fonctionne pas pareil. Il faudrait
+qu'elle soit dans le même espace que l'écran de jeu." Cause :
+`.mobile-container` (l'écran de jeu normal) est plafonné à 460px de large
+et centré - sur un écran plus large que ça (iPad en paysage, grand écran
+de bureau...), le fond de la PAGE (dégradé indigo/violet) reste visible
+de chaque côté, l'app elle-même restant étroite. Les quatre overlays
+plein écran (`.death-anim-overlay`, `.rebirth-anim-overlay`,
+`.anim-flash-overlay`, `.square-anim-overlay`) utilisaient `position:
+fixed; inset: 0`, qui couvre TOUJOURS le viewport RÉEL quel que soit
+l'ancêtre (même imbriqués dans `.mobile-container`, `position: fixed`
+ignore ce parent sauf s'il porte lui-même un `transform`) : l'animation
+s'étalait donc sur toute la largeur de l'iPad.
+
+Corrigé en reprenant EXACTEMENT le même plafond/centrage que
+`.mobile-container` (`max-width: 460px` + centrage par `left: 50%;
+transform: translateX(-50%)`) plutôt que `inset: 0`, sur les quatre
+overlays (l'utilisateur ne mentionnait que mort/renaissance, mais
+`.anim-flash-overlay`/`.square-anim-overlay` partagent exactement la même
+cause et auraient débordé de la même façon). Jamais `position: absolute`
+calé sur `.mobile-container` (qui aurait perdu le comportement "toujours
+visible quel que soit le défilement" de `position: fixed`). Les calculs
+de `background-size: cover`/positions déjà précisément mesurés (zoom,
+cercle doré de renaissance...) restent corrects sans aucun changement :
+ils sont tous exprimés en pourcentage de la boîte de CET élément, pas du
+viewport.
+
+Vérifié par Playwright sur un viewport iPad Pro 11" en paysage
+(1194×834) : mesure du rectangle réel de l'overlay de renaissance
+pendant l'animation - désormais identique (gauche/droite/largeur) à
+celui de `.mobile-container`, jamais celui du viewport. Captures d'écran
+à l'appui (mort et renaissance, toutes deux correctement boîtées avec le
+fond indigo visible de chaque côté).

@@ -3368,6 +3368,10 @@ async function renderTransactionsPanel(gameId) {
 const reportCharts = {
 	histogram: null, moneyMass: null, galilee: null, compare: null, bankProfit: null,
 	exchangeByTurn: null, exchangeByPlayer: null, moneyMassDelta: null, moneyMassPerPlayer: null,
+	// Étape 3, 04/10/2026 : richesse dans le temps désormais éclatée en 3
+	// graphiques distincts (voir renderGalileeChart/renderWealthCombinedChart/
+	// renderWealthCardsOnlyChart) plutôt qu'un seul mélangeant jetons et cartes.
+	wealthCombined: null, wealthCards: null,
 };
 
 // Remonté par un utilisateur, avec la trace d'erreur exacte de la console
@@ -3421,9 +3425,16 @@ function renderGalileeChart(wealthOverTime, mode) {
 	const allTurns = wealthOverTime.series.flatMap((s) => s.points.map((p) => p.turn));
 	const maxTurn = allTurns.length > 0 ? Math.max(...allTurns) : 0;
 
+	// Étape 3, 04/10/2026 (remonté par un utilisateur) : ce graphique est
+	// désormais STRICTEMENT la composante monétaire (p.monetaryValue, jamais
+	// les cartes) - voir StatsService.PlayerWealthPoint. C'est la seule des
+	// trois grandeurs pour laquelle la convergence vers 1.0 en valeur relative
+	// a un sens théorique (la TRM porte sur la monnaie, jamais sur la valeur
+	// des cartes détenues) - les deux autres graphiques (richesse combinée,
+	// cartes seules) n'ont donc jamais de bascule "valeur relative".
 	const datasets = wealthOverTime.series.map((s, i) => ({
 		label: s.playerName,
-		data: s.points.map((p) => ({ x: p.turn, y: mode === "relative" ? p.relativeToAverage : p.value })),
+		data: s.points.map((p) => ({ x: p.turn, y: mode === "relative" ? p.relativeToAverage : p.monetaryValue })),
 		borderColor: GALILEE_PALETTE[i % GALILEE_PALETTE.length],
 		backgroundColor: "transparent",
 		tension: 0.25,
@@ -3461,6 +3472,52 @@ function renderGalileeChart(wealthOverTime, mode) {
 			// Clic sur un nom de la légende : Chart.js isole/masque nativement la
 			// courbe correspondante (comportement par défaut), ce qui répond au besoin
 			// de pouvoir comparer les joueurs individuellement sans code supplémentaire.
+		},
+	});
+}
+
+/**
+ * Les deux graphiques "richesse dans le temps" complémentaires au module
+ * Galilée ci-dessus (04/10/2026, demande utilisateur - voir
+ * StatsService.PlayerWealthPoint) : factorisés dans une seule fonction (même
+ * structure {x,y} par point, même palette, pas de bascule absolu/relatif -
+ * contrairement au module Galilée, la convergence vers 1.0 n'a de sens
+ * théorique que pour la composante monétaire pure).
+ */
+function renderSimpleWealthChart(wealthOverTime, pChartKey, pCanvasId, pValueField) {
+	const t = window.GecoI18n.t;
+	if (typeof Chart === "undefined") {
+		el(pCanvasId).parentElement.innerHTML =
+			`<p style="color:var(--text-dim);font-size:0.8rem;padding:1rem">${t("game.chart_unavailable")}</p>`;
+		return;
+	}
+	if (!wealthOverTime || !wealthOverTime.series || wealthOverTime.series.length === 0) {
+		el(pCanvasId).parentElement.innerHTML =
+			`<p style="color:var(--text-dim);font-size:0.8rem;padding:1rem">${t("report.galilee_no_data")}</p>`;
+		return;
+	}
+
+	if (reportCharts[pChartKey]) reportCharts[pChartKey].destroy();
+
+	const datasets = wealthOverTime.series.map((s, i) => ({
+		label: s.playerName,
+		data: s.points.map((p) => ({ x: p.turn, y: p[pValueField] })),
+		borderColor: GALILEE_PALETTE[i % GALILEE_PALETTE.length],
+		backgroundColor: "transparent",
+		tension: 0.25,
+		pointRadius: 2,
+	}));
+
+	reportCharts[pChartKey] = trackChart(el(pCanvasId), {
+		type: "line",
+		data: { datasets },
+		options: {
+			plugins: { legend: { display: true, position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
+			scales: {
+				x: { type: "linear", ticks: { stepSize: 1, callback: (v) => t("game.chart_turn_label", { n: v }) } },
+				y: { beginAtZero: true },
+			},
+			maintainAspectRatio: false,
 		},
 	});
 }
@@ -3577,6 +3634,8 @@ async function renderReport(gameId, includeBank = false) {
 	renderGalileeChart(wealthOverTime, "relative");
 	el("btnGalileeAbsolute").onclick = () => renderGalileeChart(wealthOverTime, "absolute");
 	el("btnGalileeRelative").onclick = () => renderGalileeChart(wealthOverTime, "relative");
+	renderSimpleWealthChart(wealthOverTime, "wealthCombined", "chartWealthCombined", "combinedValue");
+	renderSimpleWealthChart(wealthOverTime, "wealthCards", "chartWealthCards", "cardsValue");
 
 	// Export réel du rapport en JSON téléchargeable (pas une simple décoration) :
 	// utile pour le "compte rendu" que la notice officielle recommande de publier.
@@ -5141,14 +5200,33 @@ async function openEndOfTurnWizard() {
 				<p class="du-remaining hidden" id="eqCoinsRemaining" style="font-weight:600;"></p>
 				${activePlayers.length === 0 ? `<p>${t("game.legend_no_active_players")}</p>` : activePlayers.map((p) => {
 					const pre = prefillByPlayerId.get(p.id);
-					const displayCoins = isSmartphoneLibre ? round2(pre.coins * game.weakCoinValue) : pre.coins;
+					// BUG TROUVÉ ET CORRIGÉ (04/10/2026, PDF "Retours_-_20261004.pdf") :
+					// "à la fin du dernier tour lorsque les joueurs quittent la
+					// partie, on a eu un écart entre l'affichage mobile et
+					// l'affichage desktop sur les unités monétaires" (ex. téléphone
+					// "208", assistant "207,5"). Cause : cette étape de fin de
+					// partie utilisait un simple round2(), jamais le même arrondi
+					// vers le haut sur une moitié d'unité EXACTE
+					// (roundUpIfExactlyHalf) déjà appliqué à la fois par le
+					// téléphone du joueur (voir PlayerView.statCoins) ET par
+					// l'étape ÉQUIVALENTE en cours de partie (renderStepAllPlayersMoney,
+					// WEALTH_CHECKPOINT) - seule cette étape de FIN de partie (QUIT)
+					// avait été oubliée lors de l'ajout de cet arrondi le
+					// 21/09/2026. Corrigé en reprenant EXACTEMENT le même mécanisme
+					// anti-dérive que renderStepAllPlayersMoney (voir son
+					// commentaire détaillé un peu plus haut dans ce fichier) :
+					// data-true-weak/data-prefill-display mémorisent le vrai compte
+					// de jetons et la valeur affichée d'origine, pour ne reconvertir
+					// l'arrondi en jetons QUE si l'animateur l'a lui-même modifié -
+					// jamais de monnaie créée/détruite par la seule présentation.
+					const displayCoins = isSmartphoneLibre ? roundUpIfExactlyHalf(pre.coins * game.weakCoinValue) : pre.coins;
 					return `
 					<fieldset class="death-inventory-player" data-player-id="${p.id}">
 						<legend>${escapeHtml(p.name)}</legend>
 						<p class="cannot-pay-inventory-title">${t(isSmartphoneLibre
 							? "wiz.field_monetary_units_simple" : "wiz.death_du_tokens_subtitle")}</p>
 						<label>${t(isSmartphoneLibre ? "wiz.field_monetary_units_simple" : "wiz.field_tokens_simple")}</label>
-						<input type="number" class="eqCoinWeak" value="${displayCoins}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}">
+						<input type="number" class="eqCoinWeak" value="${displayCoins}" min="0" step="${isSmartphoneLibre ? "0.1" : "1"}" data-true-weak="${pre.coins}" data-prefill-display="${displayCoins}">
 						<p class="cannot-pay-inventory-title" style="margin-top:0.6rem;">${t("wiz.death_du_cards_subtitle")}</p>
 						<div class="field-row">
 							<div><label>${t("game.field_weak_cards")}</label><input type="number" class="eqWeak" value="${pre.weak}" min="0"></div>
@@ -5162,13 +5240,21 @@ async function openEndOfTurnWizard() {
 			el("wizNextEndInventory").onclick = async () => {
 				for (const fieldset of document.querySelectorAll(".death-inventory-player")) {
 					const playerId = parseInt(fieldset.dataset.playerId, 10);
-					const enteredCoins = parseFloat(fieldset.querySelector(".eqCoinWeak").value || "0");
+					const input = fieldset.querySelector(".eqCoinWeak");
+					const enteredCoins = parseFloat(input.value || "0");
+					// Même anti-dérive que renderStepAllPlayersMoney (voir le
+					// commentaire au prefill ci-dessus, correctif du 04/10/2026) :
+					// champ intact -> vrai compte de jetons non arrondi, jamais
+					// l'arrondi affiché reconverti.
+					const prefillDisplay = parseFloat(input.dataset.prefillDisplay || "0");
+					const trueWeak = parseInt(input.dataset.trueWeak || "0", 10);
+					const untouched = Math.abs(enteredCoins - prefillDisplay) < 1e-9;
 					// Reconversion en jetons (unité réellement stockée côté
 					// serveur, voir Player.jetonWeak) - seulement nécessaire en
 					// mode smartphone, où l'animateur vient de saisir une valeur
 					// monétaire, pas un compte de jetons.
 					const weakCoins = isSmartphoneLibre
-						? Math.max(0, Math.round(enteredCoins / (game.weakCoinValue || 1)))
+						? (untouched ? trueWeak : Math.max(0, Math.round(enteredCoins / (game.weakCoinValue || 1))))
 						: Math.max(0, Math.round(enteredCoins));
 					await Api.recordEvent(state.currentGameId, {
 						type: "Q", playerId,
