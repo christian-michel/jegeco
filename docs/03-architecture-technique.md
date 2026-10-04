@@ -3485,3 +3485,64 @@ tableau de bord et les 4 graphiques du rapport (captures `quit-feature-
 dashboard.png`/`quit-feature-report.png`, répertoire de travail
 temporaire, hors dépôt). Suite complète `mvn clean package` verte avant
 commit.
+
+## 04/10/2026 (suite) - Revue à deux agents du commit 8006d14 ci-dessus :
+## deux bugs réels trouvés et corrigés (commit b8ba389)
+
+Revue à deux niveaux demandée explicitement par l'utilisateur. Le premier
+agent de contrôle a trouvé et corrigé DEUX bugs réels dans le commit
+8006d14, tous deux dans des cas que la campagne de vérification HTTP
+d'origine (passant par l'API directement) ne pouvait pas révéler :
+
+1. **`app.js`, `wizFinish.onclick`** : le commit 8006d14 avait élargi les
+   DEUX étapes d'AFFICHAGE de l'assistant de fin de tour
+   (`renderStepAllPlayersMoney`/`renderStepOtherDU`) à `p.active ||
+   p.quit`, mais avait oublié la boucle qui POSTE RÉELLEMENT le
+   WEALTH_CHECKPOINT (`Api.recordEvent`) - restée filtrée sur `pl.active`
+   seul. Conséquence : en usage RÉEL via l'interface (jamais révélé par un
+   script qui appelle l'API directement), un joueur sorti ne recevait plus
+   jamais de WEALTH_CHECKPOINT - son solde restait figé pour toujours,
+   annulant silencieusement l'intégralité de la fonctionnalité.
+2. **`StatsService.computeWealthByPlayer`, cas WEALTH_CHECKPOINT** : la
+   condition testait `event.getPlayer().isQuit()` (état FINAL/actuel du
+   joueur), pas son état au moment précis de CET événement dans la
+   relecture CHRONOLOGIQUE. Un joueur qui finit par quitter APRÈS avoir
+   joué plusieurs tours actifs (le cas le plus courant) voyait donc ses
+   WEALTH_CHECKPOINT antérieurs à son QUIT (reçus quand il était encore
+   actif) comptés en plus de ce que `addGain(QUIT)` compte déjà (valeur
+   absolue incluant déjà cette croissance) - un double comptage, mesuré à
+   +5,8% sur un scénario à 5 tours actifs avant sortie. Corrigé par un
+   suivi chronologique (`quitSoFarInReplay`, rempli uniquement au moment
+   où le QUIT est réellement traité dans la boucle) plutôt que l'état
+   final du joueur.
+
+Les deux correctifs ont été vérifiés indépendamment par le second agent de
+contrôle (scripts HTTP/Playwright écrits de zéro, jamais une copie de ceux
+du premier agent) : double comptage confirmé disparu (mesure propre sur un
+scénario à 3 tours actifs : 13 obtenu contre 18 attendu si le bug était
+revenu), solde réel d'un joueur sorti strictement croissant sur 5 cycles
+complets de l'assistant pilotés par de VRAIS clics Playwright (7→16→36→
+82→187→426), test de régression confirmé détecter effectivement le bug
+(échoue `10` attendu vs `14` obtenu quand le correctif est annulé
+temporairement). `mvn clean package` relancé indépendamment par les deux
+agents (76/76 tests à chaque fois).
+
+**Limite résiduelle mineure signalée, non corrigée** (trouvée par le
+second agent de contrôle, hors périmètre des deux bugs ci-dessus) :
+`isSmartphoneLibre`/`isSmartphoneDebt` (app.js, détection du mode
+d'affichage de l'assistant - "jetons" vs "unités monétaires") restent
+calculés via `game.players.some(p => p.active && p.hasStartingAllocation)`
+- `p.active` SEUL, jamais élargi à `p.active || p.quit`. Cohérent avec le
+commentaire du code ("même détection que côté moteur,
+`Event.isSmartphoneTrackedGame()`", qui a exactement le même
+périmètre `p.isActive()` seul, voir son propre commentaire) - PAS une
+régression de ce chantier, un choix de conception pré-existant partagé par
+le moteur et le client. Si TOUS les joueurs d'une partie finissent par
+quitter (plus aucun joueur strictement actif), l'assistant basculerait en
+affichage "jetons bruts" au lieu "d'unités monétaires" pour les joueurs
+restants (tous sortis) - purement cosmétique (la boucle de POST réelle,
+déjà corrigée, n'utilise pas cette variable et reste correcte), cas limite
+peu probable mais pas impossible. Décision à prendre par l'utilisateur :
+élargir cette détection à `isQuit()` aussi (et, par cohérence, la même
+chose côté moteur dans `Event.isSmartphoneTrackedGame()`), ou documenter
+que ce cas extrême reste un repli cosmétique acceptable.

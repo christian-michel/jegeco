@@ -567,6 +567,18 @@ juste avant).
   sur 7 tours consécutifs, transaction refusée, cartes vidées, masse
   jamais décroissante, pas de double comptage) + vérification visuelle des
   badges/courbes en pointillés.
+  **Revue à deux agents (même jour)** : deux bugs réels trouvés et corrigés
+  (commit `b8ba389`) - le DU d'un joueur sorti ne grandissait en réalité
+  JAMAIS via l'interface normale (seule une étape d'AFFICHAGE avait été
+  élargie, pas la boucle qui poste réellement l'événement) ; la richesse
+  finale d'un joueur ayant joué plusieurs tours actifs avant de quitter
+  était gonflée par un double comptage (état final du joueur lu au lieu de
+  son état chronologique réel au moment de chaque événement rejoué). Les
+  deux validés indépendamment par un second agent (scripts/mesures écrits
+  de zéro) - voir `03-architecture-technique.md`, entrée du 04/10/2026
+  "Revue à deux agents...", pour le détail complet et la limite résiduelle
+  mineure signalée (détection `isSmartphoneLibre` non élargie à `isQuit()`,
+  cas extrême cosmétique, décision utilisateur en attente).
 
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
