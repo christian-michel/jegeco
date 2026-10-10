@@ -706,6 +706,40 @@
 					</div>
 					<div id="transactionsPanelBody" class="hidden"></div>
 				</div>
+
+				<!-- Demandes de crédit (monnaie dette + smartphone, 10/10/2026) -
+				     BUG TROUVÉ pendant la campagne de test dette+smartphone demandée
+				     par l'utilisateur : le joueur peut bien ENVOYER une demande
+				     depuis son téléphone (bouton "Demander un crédit", voir
+				     player-view.js/GecoServer.java, routes /credit-requests déjà
+				     fonctionnelles côté serveur), mais RIEN côté animateur ne
+				     l'affichait ni ne permettait de l'accepter/refuser - ni dans ce
+				     tableau de bord, ni dans l'assistant de fin de tour
+				     (renderStepCredits n'accorde que des crédits décidés par
+				     l'animateur lui-même, jamais liés à une demande du joueur), ni
+				     même un simple log WebSocket ("creditRequest" diffusé mais
+				     jamais écouté par app.js). Le bouton smartphone était donc un
+				     cul-de-sac complet en usage réel (confirmé par grep : aucune
+				     des deux chaînes "credit-requests"/"creditRequest" n'apparaissait
+				     nulle part dans ce fichier avant ce correctif). Panneau minimal
+				     ajouté ici, qui réutilise tel quel le mécanisme déjà existant
+				     (CreditRequestService + routes approve/decline, qui elles-mêmes
+				     ne font qu'appeler recordEvent("N", ...) - voir GecoServer.java) :
+				     aucun nouveau code moteur, juste le fil manquant côté UI. Visible
+				     seulement en monnaie dette + mode smartphone (mêmes conditions
+				     que transactionsPanelCard ci-dessus) - une partie dette CLASSIQUE
+				     n'a jamais aucune demande (le bouton n'existe que sur l'écran
+				     joueur smartphone, voir isDebtGame() dans player-view.js).
+				     Rafraîchi automatiquement à chaque message WebSocket pour cette
+				     partie (renderGameDetail est déjà rappelée à chaque diffusion,
+				     y compris "creditRequest" - voir connectWs), pas besoin d'un
+				     canal dédié séparé. -->
+				<div class="panel-card hidden" id="creditRequestsPanelCard">
+					<div class="panel-header">
+						<h3 data-i18n="game.credit_requests_title">Demandes de crédit</h3>
+					</div>
+					<ul id="creditRequestsList" class="players-list"></ul>
+				</div>
 				<div id="turnEndToast" class="turn-end-toast hidden" data-i18n="game.toast_end_turn">Fin de tour</div>
 			</section>
 

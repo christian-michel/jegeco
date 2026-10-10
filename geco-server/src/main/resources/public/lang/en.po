@@ -2021,6 +2021,22 @@ msgstr "Request for {amount} tokens"
 msgid "playerView.credit_request_new"
 msgstr "Make a new request"
 
+# ============ Host "Credit requests" panel (missing wiring fixed 10/10/2026) ============
+msgid "game.credit_requests_title"
+msgstr "Credit requests"
+
+msgid "game.credit_requests_empty"
+msgstr "No pending request."
+
+msgid "game.credit_requests_amount_meta"
+msgstr "requests {amount} tokens"
+
+msgid "game.credit_requests_approve_btn"
+msgstr "✓ Grant"
+
+msgid "game.credit_requests_decline_btn"
+msgstr "✕ Decline"
+
 # ============ Result screen redesign + sale notification (31/08/2026) ============
 msgid "trade.new_balance_label"
 msgstr "New balance"

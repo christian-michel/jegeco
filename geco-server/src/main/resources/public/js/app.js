@@ -477,6 +477,17 @@ const Api = {
 	// l'assistant de fin de tour pour pré-remplir automatiquement le bilan de
 	// chaque joueur (voir renderStepAllPlayersMoney dans openEndOfTurnWizard).
 	getTransactions: (gameId) => api(`/api/games/${gameId}/transactions`),
+	// Étape 3, monnaie dette + smartphone : demandes de crédit envoyées par un
+	// joueur depuis son téléphone (voir CreditRequestService côté serveur) -
+	// ajoutées ici le 10/10/2026 (voir creditRequestsPanelCard dans index.html)
+	// car jusqu'alors jamais appelées nulle part côté animateur, malgré des
+	// routes serveur déjà pleinement fonctionnelles - bug trouvé pendant la
+	// campagne de test dette+smartphone demandée par l'utilisateur.
+	listCreditRequests: (gameId) => api(`/api/games/${gameId}/credit-requests`),
+	approveCreditRequest: (gameId, requestId, principal, interest) =>
+		api(`/api/games/${gameId}/credit-requests/${requestId}/approve`, { method: "POST", body: JSON.stringify({ principal, interest }) }),
+	declineCreditRequest: (gameId, requestId) =>
+		api(`/api/games/${gameId}/credit-requests/${requestId}/decline`, { method: "POST" }),
 	// Historique complet des carrés (voir CardSquareEvent) - remonté par
 	// l'utilisateur (31/08/2026) : "seront transmises à l'application de
 	// l'animateur lors de l'entre-deux tour".
@@ -2512,6 +2523,12 @@ async function renderGameDetail(gameId) {
 			el("transactionsPanelBody").classList.add("hidden");
 			el("transactionsPanelBody").innerHTML = "";
 		}
+		// Demandes de crédit (10/10/2026) : même filtre - voir le commentaire du
+		// panneau dans index.html pour le raisonnement complet (bug trouvé :
+		// aucune UI animateur n'existait jusqu'ici pour cette fonctionnalité).
+		const showCreditRequests = isSmartphoneMode && (game.moneySystem === 1);
+		el("creditRequestsPanelCard").classList.toggle("hidden", !showCreditRequests);
+		if (showCreditRequests) renderCreditRequestsPanel(gameId);
 	});
 
 	const isDebt = game.moneySystem === 1;
@@ -3203,6 +3220,62 @@ async function renderInviteQr(gameId) {
 			setTimeout(() => { el("btnCopyInviteLink").textContent = "📋 Copier le lien"; }, 1500);
 		});
 	};
+}
+
+// Étape 3, monnaie dette + smartphone (10/10/2026) : panneau "Demandes de
+// crédit" - voir le commentaire du panneau dans index.html (creditRequestsPanelCard)
+// pour le bug trouvé et le raisonnement complet. Contrairement au panneau des
+// échanges ci-dessous (ouvert/fermé à la demande), celui-ci se rafraîchit à
+// chaque rendu de la partie (déjà appelé à chaque message WebSocket pertinent,
+// voir connectWs) : une demande en attente doit être visible sans action
+// supplémentaire de l'animateur, c'est tout l'objet de ce correctif.
+async function renderCreditRequestsPanel(gameId) {
+	const t = window.GecoI18n.t;
+	const list = el("creditRequestsList");
+	let requests;
+	try {
+		requests = await Api.listCreditRequests(gameId);
+	} catch (err) {
+		list.innerHTML = `<li style="color:var(--danger)">${t("game.transactions_load_error")}</li>`;
+		return;
+	}
+	if (requests.length === 0) {
+		list.innerHTML = `<li style="color:var(--text-dim);font-size:0.85rem;">${t("game.credit_requests_empty")}</li>`;
+		return;
+	}
+	// listCreditRequests ne renvoie QUE les demandes "pending" (voir
+	// CreditRequestService.listPending côté serveur) - pas besoin de filtrer
+	// ici, une fois traitée (approuvée/refusée) une demande disparaît
+	// naturellement de cette liste au prochain rafraîchissement.
+	list.innerHTML = requests.map((r) => `
+		<li data-request-id="${r.id}">
+			<strong>${escapeHtml(r.playerName)}</strong>
+			<span class="event-meta">${t("game.credit_requests_amount_meta", { amount: r.requestedPrincipal })}</span>
+			<span class="wizard-inline-actions">
+				<input type="number" class="creditRequestInterestInput" value="1" min="0" title="${escapeHtml(t("game.field_interest"))}" style="width:3.5rem;">
+				<button type="button" class="btn btn-small creditRequestApproveBtn" data-i18n="game.credit_requests_approve_btn">${t("game.credit_requests_approve_btn")}</button>
+				<button type="button" class="btn btn-small creditRequestDeclineBtn" data-i18n="game.credit_requests_decline_btn">${t("game.credit_requests_decline_btn")}</button>
+			</span>
+		</li>`).join("");
+	list.querySelectorAll(".creditRequestApproveBtn").forEach((btn) => {
+		btn.onclick = async () => {
+			const li = btn.closest("[data-request-id]");
+			const requestId = parseInt(li.dataset.requestId, 10);
+			const request = requests.find((r) => r.id === requestId);
+			const interest = parseInt(li.querySelector(".creditRequestInterestInput").value || "0", 10);
+			btn.disabled = true;
+			await Api.approveCreditRequest(gameId, requestId, request.requestedPrincipal, interest);
+			renderGameDetail(gameId);
+		};
+	});
+	list.querySelectorAll(".creditRequestDeclineBtn").forEach((btn) => {
+		btn.onclick = async () => {
+			const li = btn.closest("[data-request-id]");
+			btn.disabled = true;
+			await Api.declineCreditRequest(gameId, parseInt(li.dataset.requestId, 10));
+			renderGameDetail(gameId);
+		};
+	});
 }
 
 // Étape 3, mode smartphone : historique des échanges par QR code (voir

@@ -2025,6 +2025,27 @@ msgstr "Demande de {amount} jetons"
 msgid "playerView.credit_request_new"
 msgstr "Faire une nouvelle demande"
 
+# ============ Panneau animateur "Demandes de credit" (fil manquant corrige le 10/10/2026) ============
+# Bug trouve pendant la campagne de test dette+smartphone demandee par
+# l'utilisateur : le joueur pouvait bien ENVOYER une demande (voir les cles
+# playerView.credit_request_* ci-dessus, deja fonctionnelles), mais rien cote
+# animateur ne l'affichait ni ne permettait de l'accepter/refuser - voir
+# creditRequestsPanelCard dans index.html pour le detail complet.
+msgid "game.credit_requests_title"
+msgstr "Demandes de crédit"
+
+msgid "game.credit_requests_empty"
+msgstr "Aucune demande en attente."
+
+msgid "game.credit_requests_amount_meta"
+msgstr "demande {amount} jetons"
+
+msgid "game.credit_requests_approve_btn"
+msgstr "✓ Accorder"
+
+msgid "game.credit_requests_decline_btn"
+msgstr "✕ Refuser"
+
 # ============ Ecran de resultat refonte + notification de vente (31/08/2026) ============
 msgid "trade.new_balance_label"
 msgstr "Nouveau solde"
