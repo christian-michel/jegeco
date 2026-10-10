@@ -452,17 +452,43 @@ public class Event implements Serializable
 			// EXACT (principal+interest) que la masse monétaire globale, en
 			// miroir de NEW_CREDIT (qui le crédite de "principal" au moment de
 			// l'emprunt, voir plus bas) - couvre aussi bien un remboursement
-			// complet que partiel. BANKRUPT/PRISON/CANNOT_PAY gardent weakCards
-			// inchangé (leur valeur ici n'a de toute façon aucun effet observable :
-			// ces 3 cas tombent tous dans le bloc "sinon" du QUIT/DEATH ci-dessous,
-			// qui remet TOUJOURS jetonWeak à 0 pour eux, quelle que soit la valeur
-			// posée à cette étape).
+			// complet que partiel.
+			//
+			// BUG TROUVÉ ET CORRIGÉ (10/10/2026, campagne de test dette+
+			// smartphone demandée par l'utilisateur, 2 joueurs/2 tours,
+			// reproduit via l'API REST réelle - voir le rapport de cette
+			// campagne) : le commentaire ci-dessus affirmait que la valeur de
+			// "weakCards" ici n'avait "aucun effet observable" pour BANKRUPT/
+			// PRISON/CANNOT_PAY puisque le bloc "sinon" du QUIT/DEATH
+			// ci-dessous remettait de toute façon jetonWeak à 0 - CE QUI ÉTAIT
+			// LUI-MÊME LE BUG, resté invisible tant qu'aucun scénario réel
+			// n'avait testé une saisie PARTIELLE (joueur possédant PLUS de
+			// jetons que la cible saisie). Observé concrètement : un joueur
+			// avec 60 jetons, saisi de exactement 60+1 carte pour couvrir une
+			// dette de 61, se retrouvait certes à 0 - correct ici par pure
+			// coïncidence (saisie = solde entier) - mais un joueur avec
+			// davantage de jetons que la cible aurait perdu la TOTALITÉ de son
+			// solde au lieu de seulement le montant réellement saisi
+			// ("principal", voir computeAutoSeizure/classifyCannotPay côté
+			// app.js - et plugins/dette/manifest.json, qui documente bien
+			// "seizedCoins" comme un montant CIBLÉ, jamais "tout le solde") -
+			// un écart silencieux entre la masse monétaire globale (réduite
+			// de "principal" seulement, voir le bloc commun juste en dessous)
+			// et le solde réellement affiché sur CE téléphone (réduit de BEAUCOUP
+			// plus), détecté par la vérification de cohérence dashboard/
+			// smartphone de la campagne. Seuls QUIT et DEATH (sortie
+			// définitive, le joueur ne rejoue plus - voir plus bas) doivent
+			// réellement repartir à 0 ; BANKRUPT/PRISON/CANNOT_PAY (joueur qui
+			// RESTE actif, simplement saisi d'un montant précis) ne débitent
+			// désormais plus que ce montant précis, jamais la totalité -
+			// variable renommée en coinsSeized pour éviter toute confusion
+			// avec les CARTES saisies (weakCards/mediumCards/strongCards,
+			// toujours gérées séparément par game.seizeValues ci-dessus, un
+			// inventaire de CARTES DE JEU distinct des jetons de monnaie).
 			if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT))
 			{
-				final int weakDebit = EventType.REIMB_CREDIT.equals(evt) ? (principal + interest) : weakCards;
-				player.setJetonWeak(Math.max(0, player.getJetonWeak() - weakDebit));
-				player.setJetonMedium(Math.max(0, player.getJetonMedium() - mediumCards));
-				player.setJetonStrong(Math.max(0, player.getJetonStrong() - strongCards));
+				final int coinsSeized = EventType.REIMB_CREDIT.equals(evt) ? (principal + interest) : principal;
+				player.setJetonWeak(Math.max(0, player.getJetonWeak() - coinsSeized));
 			}
 			// and then it's just like quitting: don't break here!
 
@@ -560,19 +586,32 @@ public class Event implements Serializable
 				player.setCurDebt(0);
 				player.setCurInterest(0);
 				// Étape 3, monnaie dette suivie par SMARTPHONE (17/09/2026) : à la
-				// mort/sortie/saisie d'un joueur, son solde physique de jetons est
-				// remis à zéro - voir plugins/dette/manifest.json,
-				// deathRebirth.note : "une renaissance en dette ne redonne pas de
-				// dotation fixe, le joueur reprend simplement à 0 dette" - son
-				// jetonWeak suit exactement la même règle (jamais de dotation
-				// gratuite comme la libre, voir le cas NEW_CREDIT plus bas). Ce qui
-				// vient d'être compté dans weakCards/mediumCards/strongCards
-				// (inventaire à cet instant, voir GameService.recordEvent) a déjà
-				// été pris en compte pour les statistiques avant ce point - jamais
-				// pour la dette CLASSIQUE (isSmartphoneTrackedGame() y reste
-				// toujours faux) ni pour la libre/le troc (mécanisme propre à la
-				// dette).
-				if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT))
+				// mort/sortie d'un joueur, son solde physique de jetons est remis
+				// à zéro - voir plugins/dette/manifest.json, deathRebirth.note :
+				// "une renaissance en dette ne redonne pas de dotation fixe, le
+				// joueur reprend simplement à 0 dette" - son jetonWeak suit
+				// exactement la même règle (jamais de dotation gratuite comme la
+				// libre, voir le cas NEW_CREDIT plus bas). Jamais pour la dette
+				// CLASSIQUE (isSmartphoneTrackedGame() y reste toujours faux) ni
+				// pour la libre/le troc (mécanisme propre à la dette).
+				//
+				// BUG TROUVÉ ET CORRIGÉ (10/10/2026, campagne de test dette+
+				// smartphone - voir le commentaire détaillé juste au-dessus, au
+				// début de ce même bloc "case BANKRUPT/PRISON/CANNOT_PAY/
+				// REIMB_CREDIT") : cette remise à zéro s'appliquait jusqu'ici
+				// INCONDITIONNELLEMENT à CE bloc "sinon" tout entier - qui couvre
+				// aussi BANKRUPT/PRISON/CANNOT_PAY (joueur SAISI mais qui reste
+				// actif, continue de jouer - jamais déconnecté, voir l'absence de
+				// player.setActive(false) pour ces trois types), pas seulement
+				// QUIT/DEATH (sortie définitive). Un joueur simplement saisi
+				// gardait donc, à tort, un solde de jetons à 0 au lieu du reste
+				// de son solde réel après saisie (déjà débité du montant
+				// exactement saisi juste au-dessus, voir coinsSeized) - écrasant
+				// ce débit correct par une remise à zéro totale et injustifiée.
+				// Restreint désormais explicitement à QUIT/DEATH, les deux seuls
+				// cas où le joueur quitte réellement la circulation active.
+				if (isSmartphoneTrackedGame(game) && (game.getMoneySystem() == Game.MONEY_DEBT)
+						&& (EventType.QUIT.equals(evt) || EventType.DEATH.equals(evt)))
 				{
 					player.setJetonWeak(0);
 					player.setJetonMedium(0);
