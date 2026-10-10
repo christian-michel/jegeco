@@ -168,4 +168,77 @@ public class DebtMoneySystemTest
 		assertEquals(5, mPlayer1.getJetonWeak(),
 				"jetonWeak doit être débité EXACTEMENT du montant remboursé (principal+intérêt = 5), jamais plus, jamais moins.");
 	}
+
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (10/10/2026, campagne de test dette+smartphone
+	 * réelle via Playwright - 2 joueurs/2 tours, masse monétaire globale
+	 * retombée à -1 après une saisie bancaire). Un joueur SAISI (BANKRUPT/
+	 * PRISON/CANNOT_PAY - les trois codes tombent dans le même bloc
+	 * Event.applyEvent, voir son commentaire) reste ACTIF, contrairement à
+	 * QUIT/DEATH (jamais de {@code player.setActive(false)} pour ces trois
+	 * cas) : seul le montant RÉELLEMENT saisi ("principal", voir
+	 * computeAutoSeizure côté app.js et plugins/dette/manifest.json, qui
+	 * documente "seizedCoins" comme un montant CIBLÉ, jamais "tout le
+	 * solde") doit quitter son solde physique de jetons, jamais la totalité.
+	 * Avant ce correctif, jetonWeak était systématiquement remis à 0
+	 * (hérité, par un fallthrough Java sans break, du même bloc que QUIT/
+	 * DEATH) quel que soit le montant réellement saisi - un joueur saisi de
+	 * 10 sur un solde de 50 se retrouvait à tort à 0 au lieu de 40, créant
+	 * un écart silencieux entre la masse monétaire globale (réduite
+	 * seulement de "principal", donc cohérente) et le solde affiché sur son
+	 * téléphone (bien plus bas que la réalité).
+	 */
+	@Test
+	public void testCannotPaySeizureOnlyDebitsActualSeizedAmountNotEntireBalance()
+	{
+		mPlayer1.setStartingCardsJson("{}"); // simule une pioche de départ réelle (mode smartphone)
+
+		final Event credit = new Event(mGame, EventType.NEW_CREDIT, mPlayer1);
+		credit.setPrincipal(50);
+		credit.setInterest(0);
+		credit.applyEvent();
+		assertEquals(50, mPlayer1.getJetonWeak(), "Le crédit doit créditer les 50 jetons empruntés.");
+
+		// Saisie bancaire ciblée de 10 jetons seulement (ex. intérêt dû),
+		// jamais la totalité du solde - voir computeAutoSeizure/
+		// classifyCannotPay côté app.js, qui calcule "seizedCoins" comme un
+		// montant précis, pas "tout ce que le joueur possède".
+		final Event seizure = new Event(mGame, EventType.CANNOT_PAY, mPlayer1);
+		seizure.setPrincipal(10);
+		seizure.setInterest(0);
+		seizure.applyEvent();
+
+		assertEquals(40, mPlayer1.getJetonWeak(),
+				"Une saisie CANNOT_PAY ne doit débiter que le montant RÉELLEMENT saisi (10), jamais remettre le solde "
+						+ "entier à 0 - le joueur reste actif et continue de jouer avec le reste de son solde.");
+		assertEquals(0, mPlayer1.getCurDebt(), "La dette reste intégralement soldée (forgiven) après une saisie, comme avant ce correctif.");
+	}
+
+	/**
+	 * Garde-fou symétrique du test ci-dessus : QUIT (et DEATH, même
+	 * mécanisme) doit, lui, TOUJOURS remettre jetonWeak à 0 - le joueur
+	 * quitte réellement la circulation active (contrairement à CANNOT_PAY),
+	 * donc ce comportement ne doit pas régresser avec le correctif
+	 * ci-dessus (qui restreint la remise à zéro à QUIT/DEATH uniquement).
+	 */
+	@Test
+	public void testQuitStillResetsJetonWeakToZeroEvenWithMoreBalanceThanDeclared()
+	{
+		mPlayer1.setStartingCardsJson("{}");
+
+		final Event credit = new Event(mGame, EventType.NEW_CREDIT, mPlayer1);
+		credit.setPrincipal(50);
+		credit.setInterest(0);
+		credit.applyEvent();
+		assertEquals(50, mPlayer1.getJetonWeak());
+
+		final Event quit = new Event(mGame, EventType.QUIT, mPlayer1);
+		quit.setPrincipal(50); // "monnaie restante" declaree par l'animateur, voir openPlayerQuitDialog
+		quit.setInterest(0);
+		quit.applyEvent();
+
+		assertEquals(0, mPlayer1.getJetonWeak(),
+				"QUIT doit toujours remettre jetonWeak à 0 (sortie définitive de la circulation active) - comportement "
+						+ "inchangé par le correctif CANNOT_PAY/BANKRUPT/PRISON ci-dessus.");
+	}
 }
