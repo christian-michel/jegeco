@@ -3546,3 +3546,94 @@ peu probable mais pas impossible. Décision à prendre par l'utilisateur :
 élargir cette détection à `isQuit()` aussi (et, par cohérence, la même
 chose côté moteur dans `Event.isSmartphoneTrackedGame()`), ou documenter
 que ce cas extrême reste un repli cosmétique acceptable.
+
+## 10/10/2026 - Animations "Commencez !"/"Stop !" (commit b70216b) et revue
+## à deux agents : un bug réel trouvé et corrigé (commit 418f09b)
+
+Implémentation de deux animations plein écran sur les smartphones des
+joueurs, demande explicite de l'utilisateur (images jointes "Debut.jpeg"/
+"Stop.jpeg") : "Commencez !" au début de chaque tour, "Stop !" à la fin,
+modélisées sur les animations existantes "Mort du joueur"/"Renaissance !"
+(même gabarit JS/CSS, effet "explosion" cuit directement dans la
+transition CSS du fond plutôt que de réutiliser `#animFlashOverlay` -
+risque de collision avec une animation de mort/renaissance/carré encore en
+cours pour un autre joueur, ces files d'attente n'étant jamais
+synchronisées entre elles). "Début de tour" réutilise la diffusion WS
+existante (`event`/`TURN`) ; "fin de tour" n'avait AUCUNE diffusion
+existante côté serveur (ni le clic manuel ni l'expiration automatique du
+minuteur n'appelaient jusque-là le serveur) - nouvel endpoint `POST
+/api/games/{id}/turn/announce-end` (sans mutation d'état) + diffusion WS
+`turn_ending` ajoutés pour ce seul besoin. Détail complet dans le message
+du commit `b70216b`.
+
+Revue à deux niveaux demandée explicitement par l'utilisateur (identique
+au protocole déjà suivi pour le commit 8006d14 ci-dessus), avec en plus
+une campagne de test à grande échelle demandée explicitement : 3 parties
+monnaie libre+smartphone, 9 joueurs + animateur, 8 tours chacune
+(`playwright`, durée de tour raccourcie à 20-35s au lieu de 180s pour
+rester exécutable - exerce exactement le même code côté client, voir
+`startTurnTimer()`/`update()`, juste plus vite). Agent de contrôle : 0 bug
+trouvé, campagne complète documentée (51 captures d'écran, 72/72
+vérifications croisées jetons joueur/animateur, garde anti-interruption
+"testée 3 fois" sans jamais mettre le réseau sous contrainte), aucun
+scénario de blocage total des échanges observé sur 54 tentatives, un
+risque théorique non observé signalé (raréfaction de modèles de cartes sur
+des parties très longues, 12+ tours - à surveiller, pas d'action requise).
+
+Le second agent (audit indépendant, scripts et scénarios Playwright écrits
+de zéro, jamais une copie de ceux du premier) a confirmé l'essentiel du
+rapport du premier agent (build/tests/i18n, les deux points où il
+s'auto-disculpait - détection DOM peu fiable sous charge : artefact de son
+propre sondage externe, confirmé par un MutationObserver posé EN PAGE ;
+erreur 500 de l'assistant de fin de partie au dernier tour : prouvé
+matériellement étranger à b70216b par lecture exhaustive du diff, ce
+commit ne touchant aucune ligne de ce flux) - **mais a trouvé un vrai bug
+que le premier agent avait manqué** :
+
+**Garde anti-interruption contournable par un aller-retour réseau réel.**
+La garde ("l'animation plein écran ne doit jamais s'afficher si une
+modale d'achat/vente est ouverte") testait `state.cardModalOffer`
+(player-view.js) - un champ qui ne devient non-null qu'une fois
+`generateCardModalQr()` revenu du serveur. Or `openCardModal()` affiche
+déjà la modale ET lance ce round-trip de façon SYNCHRONE, avant tout
+`await` - `state.cardModalItem`, lui, est posé en tout premier, avant le
+moindre aller-retour réseau. Sur un réseau rapide (poste de test local),
+le round-trip se termine en quelques millisecondes, refermant la fenêtre
+de course avant qu'un test manuel ne puisse l'atteindre - exactement
+pourquoi le premier agent, qui a testé cette garde "3 fois" sans jamais
+ralentir artificiellement le réseau, ne l'a pas vue. Reproduit par le
+second agent avec Playwright + réseau ralenti via CDP (800ms, un "accroc
+wifi" ordinaire avec de nombreux téléphones, déjà documenté ailleurs dans
+ce projet comme un cas réel fréquent - voir plus haut dans ce document,
+09/09/2026) : un joueur qui vient de taper sur une carte pour la vendre,
+pendant que son QR est encore en cours de génération, voyait l'animation
+plein écran (`pointer-events:auto`) recouvrir intégralement sa modale -
+très exactement le blocage de ~1,5s que cette garde avait été écrite pour
+éviter, juste avec le mauvais indicateur. Corrigé (commit `418f09b`,
+cherry-pické depuis le worktree du second agent dans la branche
+principale) : `state.cardModalItem` à la place de `state.cardModalOffer`
+aux 4 endroits où b70216b avait introduit ce test - `state.cardModalOffer`
+reste le bon test ailleurs dans ce même fichier (`handleOwnSaleCompleted`,
+qui doit vérifier que la modale correspond À CETTE offre précise, pas
+seulement qu'une modale est ouverte), volontairement non touché. Vérifié
+après correctif : `mvn clean package` vert (76/76 tests, aucune
+régression), scénario Playwright dédié confirmant la fuite AVANT le
+correctif et sa disparition APRÈS (repli sur l'infobulle, modale intacte).
+
+**Point produit signalé, non corrigé** (trouvé par le second agent, pas un
+bug franc - décision utilisateur en attente, même esprit que les points
+similaires déjà consignés dans ce document) : un clic MANUEL précoce sur
+"Terminer le tour" (bien avant l'expiration naturelle du minuteur, hors
+pause) déclenche désormais "Stop !" sur tous les téléphones, alors que
+`/turn/announce-end` ne mute AUCUN état serveur par conception (pure
+diffusion) - `tradingAllowed` reste `true` côté serveur juste après
+l'annonce. Un joueur pourrait donc en théorie continuer à échanger
+pendant que son téléphone affiche "Stop !" puis l'écran Profil. Ce
+comportement existait déjà AVANT b70216b (un clic manuel sur "Terminer le
+tour" n'a jamais bloqué le serveur) - b70216b n'est donc pas une
+régression à proprement parler, mais lui donne pour la première fois un
+signal visuel fort et potentiellement trompeur. Non corrigé : décision
+produit ambiguë (faut-il que "Terminer le tour" bloque réellement les
+échanges dès le clic, ou le signal visuel doit-il simplement refléter
+l'intention de l'animateur sans contrainte serveur immédiate ?), à arbitrer
+par l'utilisateur.
