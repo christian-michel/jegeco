@@ -447,6 +447,10 @@ const Api = {
 	extendTurn: (gameId, seconds) => api(`/api/games/${gameId}/turn/extend?seconds=${seconds}`, { method: "POST" }),
 	pauseTurn: (gameId) => api(`/api/games/${gameId}/turn/pause`, { method: "POST" }),
 	resumeTurn: (gameId) => api(`/api/games/${gameId}/turn/resume`, { method: "POST" }),
+	// Animation "Stop !" plein écran sur les smartphones (10/10/2026, voir
+	// GecoServer.java pour le détail - endpoint sans mutation d'état, relaie
+	// juste l'instant exact à tous les joueurs via WS "turn_ending").
+	announceTurnEnd: (gameId) => api(`/api/games/${gameId}/turn/announce-end`, { method: "POST" }),
 	getComparison: (ids) => api(`/api/games/compare?ids=${ids.join(",")}`),
 	listPlugins: () => api("/api/plugins"),
 	setPluginEnabled: (id, enabled) => api(`/api/plugins/${id}/enabled`, { method: "PUT", body: JSON.stringify({ enabled }) }),
@@ -4145,6 +4149,15 @@ function startTurnTimer(game) {
 		if (remaining <= 0 && !state.timer.endToastShown && game.pausedRemainingSeconds == null) {
 			state.timer.endToastShown = true;
 			playWhistle("stop");
+			// Animation "Stop !" plein écran sur les smartphones (10/10/2026) -
+			// remonté par l'utilisateur. `update` n'est pas async (appelée à
+			// chaque tick par setInterval) : appel "fire-and-forget", comme les
+			// autres notifications WebSocket de ce fichier - une erreur réseau
+			// ne doit jamais bloquer l'affichage local de l'info-bulle/
+			// l'ouverture de l'assistant juste en dessous, qui restent
+			// strictement inchangés quoi qu'il arrive côté serveur.
+			Api.announceTurnEnd(state.currentGameId).catch((err) =>
+				console.error("Annonce \"fin de tour\" (animation smartphone) impossible :", err));
 			const toast = el("turnEndToast");
 			// Remonté par un utilisateur, avec un document de spécification détaillé :
 			// au dernier tour de la partie, l'info-bulle affiche "Fin du dernier tour"
@@ -6204,6 +6217,11 @@ function bindActions() {
 		// est terminé, quelle que soit la façon dont ça a été déclenché.
 		stopTurnTimer();
 		playWhistle("stop");
+		// Animation "Stop !" plein écran sur les smartphones (10/10/2026) -
+		// même appel fire-and-forget que le chemin automatique ci-dessous
+		// (update()), pour ce déclenchement manuel.
+		Api.announceTurnEnd(state.currentGameId).catch((err) =>
+			console.error("Annonce \"fin de tour\" (animation smartphone) impossible :", err));
 		// BUG TROUVÉ ET CORRIGÉ (21/09/2026, remonté par l'utilisateur : "au
 		// moment où [un joueur] renaît, l'application donne un coup de sifflet
 		// [...] il ne faut pas le faire ici") : contrairement au chemin

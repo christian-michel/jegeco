@@ -2094,6 +2094,14 @@ msgstr "Mort du joueur"
 msgid "playerView.rebirth_anim_title"
 msgstr "Renaissance !"
 
+# ============ Animation "Commencez !" (début de tour, 10/10/2026) ============
+msgid "playerView.turnstart_anim_title"
+msgstr "Commencez !"
+
+# ============ Animation "Stop !" (fin de tour, 10/10/2026) ============
+msgid "playerView.turnend_anim_title"
+msgstr "Stop !"
+
 # ============ Infobulles temporaires (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"
 msgstr "Vous n'avez pas assez d'unités monétaires"

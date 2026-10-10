@@ -1088,6 +1088,35 @@ public class GecoServer
 			ctx.json(GameDetailDto.from(game));
 		});
 
+		// Annonce "fin de tour" (10/10/2026) - remonté par l'utilisateur :
+		// animation plein écran "Stop !" sur les smartphones des joueurs, "le
+		// même temps à peu près" que l'animation de mort/renaissance. Contrairement
+		// au début de tour (déjà couvert par la diffusion existante de
+		// l'événement TURN, voir /api/games/{id}/events), AUCUNE diffusion
+		// n'existait jusqu'ici pour la fin de tour : ni le clic sur "Terminer
+		// le tour" (bouton animateur), ni l'expiration automatique du
+		// minuteur à zéro n'appelaient le serveur - les deux restaient
+		// purement locaux au navigateur de l'animateur (voir app.js,
+		// btnEndTurn.onclick et startTurnTimer). Endpoint volontairement SANS
+		// AUCUNE mutation d'état (contrairement à /turn/pause ci-dessus) :
+		// sert uniquement à relayer l'instant exact du clic/de l'expiration à
+		// tous les smartphones connectés, via une diffusion WS dédiée
+		// ("turn_ending"), agnostique du système monétaire (dette/libre/troc)
+		// - même principe que la diffusion "death", jamais réservée à un seul
+		// mode de jeu.
+		pApp.post("/api/games/{id}/turn/announce-end", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			broadcast(id, "turn_ending", null); //$NON-NLS-1$
+			ctx.json(java.util.Map.of("ok", true)); //$NON-NLS-1$
+		});
+
 		// Rapport de fin de partie (Phase D) : statistiques agrégées (moyenne, médiane,
 		// écart-type, indice de Gini) et histogramme de répartition finale des richesses.
 		pApp.get("/api/games/{id}/report", ctx -> { //$NON-NLS-1$

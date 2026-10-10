@@ -2328,30 +2328,48 @@ function showToast(pMessage) {
 	}, 3000);
 }
 
-function playPlayerWhistle() {
+// Paramètre `kind` ajouté le 10/10/2026 (animation "Stop !" de fin de tour) -
+// même fichier MP3 unique pour le début ET la fin (voir playWhistle côté
+// animateur, app.js : "un seul et même son... la demande décrit un seul coup
+// de sifflet, pas deux sons distincts") - seul le secours synthétisé
+// distingue les deux (voir playSynthesizedPlayerWhistle ci-dessous), par
+// cohérence avec ce même fichier.
+function playPlayerWhistle(kind) {
 	try {
 		const audio = new Audio("/sounds/whistle.mp3");
-		audio.play().catch(() => playSynthesizedPlayerWhistle());
+		audio.play().catch(() => playSynthesizedPlayerWhistle(kind));
 	} catch (err) {
-		playSynthesizedPlayerWhistle();
+		playSynthesizedPlayerWhistle(kind);
 	}
 }
-function playSynthesizedPlayerWhistle() {
+function playSynthesizedPlayerWhistle(kind) {
 	try {
 		if (!mPlayerAudioCtx) mPlayerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
 		if (mPlayerAudioCtx.state === "suspended") mPlayerAudioCtx.resume();
-		const now = mPlayerAudioCtx.currentTime;
-		const osc = mPlayerAudioCtx.createOscillator();
-		const gain = mPlayerAudioCtx.createGain();
-		osc.connect(gain);
-		gain.connect(mPlayerAudioCtx.destination);
-		osc.type = "square";
-		osc.frequency.setValueAtTime(2200, now);
-		gain.gain.setValueAtTime(0.0001, now);
-		gain.gain.exponentialRampToValueAtTime(0.25, now + 0.02);
-		gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-		osc.start(now);
-		osc.stop(now + 0.35);
+		const ctx = mPlayerAudioCtx;
+		function blast(startAt, durationSec) {
+			const osc = ctx.createOscillator();
+			const gain = ctx.createGain();
+			osc.connect(gain);
+			gain.connect(ctx.destination);
+			osc.type = "square";
+			osc.frequency.setValueAtTime(2200, startAt);
+			gain.gain.setValueAtTime(0.0001, startAt);
+			gain.gain.exponentialRampToValueAtTime(0.25, startAt + 0.02);
+			gain.gain.exponentialRampToValueAtTime(0.0001, startAt + durationSec);
+			osc.start(startAt);
+			osc.stop(startAt + durationSec);
+		}
+		const now = ctx.currentTime;
+		// Même convention que playSynthesizedWhistle côté animateur (app.js) :
+		// un seul coup long pour le début ("start"), deux coups brefs pour la
+		// fin - sans fichier MP3 disponible, cette distinction redevient utile.
+		if (kind === "start") {
+			blast(now, 0.35);
+		} else {
+			blast(now, 0.18);
+			blast(now + 0.25, 0.2);
+		}
 	} catch (err) {
 		// Ni fichier ni synthèse possible (navigateur très restrictif) : on
 		// abandonne silencieusement, jamais bloquant pour la suite.
@@ -2434,7 +2452,7 @@ function connectPlayerWs() {
 		// achat/une vente en cours (un simple son n'interrompt rien, contrairement
 		// à la bascule d'écran juste en dessous, elle bien gardée).
 		if ((msg.type === "event") && (msg.payload.type === "TURN")) {
-			playPlayerWhistle();
+			playPlayerWhistle("start");
 			// Remonté par l'utilisateur (06/09/2026) : "les carrés s'enchaînent
 			// même pendant l'entre-deux-tours. L'animation ne s'arrête plus." -
 			// purge tout ce qui restait en file d'attente (voir
@@ -2444,13 +2462,49 @@ function connectPlayerWs() {
 			// continue naturellement jusqu'à sa fin - jamais interrompue en
 			// plein milieu, seules les suivantes en attente sont annulées.
 			clearSquareAnimQueueOnNewTurn();
-			// Remonté par l'utilisateur (05/09/2026) : une infobulle doit
-			// aussi accompagner le début de tour, en plus du sifflet - même
-			// mécanisme que "solde insuffisant"/"fin du tour" (voir showToast).
-			showToast(t("playerView.turn_started_toast"));
+			// Animation "Commencez !" plein écran (10/10/2026, remonté par
+			// l'utilisateur, image jointe) remplace ici l'ancienne infobulle +
+			// bascule immédiate vers l'onglet Cartes (toujours gardée si un
+			// achat/une vente est EN COURS, voir ci-dessous) - la bascule vers
+			// Cartes a maintenant lieu à la FIN de l'animation elle-même (voir
+			// playTurnStartAnimation), pas ici.
 			if (!state.cardModalOffer && !state.scanStream) {
-				renderMyCards();
-				setActiveNav("navBtnCards");
+				enqueueTurnStartAnimation();
+			} else {
+				// Achat/vente en cours sur ce téléphone : ne jamais poser une
+				// animation plein écran par-dessus (bloquerait la modal/le scan
+				// pendant ~1,5s) - repli sur la simple infobulle d'avant cette
+				// fonctionnalité, le joueur retrouvera l'onglet Cartes normalement
+				// à la fermeture de sa modal/son scan, sans bascule forcée.
+				showToast(t("playerView.turn_started_toast"));
+			}
+		}
+		// Fin de tour (10/10/2026, nouvelle diffusion WS dédiée "turn_ending" -
+		// voir GecoServer.java/app.js, Api.announceTurnEnd) - remonté par
+		// l'utilisateur : animation "Stop !" plein écran symétrique de
+		// "Commencez !" ci-dessus, même garde contre l'interruption d'un
+		// achat/une vente en cours. Pas de sifflet "stop" séparé joué ICI :
+		// contrairement au début de tour (sifflet joué immédiatement, même si
+		// l'animation est différée par la garde ci-dessus), jouer le sifflet de
+		// fin de tour n'a de sens qu'accompagné de l'animation - un joueur en
+		// pleine transaction qui ne verra pas "Stop !" n'a pas besoin d'un
+		// sifflet sans contexte visuel.
+		if (msg.type === "turn_ending") {
+			// Correctif anti-doublon : le rafraîchissement périodique
+			// (refreshPlayer, toutes les 5s) détecte LUI AUSSI la fin de tour,
+			// indépendamment de ce message WS (transition tradingAllowed true ->
+			// false, voir plus haut dans ce fichier - mécanisme PRÉEXISTANT,
+			// gardé tel quel comme filet de sécurité si ce message WS était
+			// manqué, ex. reconnexion). Sans cette ligne, l'infobulle "Fin de
+			// tour" de ce mécanisme plus ancien se déclencherait À NOUVEAU juste
+			// après (ou pendant) l'animation/l'infobulle immédiate ci-dessous,
+			// pour le même événement.
+			state.previousTradingAllowed = false;
+			if (!state.cardModalOffer && !state.scanStream) {
+				playPlayerWhistle("stop");
+				enqueueTurnEndAnimation();
+			} else {
+				showToast(t("playerView.turn_ended_toast"));
 			}
 		}
 	};
@@ -3194,6 +3248,199 @@ function playRebirthChimeSound() {
 	} catch (err) {
 		// Ni synthèse audio possible (navigateur très restrictif) : on
 		// abandonne silencieusement, jamais bloquant pour l'animation visuelle.
+	}
+}
+
+// ============================================================
+// Animations "Commencez !" (début de tour) / "Stop !" (fin de tour)
+// (10/10/2026) - remonté par l'utilisateur, deux images jointes au message
+// ("Debut.jpeg"/"Stop.jpeg", même scène de marché en forêt, jour/nuit) :
+// "comme pour le texte du joueur qui est mort (et le même temps à peu
+// près). Et avec une animation sur le texte et l'image, comme une
+// explosion !". Mécanique calquée sur playDeathAnimation/playRebirthAnimation
+// ci-dessus (même technique "transition: none" + reflow forcé pour un état
+// de départ instantané, même try/finally englobant, même titre rendu par
+// js/vendor/cartoon-text.js - jamais un texte codé en dur, pour rester
+// multilingue) - voir le commentaire détaillé sur .turnstart-anim-overlay/
+// .turnend-anim-overlay dans player.css pour le choix de NE PAS réutiliser
+// #animFlashOverlay ici (risque de collision avec une animation de mort/
+// renaissance/carré encore en cours pour tel ou tel joueur au même instant,
+// ces files d'attente n'étant jamais synchronisées entre elles).
+//
+// Deux files d'attente INDÉPENDANTES l'une de l'autre (contrairement à
+// mort+renaissance, jamais chaînées entre elles ici) - par la même prudence
+// défensive que mDeathAnimQueue : un double message WebSocket (rejeu
+// réseau, reconnexion...) ne doit jamais faire se chevaucher deux
+// animations "Commencez !" (ou deux "Stop !") en plein milieu.
+let mTurnStartAnimQueue = [];
+let mTurnStartAnimRunning = false;
+function enqueueTurnStartAnimation() {
+	mTurnStartAnimQueue.push(true);
+	if (!mTurnStartAnimRunning) drainTurnStartAnimQueue();
+}
+async function drainTurnStartAnimQueue() {
+	mTurnStartAnimRunning = true;
+	try {
+		while (mTurnStartAnimQueue.length > 0) {
+			mTurnStartAnimQueue.shift();
+			try {
+				await playTurnStartAnimation();
+			} catch (err) {
+				pushDebugLog("ERREUR", "Animation \"Commencez !\" (file d'attente) interrompue :", err);
+			}
+		}
+	} finally {
+		mTurnStartAnimRunning = false;
+	}
+}
+
+let mTurnEndAnimQueue = [];
+let mTurnEndAnimRunning = false;
+function enqueueTurnEndAnimation() {
+	mTurnEndAnimQueue.push(true);
+	if (!mTurnEndAnimRunning) drainTurnEndAnimQueue();
+}
+async function drainTurnEndAnimQueue() {
+	mTurnEndAnimRunning = true;
+	try {
+		while (mTurnEndAnimQueue.length > 0) {
+			mTurnEndAnimQueue.shift();
+			try {
+				await playTurnEndAnimation();
+			} catch (err) {
+				pushDebugLog("ERREUR", "Animation \"Stop !\" (file d'attente) interrompue :", err);
+			}
+		}
+	} finally {
+		mTurnEndAnimRunning = false;
+	}
+}
+
+// Durées calquées sur la transition CSS .turnstart-anim-zoom/.turnend-anim-
+// zoom (0,55s, voir player.css) et sur le tremblement/tampon partagés avec
+// mort/renaissance (deathAnimShake 450ms, deathAnimStampSlam 380ms) - même
+// durée totale d'affichage que ces deux animations (1,5s), demande
+// explicite de l'utilisateur ("le même temps à peu près").
+const TURNSTART_ANIM_ZOOM_START_DELAY_MS = 50;
+const TURNSTART_ANIM_EXPLODE_MS = 550;
+const TURNSTART_ANIM_IMPACT_MS = 450;
+const TURNSTART_ANIM_TOTAL_DISPLAY_MS = 1500;
+const TURNEND_ANIM_ZOOM_START_DELAY_MS = 50;
+const TURNEND_ANIM_EXPLODE_MS = 550;
+const TURNEND_ANIM_IMPACT_MS = 450;
+const TURNEND_ANIM_TOTAL_DISPLAY_MS = 1500;
+
+// Appelée UNIQUEMENT depuis drainTurnStartAnimQueue() ci-dessus. Bascule
+// vers l'onglet Cartes à la FIN de l'animation (demande explicite de
+// l'utilisateur) - toujours gardée contre un achat/une vente entre-temps
+// ouvert sur ce téléphone, même garde que l'ancien code remplacé (voir
+// connectPlayerWs) : en pratique, l'entrée dans la file est déjà filtrée par
+// cette même garde, mais une modal/un scan pourrait en théorie s'ouvrir
+// PENDANT l'animation si une exception interrompait prématurément le verrou
+// visuel - prudence inchangée.
+async function playTurnStartAnimation() {
+	const overlay = el("turnstartAnimOverlay");
+	const zoom = el("turnstartAnimZoom");
+	const titleHost = el("turnstartAnimTitleHost");
+
+	zoom.style.transition = "none";
+	zoom.classList.remove("exploded", "shake-impact");
+	zoom.classList.add("collapsed");
+	void zoom.offsetWidth; // force le calcul du style "collapsed" avant de rétablir la transition
+	zoom.style.transition = "";
+	titleHost.classList.remove("stamp-in");
+	titleHost.style.opacity = "0";
+
+	overlay.style.transition = "none";
+	overlay.classList.add("active");
+	void overlay.offsetWidth;
+	overlay.style.transition = "";
+
+	try {
+		await new Promise((r) => setTimeout(r, TURNSTART_ANIM_ZOOM_START_DELAY_MS));
+
+		// ÉTAPE 1 : "explosion" - l'image jaillit d'un point lumineux minuscule
+		// jusqu'à occuper tout l'écran (voir la transition CSS avec dépassement,
+		// .turnstart-anim-zoom, pour l'effet de jaillissement).
+		zoom.classList.remove("collapsed");
+		zoom.classList.add("exploded");
+		await new Promise((r) => setTimeout(r, TURNSTART_ANIM_EXPLODE_MS));
+
+		// ÉTAPE 2 : le titre (multilingue) apparaît façon "coup de tampon",
+		// avec tremblement d'écran synchronisé - même technique que mort/
+		// renaissance.
+		titleHost.style.opacity = "";
+		await renderAnimTitle(titleHost, t("playerView.turnstart_anim_title"));
+		titleHost.classList.add("stamp-in");
+		zoom.classList.add("shake-impact");
+		await new Promise((r) => setTimeout(r, TURNSTART_ANIM_IMPACT_MS));
+		zoom.classList.remove("shake-impact");
+
+		// ÉTAPE 3 : reste affichée jusqu'au total demandé, puis referme automatiquement.
+		const elapsed = TURNSTART_ANIM_ZOOM_START_DELAY_MS + TURNSTART_ANIM_EXPLODE_MS + TURNSTART_ANIM_IMPACT_MS;
+		await new Promise((r) => setTimeout(r, Math.max(0, TURNSTART_ANIM_TOTAL_DISPLAY_MS - elapsed)));
+	} catch (err) {
+		pushDebugLog("ERREUR", "Animation \"Commencez !\" interrompue :", err);
+	} finally {
+		zoom.classList.remove("shake-impact");
+		overlay.classList.remove("active");
+		// Demande explicite de l'utilisateur : "Lorsque l'animation est
+		// terminée, le smartphone du joueur affiche l'écran des cartes."
+		if (!state.cardModalOffer && !state.scanStream) {
+			renderMyCards();
+			setActiveNav("navBtnCards");
+		}
+	}
+}
+
+// Symétrique de playTurnStartAnimation ci-dessus - bascule vers l'écran
+// Profil à la fin (demande explicite de l'utilisateur), pas l'onglet Cartes.
+async function playTurnEndAnimation() {
+	const overlay = el("turnendAnimOverlay");
+	const zoom = el("turnendAnimZoom");
+	const titleHost = el("turnendAnimTitleHost");
+
+	zoom.style.transition = "none";
+	zoom.classList.remove("exploded", "shake-impact");
+	zoom.classList.add("collapsed");
+	void zoom.offsetWidth;
+	zoom.style.transition = "";
+	titleHost.classList.remove("stamp-in");
+	titleHost.style.opacity = "0";
+
+	overlay.style.transition = "none";
+	overlay.classList.add("active");
+	void overlay.offsetWidth;
+	overlay.style.transition = "";
+
+	try {
+		await new Promise((r) => setTimeout(r, TURNEND_ANIM_ZOOM_START_DELAY_MS));
+
+		zoom.classList.remove("collapsed");
+		zoom.classList.add("exploded");
+		await new Promise((r) => setTimeout(r, TURNEND_ANIM_EXPLODE_MS));
+
+		titleHost.style.opacity = "";
+		await renderAnimTitle(titleHost, t("playerView.turnend_anim_title"));
+		titleHost.classList.add("stamp-in");
+		zoom.classList.add("shake-impact");
+		await new Promise((r) => setTimeout(r, TURNEND_ANIM_IMPACT_MS));
+		zoom.classList.remove("shake-impact");
+
+		const elapsed = TURNEND_ANIM_ZOOM_START_DELAY_MS + TURNEND_ANIM_EXPLODE_MS + TURNEND_ANIM_IMPACT_MS;
+		await new Promise((r) => setTimeout(r, Math.max(0, TURNEND_ANIM_TOTAL_DISPLAY_MS - elapsed)));
+	} catch (err) {
+		pushDebugLog("ERREUR", "Animation \"Stop !\" interrompue :", err);
+	} finally {
+		zoom.classList.remove("shake-impact");
+		overlay.classList.remove("active");
+		// Demande explicite de l'utilisateur : "Lorsque l'animation est
+		// terminée, le smartphone du joueur affiche l'écran des profils."
+		if (!state.cardModalOffer && !state.scanStream) {
+			renderProfile();
+			showScreen("profileScreen");
+			setActiveNav("navBtnProfile");
+		}
 	}
 }
 

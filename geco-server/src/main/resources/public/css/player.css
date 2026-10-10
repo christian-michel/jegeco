@@ -1207,6 +1207,109 @@ body {
 @media (prefers-reduced-motion: reduce) { .anim-flash-overlay { transition: none; } }
 
 /* ============================================================
+   Animations "Commencez !" (début de tour) et "Stop !" (fin de tour)
+   (10/10/2026) - remonté par l'utilisateur, images jointes au message
+   ("Debut.jpeg"/"Stop.jpeg", scène de marché en forêt - jour/clair pour le
+   début, nuit/froid avec bordure décorative pour la fin) : "comme pour le
+   texte du joueur qui est mort (et le même temps à peu près). Et avec une
+   animation sur le texte et l'image, comme une explosion !". Mécanique et
+   gabarit CSS directement calqués sur .death-anim-overlay/.rebirth-anim-
+   overlay ci-dessus (même plafond 460px/centrage, voir leur commentaire
+   détaillé pour le correctif iPad en paysage du 04/10/2026, même
+   tremblement d'impact deathAnimShake, même "coup de tampon" du titre
+   deathAnimStampSlam) - AUCUNE astuce nouvelle à redécouvrir.
+   Différence volontaire avec "Mort du joueur"/"Renaissance !" : ici, PAS de
+   .anim-flash-overlay partagé - ce flash n'est garanti sans conflit QUE
+   pour ses deux consommateurs d'origine, toujours strictement enchaînés sur
+   le même événement WebSocket "death" (voir le commentaire détaillé sur cet
+   élément ci-dessus, "jamais actifs en même temps"). "Commencez !"/"Stop !"
+   se déclenchent sur des événements totalement indépendants (WS "event"
+   TURN / nouveau WS "turn_ending") qui peuvent en toute rigueur arriver
+   alors qu'une animation de mort/renaissance/carré est encore en cours pour
+   tel ou tel joueur (files d'attente séparées, jamais synchronisées entre
+   elles - vérifié dans le code existant). Plutôt que de risquer la même
+   classe de bug déjà rencontrée et corrigée une fois pour 2 consommateurs,
+   l'effet "explosion" est ici cuit directement dans le keyframe du fond
+   (`turnAnimExplode`, scale+filter) : aucun élément DOM partagé, donc aucun
+   risque de collision d'état entre animations.
+   z-index au-dessus de TOUT le reste (carré 3000 < mort 3050 < renaissance
+   3060 < flash mort/renaissance 3070 < début de tour 3080 < fin de tour
+   3090) : "Commencez !"/"Stop !" rythment la partie ENTIÈRE (tous les
+   joueurs à la fois), un cran au-dessus des animations propres à un seul
+   joueur qui pourraient encore jouer au même instant - jamais masquées par
+   elles. Fin de tour au-dessus de début de tour par cohérence avec mort >
+   renaissance ci-dessus (le plus "tardif" dans le déroulé d'un tour gagne).
+   ============================================================ */
+.turnstart-anim-overlay, .turnend-anim-overlay {
+	/* position/largeur : voir le commentaire détaillé sur .death-anim-overlay
+	   plus haut dans ce fichier (correctif du 04/10/2026, iPad en paysage). */
+	position: fixed; top: 0; bottom: 0; left: 50%; width: 100%; max-width: 460px;
+	transform: translateX(-50%);
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+	overflow: hidden;
+}
+.turnstart-anim-overlay { z-index: 3080; background: #0c1b2e; }
+.turnend-anim-overlay { z-index: 3090; background: #05070d; }
+.turnstart-anim-overlay.active, .turnend-anim-overlay.active { opacity: 1; pointer-events: auto; }
+
+.turnstart-anim-zoom, .turnend-anim-zoom {
+	position: absolute; inset: 0;
+	background-size: cover; background-position: center; background-repeat: no-repeat;
+	transform-origin: 50% 50%;
+	/* Courbe "back ease-out" (dépasse 1 puis se stabilise) plutôt que le
+	   simple dézoom de .death-anim-zoom/.rebirth-anim-zoom : donne l'effet de
+	   "jaillissement"/explosion demandé, au lieu d'un dézoom régulier depuis
+	   un point de l'image. Même durée (0.55s) que ces deux animations, pour
+	   un rythme cohérent sur l'ensemble de l'écran joueur - voir
+	   TURNSTART_ANIM_EXPLODE_MS/TURNEND_ANIM_EXPLODE_MS côté JS, à garder
+	   synchronisées. */
+	transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.55s ease-out;
+	will-change: transform, filter;
+}
+.turnstart-anim-zoom { background-image: url("/img/turnstart-background.jpg"); }
+.turnend-anim-zoom { background-image: url("/img/turnend-background.jpg"); }
+/* État de départ : image réduite à un point lumineux ("sur-exposée", comme
+   un flash qui démarre), état d'arrivée : taille normale, couleurs
+   normales - la transition CSS ci-dessus fait tout le travail de
+   "l'explosion" entre les deux, sans élément DOM supplémentaire (voir le
+   commentaire détaillé plus haut sur ce choix). */
+.turnstart-anim-zoom.collapsed, .turnend-anim-zoom.collapsed {
+	transform: scale(0.05); filter: brightness(4.5) contrast(0.7) saturate(0);
+}
+.turnstart-anim-zoom.exploded, .turnend-anim-zoom.exploded {
+	transform: scale(1); filter: brightness(1) contrast(1) saturate(1);
+}
+.turnstart-anim-zoom.shake-impact, .turnend-anim-zoom.shake-impact {
+	animation: deathAnimShake 450ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@media (prefers-reduced-motion: reduce) {
+	.turnstart-anim-zoom, .turnend-anim-zoom { transition: none; }
+	.turnstart-anim-zoom.shake-impact, .turnend-anim-zoom.shake-impact { animation: none; }
+}
+
+/* Titre ("Commencez !"/"Stop !", voir js/vendor/cartoon-text.js - jamais un
+   texte codé en dur, pour rester multilingue) positionné EN HAUT de l'écran
+   (demande explicite de l'utilisateur, "en haut, comme pour le texte du
+   joueur qui est mort") - reprend le positionnement absolu de
+   .rebirth-anim-title-host (top: 18%) plutôt que le centrage flex de
+   .death-anim-title-host : ici le fond occupe tout l'écran sans élément
+   secondaire à partager avec le titre, un ancrage haut fixe reste donc le
+   plus proche de la maquette fournie (scène visible en dessous du texte). */
+.turnstart-anim-title-host, .turnend-anim-title-host {
+	position: absolute; left: 0; right: 0; top: 10%; margin: 0 auto;
+	z-index: 2; width: 86%; max-width: 420px;
+	opacity: 0; will-change: transform, opacity, filter;
+	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.5));
+}
+.turnstart-anim-title-host.stamp-in, .turnend-anim-title-host.stamp-in {
+	animation: deathAnimStampSlam 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+	.turnstart-anim-title-host.stamp-in, .turnend-anim-title-host.stamp-in { animation: none; opacity: 1; }
+}
+
+/* ============================================================
    Infobulles temporaires (02/09/2026) - remonté par l'utilisateur : "solde
    insuffisant" pendant un achat, "fin du tour" à l'expiration du minuteur.
    Voir showToast() dans player-view.js.

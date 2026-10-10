@@ -2090,6 +2090,14 @@ msgstr "Player died"
 msgid "playerView.rebirth_anim_title"
 msgstr "Rebirth!"
 
+# ============ "Start!" animation (turn start, 10/10/2026) ============
+msgid "playerView.turnstart_anim_title"
+msgstr "Start!"
+
+# ============ "Stop!" animation (turn end, 10/10/2026) ============
+msgid "playerView.turnend_anim_title"
+msgstr "Stop!"
+
 # ============ Temporary toast notifications (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"
 msgstr "You don't have enough currency units"

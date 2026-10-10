@@ -334,6 +334,38 @@
 	     les deux animations ne sont jamais actives simultanément. -->
 	<div class="anim-flash-overlay" id="animFlashOverlay"></div>
 
+	<!-- ===== Animation "Commencez !" (début de tour, 10/10/2026) =====
+	     Remonté par l'utilisateur (image jointe "Debut.jpeg", scène de marché
+	     en forêt ensoleillée) : "à chaque début de tour, les écrans des
+	     smartphones des joueurs affichent l'image... ainsi que le texte
+	     'Commencez !', en haut... avec une animation... comme une
+	     explosion !". Déclenchée par le même événement WebSocket "event"/
+	     TURN déjà utilisé pour la bascule automatique vers l'onglet Cartes
+	     (voir connectPlayerWs/playTurnStartAnimation dans player-view.js) -
+	     agnostique du système monétaire (dette/libre/troc), comme la mort du
+	     joueur. Une fois l'animation terminée, bascule vers l'écran Cartes
+	     (demande explicite). -->
+	<div class="turnstart-anim-overlay" id="turnstartAnimOverlay">
+		<div class="turnstart-anim-zoom" id="turnstartAnimZoom"></div>
+		<div class="turnstart-anim-title-host" id="turnstartAnimTitleHost"></div>
+	</div>
+
+	<!-- ===== Animation "Stop !" (fin de tour, 10/10/2026) =====
+	     Remonté par l'utilisateur (image jointe "Stop.jpeg", même scène de
+	     marché en forêt mais de nuit, bordure décorative) : même principe que
+	     "Commencez !" ci-dessus, symétrique. Contrairement au début de tour,
+	     aucun événement WebSocket n'existait déjà pour "la fin de tour" (ni
+	     le bouton "Terminer le tour" de l'animateur, ni le compte à rebours
+	     automatique à zéro ne faisaient jusqu'ici d'appel serveur) - nouvelle
+	     route POST /api/games/{id}/turn/announce-end + diffusion WS
+	     "turn_ending" ajoutées pour ce seul besoin (voir GecoServer.java/
+	     app.js). Une fois l'animation terminée, bascule vers l'écran Profil
+	     (demande explicite, symétrique de "Commencez !" → Cartes). -->
+	<div class="turnend-anim-overlay" id="turnendAnimOverlay">
+		<div class="turnend-anim-zoom" id="turnendAnimZoom"></div>
+		<div class="turnend-anim-title-host" id="turnendAnimTitleHost"></div>
+	</div>
+
 	<!-- ===== Onglet "Stats" : classement complet ===== -->
 	<div id="leaderboardScreen" class="main-content hidden">
 		<section class="card leaderboard-card">
