@@ -2468,7 +2468,28 @@ function connectPlayerWs() {
 			// achat/une vente est EN COURS, voir ci-dessous) - la bascule vers
 			// Cartes a maintenant lieu à la FIN de l'animation elle-même (voir
 			// playTurnStartAnimation), pas ici.
-			if (!state.cardModalOffer && !state.scanStream) {
+			// BUG TROUVÉ ET CORRIGÉ (10/10/2026, seconde relecture indépendante
+			// du commit b70216b) : la garde testait state.cardModalOffer, qui ne
+			// devient non-null qu'une fois generateCardModalQr() revenu du
+			// serveur (round-trip réseau) - or openCardModal() affiche déjà la
+			// modal ET lance ce round-trip de façon synchrone (voir
+			// state.cardModalItem, posé en tout premier dans openCardModal,
+			// AVANT tout await). Reproduit en conditions réelles (réseau
+			// ralenti, voir docs du 09/09/2026 sur les "accrocs wifi" fréquents
+			// avec de nombreux téléphones) : un joueur qui venait de taper sur
+			// une carte pour la vendre voyait l'animation plein écran
+			// (pointer-events:auto) recouvrir intégralement sa modal encore en
+			// cours de préparation - exactement le blocage de ~1,5s que cette
+			// garde a été écrite pour éviter (voir le commentaire du commit
+			// original), juste avec le mauvais indicateur. state.cardModalItem
+			// est vrai dès l'ouverture de la modal (persiste jusqu'à
+			// closeCardModal()), qu'une offre ait déjà été générée ou non -
+			// c'est le bon test ici. state.cardModalOffer reste le bon test
+			// ailleurs dans ce fichier (ex. handleOwnSaleCompleted) où il s'agit
+			// de savoir si la modal correspond À CETTE offre précise, pas
+			// simplement si une modal est ouverte - ne pas généraliser ce
+			// correctif à ces autres usages.
+			if (!state.cardModalItem && !state.scanStream) {
 				enqueueTurnStartAnimation();
 			} else {
 				// Achat/vente en cours sur ce téléphone : ne jamais poser une
@@ -2500,7 +2521,10 @@ function connectPlayerWs() {
 			// après (ou pendant) l'animation/l'infobulle immédiate ci-dessous,
 			// pour le même événement.
 			state.previousTradingAllowed = false;
-			if (!state.cardModalOffer && !state.scanStream) {
+			// Même correctif que ci-dessus pour "Commencez !" (10/10/2026) :
+			// state.cardModalItem, pas state.cardModalOffer (voir le
+			// commentaire détaillé plus haut dans ce même fichier).
+			if (!state.cardModalItem && !state.scanStream) {
 				playPlayerWhistle("stop");
 				enqueueTurnEndAnimation();
 			} else {
@@ -3386,7 +3410,9 @@ async function playTurnStartAnimation() {
 		overlay.classList.remove("active");
 		// Demande explicite de l'utilisateur : "Lorsque l'animation est
 		// terminée, le smartphone du joueur affiche l'écran des cartes."
-		if (!state.cardModalOffer && !state.scanStream) {
+		// state.cardModalItem, pas state.cardModalOffer (10/10/2026, voir le
+		// correctif détaillé dans connectPlayerWs plus haut dans ce fichier).
+		if (!state.cardModalItem && !state.scanStream) {
 			renderMyCards();
 			setActiveNav("navBtnCards");
 		}
@@ -3436,7 +3462,9 @@ async function playTurnEndAnimation() {
 		overlay.classList.remove("active");
 		// Demande explicite de l'utilisateur : "Lorsque l'animation est
 		// terminée, le smartphone du joueur affiche l'écran des profils."
-		if (!state.cardModalOffer && !state.scanStream) {
+		// state.cardModalItem, pas state.cardModalOffer (10/10/2026, voir le
+		// correctif détaillé dans connectPlayerWs plus haut dans ce fichier).
+		if (!state.cardModalItem && !state.scanStream) {
 			renderProfile();
 			showScreen("profileScreen");
 			setActiveNav("navBtnProfile");
