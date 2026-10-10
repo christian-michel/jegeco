@@ -313,3 +313,22 @@ ajoutes, pas seulement via ce script.
   leur valeur) — décision utilisateur en attente. Bug mineur lié : le
   graphique "masse monétaire" affiche pour "Tour 1" la masse FINALE de la
   partie au lieu de la masse réelle à ce tour (même mécanisme de rejeu).
+- **Corrigé le 10/10/2026** (campagne de validation troc+smartphone, 3
+  parties 4/8/16 joueurs/12 tours, preuve concrète via API+Playwright) :
+  `Player.goodsCount` (le "nombre d'objets" affiché au TABLEAU DE BORD
+  ANIMATEUR — `app.js`, `statGoods`/`game.player_meta_troc`/classement) ne
+  reflétait plus la réalité pour un carré troc+smartphone, resté figé sur
+  l'ancienne mécanique "carte-contre-jetons" (`recordTransactionUnlocked`,
+  remplacée le 18/09/2026 par `recordCardSwap`/`/redeem-swap`) et la
+  renaissance seule (`Event.java`, cas `DEATH`) : `checkAndCashInSquares`
+  ne le mettait jamais à jour. Mesuré : après un carré forcé (API réelle),
+  le téléphone du joueur affichait 5 cartes (4 "replenished" + 1
+  "promoted" − 4 défaussées), le tableau de bord affichait toujours 4
+  (figé sur la dotation de départ) — écart qui persiste tant qu'aucun
+  autre carré ne se reproduit pour ce joueur. Corrigé dans
+  `GameService.checkAndCashInSquaresUnlocked` : `goodsCount` ajusté du
+  même delta exact que les cartes réellement échangées
+  (`-4 + replenished.size() + 1`), uniquement pour `Game.MONEY_TROC`
+  (seul système où ce champ a un sens, voir
+  `docs/10-etape-plugins-troc.md` règle 9) — jamais pour dette/libre.
+  76 tests toujours verts après correctif (aucune régression).

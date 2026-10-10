@@ -1725,6 +1725,9 @@ msgstr "Free"
 msgid "trade.result_success_title"
 msgstr "Purchase successful!"
 
+msgid "trade.result_success_title_swap"
+msgstr "Swap successful!"
+
 msgid "trade.result_success_body"
 msgstr "You bought: {name}."
 

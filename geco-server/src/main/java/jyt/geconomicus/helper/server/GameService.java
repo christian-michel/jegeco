@@ -2452,6 +2452,31 @@ public class GameService
 				final Player player = em.find(Player.class, pPlayerId);
 				em.getTransaction().begin();
 				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
+				// BUG TROUVÉ ET CORRIGÉ (campagne de test troc+smartphone, 10/10/2026,
+				// preuve concrète : après un carré forcé, le téléphone du joueur
+				// affichait un total réel de 5 cartes - 4 "replenished" + 1
+				// "promoted" moins les 4 défaussées, voir juste au-dessus - alors que
+				// le TABLEAU DE BORD ANIMATEUR affichait toujours goodsCount=4, resté
+				// figé sur la dotation de départ) : Player.goodsCount n'était mis à
+				// jour QUE par recordTransactionUnlocked (l'ancien mécanisme troc+
+				// smartphone "carte-contre-jetons", remplacé le 18/09/2026 par
+				// recordCardSwap/redeem-swap, voir son commentaire) et par la
+				// renaissance (Event.java, cas DEATH) - jamais ICI, pourtant LE
+				// mécanisme qui fait varier le nombre de cartes en main en cours de
+				// tour pour troc+smartphone. app.js affiche ce champ tel quel pour
+				// "Nombre d'objets" (statGoods, le résumé "Objets détenus" du
+				// classement...) : un animateur voyait donc un décompte faux dès le
+				// premier carré de la partie. Non borné à `!noopSquare` : même un
+				// repli "dégénéré" (promotedCardId == squareCardId, voir plus haut)
+				// déplace réellement des cartes dans l'inventaire RECONSTITUÉ
+				// (Transaction/CardSquareEvent rejoués par computePlayerCardInventory,
+				// jamais affecté par noopSquare - lui ne change que l'affichage de
+				// l'ANIMATION) : goodsCount doit donc suivre exactement le même delta
+				// dans les deux cas. Jamais pour la dette/libre (goodsCount n'a de
+				// sens que pour troc, voir docs/10-etape-plugins-troc.md règle 9 :
+				// "richesse = nombre d'objets possédés").
+				if (game.getMoneySystem() == Game.MONEY_TROC)
+					player.setGoodsCount(player.getGoodsCount() - 4 + replenished.size() + 1);
 				// Mutation de game.revolutionCount faite DANS la transaction
 				// (comme smartphoneCardPileJson juste au-dessus), jamais avant
 				// begin() - un champ modifié sur une entité gérée hors

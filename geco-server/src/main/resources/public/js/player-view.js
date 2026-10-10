@@ -2054,7 +2054,15 @@ async function confirmPurchase() {
 			// de l'échange (le nouvel inventaire sera visible au rafraîchissement
 			// du hub, voir refreshPlayer()).
 			const givenName = catalogTextValue(state.trocSwapOfferedItem.entry.nom) || state.trocSwapOfferedItem.entry.id;
-			showTradeResult(true, t("trade.result_success_title"),
+			// BUG TROUVÉ ET CORRIGÉ (campagne de test troc+smartphone, 10/10/2026) :
+			// le TITRE de l'écran de résultat restait "Achat réussi !"
+			// (trade.result_success_title) même pour un échange troc, qui n'est
+			// jamais un achat (aucun jeton, voir docs/10-etape-plugins-troc.md,
+			// règle 6) - seul le CORPS du message (result_success_body_swap)
+			// avait déjà été adapté. Titre dédié désormais, même principe que
+			// renderScanConfirm/confirmPurchase plus haut dans ce fichier (déjà
+			// adaptés au troc pour le reste de cet écran).
+			showTradeResult(true, t("trade.result_success_title_swap"),
 				t("trade.result_success_body_swap", { received: cardName, given: givenName }));
 			state.trocSwapOfferedItem = null;
 		} else {
