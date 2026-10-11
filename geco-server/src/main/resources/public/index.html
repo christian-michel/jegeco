@@ -770,7 +770,12 @@
 						<h3 class="chart-title" data-i18n="report.chart_histogram_title">Richesse finale par joueur</h3>
 						<div class="chart-container"><canvas id="chartHistogram"></canvas></div>
 					</div>
-					<div class="panel-card">
+					<!-- id (11/10/2026, parité des écrans Statistiques demandée par
+					     l'utilisateur) : masqué en troc, comme son équivalent du tableau
+					     de bord "Partie en cours" (#chartMoneyMassPanel/renderCharts) - le
+					     troc n'a aucune masse monétaire (voir plugins/troc/manifest.json,
+					     hasMoneyMass: false), ce graphique n'a donc pas de sens pour lui. -->
+					<div class="panel-card" id="chartReportMoneyMassPanel">
 						<h3 class="chart-title" data-i18n="report.chart_money_mass_title">Évolution de la masse monétaire</h3>
 						<!-- Remonté par l'utilisateur (13/09/2026) : clarifier que les valeurs
 						     sont des UNITÉS MONÉTAIRES (ex. : G1), jamais un nombre de jetons -
@@ -850,6 +855,31 @@
 						<div class="panel-card">
 							<h3 class="chart-title" data-i18n="report.mass_chart_per_player_title">Accès à la monnaie (masse / joueurs actifs)</h3>
 							<div class="chart-container"><canvas id="chartMoneyMassPerPlayer"></canvas></div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Troc+smartphone (11/10/2026, parité des écrans Statistiques
+				     demandée par l'utilisateur) : équivalent troc de la section
+				     "Échanges monétaires" ci-dessus - échanges carte-contre-carte
+				     individuels, jamais de "masse monétaire détaillée" (le troc n'en a
+				     aucune, voir plugins/troc/manifest.json, hasMoneyMass: false) -
+				     masqué pour la dette/la libre et pour tout troc sans smartphone
+				     (troc CLASSIQUE, animateur seul) - voir
+				     StatsService.TrocExchangeReport.applicable et
+				     renderTrocExchangeStatsSection dans app.js. -->
+				<div class="panel-card hidden" id="trocExchangeStatsSection">
+					<h3 class="chart-title" data-i18n="report.troc_exchange_section_title">Échanges troc</h3>
+					<p class="galilee-explainer" data-i18n="report.troc_exchange_section_explainer">Valeurs exprimées en valeur troc (pondération faible=1, moyenne=4, forte/très forte=16), jamais en unités monétaires - le troc n'en utilise aucune.</p>
+					<div class="stat-cards" id="trocExchangeStatCards"></div>
+					<div class="charts-row">
+						<div class="panel-card">
+							<h3 class="chart-title" data-i18n="report.troc_exchange_chart_by_turn_title">Échanges par tour (nombre et valeur)</h3>
+							<div class="chart-container"><canvas id="chartTrocExchangeByTurn"></canvas></div>
+						</div>
+						<div class="panel-card">
+							<h3 class="chart-title" data-i18n="report.troc_exchange_chart_by_player_title">Échanges par joueur</h3>
+							<div class="chart-container"><canvas id="chartTrocExchangeByPlayer"></canvas></div>
 						</div>
 					</div>
 				</div>

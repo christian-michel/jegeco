@@ -333,7 +333,29 @@ public class StatsService
 	 * suivi en continu par le moteur (intérêts perçus + valeurs saisies + argent/
 	 * cartes investis), pas recalculé depuis l'historique des événements.
 	 */
+	/**
+	 * Repli historique (aucune {@link Transaction} connue) - gardé pour les
+	 * appelants qui n'ont pas besoin des statistiques troc+smartphone basées
+	 * sur les échanges individuels (voir la surcharge ci-dessous, seule à
+	 * alimenter correctement {@link TrocPlayerStat#tradeCount} pour un troc
+	 * suivi par smartphone - liste vide ici, donc {@code tradeCount} ne
+	 * reflète alors que l'éventuel troc CLASSIQUE, GOODS_TRADE).
+	 */
 	public FinalReport computeFinalReport(final Game pGame, final boolean pIncludeBank)
+	{
+		return computeFinalReport(pGame, pIncludeBank, List.of());
+	}
+
+	/**
+	 * Voir {@link #computeFinalReport(Game, boolean)} - cette surcharge reçoit
+	 * en plus la liste des {@link Transaction} de la partie (comme
+	 * {@link #computeExchangeAndMoneyReport}), nécessaire pour que
+	 * {@link #computeTrocStats} comptabilise aussi les échanges carte-contre-
+	 * carte du troc+smartphone (correctif du 11/10/2026, voir son commentaire
+	 * détaillé).
+	 */
+	public FinalReport computeFinalReport(final Game pGame, final boolean pIncludeBank,
+			final List<Transaction> pTransactions)
 	{
 		final Map<String, Integer> wealthByPlayer = computeWealthByPlayer(pGame);
 		if (pIncludeBank)
@@ -381,17 +403,37 @@ public class StatsService
 				pGame.getMoneyMass(), totalProduction, round1(average), round1(median), round1(stdDev),
 				round1(gini * 100), round1(povertyThreshold), playersUnderThreshold, round1(modestThreshold),
 				playersModest, computeWealthHistogram(wealths), playerWealths, computeMoneyMassHistory(pGame),
-				pIncludeBank, computeTrocStats(pGame),
+				pIncludeBank, computeTrocStats(pGame, pTransactions),
 				pGame.getMoneySystem() == Game.MONEY_DEBT ? computeBankProfitBreakdown(pGame) : null);
 	}
 
 	/**
 	 * Calcule les statistiques spécifiques au troc (voir plugins/troc/manifest.json,
-	 * extraStats) : rejoue l'historique des événements GOODS_TRADE pour cumuler,
-	 * par joueur, le nombre d'échanges réalisés. Liste vide pour tout autre
-	 * système d'échange.
+	 * extraStats) : rejoue l'historique des événements GOODS_TRADE (troc
+	 * CLASSIQUE, enregistré par l'animateur) pour cumuler, par joueur, le
+	 * nombre d'échanges réalisés. Liste vide pour tout autre système d'échange.
+	 * <p>
+	 * BUG TROUVÉ ET CORRIGÉ (11/10/2026, parité des écrans Statistiques
+	 * demandée par l'utilisateur, repéré en préparant la nouvelle section
+	 * "Échanges troc" - déjà signalé sans être corrigé par un agent de
+	 * contrôle lors de la campagne du 10/10/2026) : cette méthode ne comptait
+	 * QUE les événements GOODS_TRADE - jamais les {@link Transaction}
+	 * carte-contre-carte du troc+SMARTPHONE (voir {@code GameService.
+	 * recordCardSwap}/route {@code /redeem-swap}, le SEUL mécanisme réellement
+	 * exercé par un troc+smartphone, GOODS_TRADE restant propre au troc
+	 * CLASSIQUE, animateur seul). {@code tradeCount} restait donc TOUJOURS à 0
+	 * pour tout joueur d'une partie troc+smartphone, quel que soit le nombre
+	 * d'échanges réellement réalisés sur son téléphone - exactement la même
+	 * famille de bug que {@code Player.goodsCount} jamais mis à jour par un
+	 * carré troc+smartphone (voir {@link #computeWealthByPlayer}/CLAUDE.md,
+	 * entrée du 10/10/2026), corrigée séparément le même jour. Désormais
+	 * paramétrée par la liste des {@link Transaction} de la partie (comme
+	 * {@link #computeExchangeAndMoneyReport}) - comptabilise en plus chaque
+	 * {@code Transaction.isCardSwap()} une fois pour l'acheteur ET une fois
+	 * pour le vendeur, même convention que GOODS_TRADE ci-dessus (chaque
+	 * échange compte pour les DEUX participants).
 	 */
-	private List<TrocPlayerStat> computeTrocStats(final Game pGame)
+	private List<TrocPlayerStat> computeTrocStats(final Game pGame, final List<Transaction> pTransactions)
 	{
 		if (pGame.getMoneySystem() != Game.MONEY_TROC)
 			return List.of();
@@ -409,6 +451,15 @@ public class StatsService
 				continue;
 			tradeCountByPlayer.merge(event.getPlayer().getName(), 1, Integer::sum);
 			tradeCountByPlayer.merge(event.getCounterpartyPlayer().getName(), 1, Integer::sum);
+		}
+		for (final Transaction tx : pTransactions)
+		{
+			if (!tx.isCardSwap())
+				continue;
+			if (tx.getBuyer() != null)
+				tradeCountByPlayer.merge(tx.getBuyer().getName(), 1, Integer::sum);
+			if (tx.getSeller() != null)
+				tradeCountByPlayer.merge(tx.getSeller().getName(), 1, Integer::sum);
 		}
 
 		final List<TrocPlayerStat> stats = new ArrayList<>();
@@ -879,6 +930,141 @@ public class StatsService
 				.sorted(Comparator.comparingInt(PlayerExchangeStat::count).reversed()).toList();
 
 		return new ExchangeStats(globalCount, round2(globalValueJetons * unitsPerJeton), round1(averageValuePerExchange),
+				round1(medianValuePerExchange), round1(averageCountPerTurn), round1(medianCountPerTurn), byTurn,
+				byPlayer);
+	}
+
+	/** Un point de la courbe "échanges troc" par tour - voir {@link TrocExchangeStats}. */
+	public record TrocExchangeTurnPoint(int turn, int count, int totalValue)
+	{
+	}
+
+	/** Activité d'échange troc d'un joueur, acheteur ET vendeur confondus - même convention que {@link PlayerExchangeStat}. */
+	public record TrocPlayerExchangeStat(String playerName, int count, int totalValue)
+	{
+	}
+
+	/**
+	 * Statistiques des échanges carte-contre-carte individuels (troc+smartphone
+	 * uniquement - voir {@code GameService.recordCardSwap}/route
+	 * {@code /redeem-swap}), équivalent troc de {@link ExchangeStats}
+	 * (dette/libre, échanges carte-contre-jetons). {@code totalValue}/
+	 * {@code globalValue} en "valeur troc" (pondération 1/4/16 par niveau -
+	 * faible/moyenne/forte-tresforte, voir {@link #computeCardsGain} et
+	 * {@code GameService.computeLeaderboard} pour la même pondération déjà
+	 * utilisée ailleurs), jamais en unités monétaires (le troc n'en a aucune -
+	 * voir plugins/troc/manifest.json, {@code hasMoneyMass: false}).
+	 */
+	public record TrocExchangeStats(int globalCount, int globalValue, double averageValuePerExchange,
+			double medianValuePerExchange, double averageCountPerTurn, double medianCountPerTurn,
+			List<TrocExchangeTurnPoint> byTurn, List<TrocPlayerExchangeStat> byPlayer)
+	{
+	}
+
+	/**
+	 * {@code applicable} vaut faux pour tout système autre que le troc, ou un
+	 * troc sans aucun joueur suivi par smartphone (troc CLASSIQUE, animateur
+	 * seul - voir {@code docs/10-etape-plugins-troc.md}, section "classique") -
+	 * jamais une erreur, le client masque alors la section entière plutôt que
+	 * d'afficher un graphique vide (même convention que
+	 * {@link ExchangeAndMoneyReport}).
+	 */
+	public record TrocExchangeReport(boolean applicable, TrocExchangeStats exchangeStats)
+	{
+	}
+
+	/**
+	 * Section "Échanges troc" (11/10/2026, parité des écrans Statistiques
+	 * demandée par l'utilisateur - voir docs/03-architecture-technique.md) :
+	 * équivalent troc de {@link #computeExchangeAndMoneyReport} (dette/libre).
+	 * Jamais de section "masse monétaire détaillée" ici, contrairement à son
+	 * équivalent dette/libre - le troc n'a aucune masse monétaire à détailler
+	 * (voir plugins/troc/manifest.json, {@code hasMoneyMass: false}), seul le
+	 * nombre/la valeur des échanges a un sens pour ce système.
+	 */
+	public TrocExchangeReport computeTrocExchangeReport(final Game pGame, final List<Transaction> pTransactions)
+	{
+		final boolean applicable = (pGame.getMoneySystem() == Game.MONEY_TROC) && isSmartphoneTrackedGame(pGame);
+		if (!applicable)
+			return new TrocExchangeReport(false, null);
+		return new TrocExchangeReport(true, computeTrocExchangeStats(pTransactions, pGame));
+	}
+
+	/** Pondération troc d'un niveau de carte (1/4/16) - voir {@link #computeCardsGain}, même convention. */
+	private int trocCardWeight(final String pLevel)
+	{
+		if ("moyenne".equals(pLevel)) //$NON-NLS-1$
+			return 4;
+		if ("forte".equals(pLevel) || "tresforte".equals(pLevel)) //$NON-NLS-1$ //$NON-NLS-2$
+			return 16;
+		return 1; // "faible", ou niveau inconnu - repli sûr plutôt qu'une exception //$NON-NLS-1$
+	}
+
+	/**
+	 * Voir {@link #computeTrocExchangeReport}. Structurée à l'identique de
+	 * {@link #computeExchangeStats} (dette/libre) - mêmes agrégats (compte/
+	 * valeur globaux, moyenne/médiane, répartition par tour et par joueur),
+	 * sur les {@link Transaction#isCardSwap()} plutôt que sur les échanges
+	 * carte-contre-jetons. La VALEUR d'un échange troc est, par construction
+	 * (réciprocité + même valeur obligatoire, voir {@code GameService.
+	 * recordCardSwap}), identique des deux côtés - un seul calcul
+	 * ({@link #trocCardWeight} sur {@code cardLevel}) suffit donc, jamais
+	 * besoin de comparer aux deux niveaux.
+	 */
+	private TrocExchangeStats computeTrocExchangeStats(final List<Transaction> pTransactions, final Game pGame)
+	{
+		final List<Transaction> swaps = pTransactions.stream().filter(Transaction::isCardSwap).toList();
+
+		final int globalCount = swaps.size();
+		final List<Integer> sortedValues = swaps.stream().map(t -> trocCardWeight(t.getCardLevel())).sorted().toList();
+		final long globalValue = sortedValues.stream().mapToLong(Integer::longValue).sum();
+		final double averageValuePerExchange = globalCount == 0 ? 0 : (double) globalValue / globalCount;
+		final double medianValuePerExchange = computeMedian(sortedValues);
+
+		// Un point par tour DÉJÀ JOUÉ, même sans aucun échange (compte à 0) -
+		// même raisonnement que computeExchangeStats ci-dessus.
+		final Map<Integer, long[]> byTurnMap = new TreeMap<>();
+		for (int turn = 1; turn <= Math.max(pGame.getTurnNumber(), 0); turn++)
+			byTurnMap.put(turn, new long[2]);
+		for (final Transaction tx : swaps)
+		{
+			final long[] bucket = byTurnMap.computeIfAbsent(tx.getTurnNumber(), k -> new long[2]);
+			bucket[0]++;
+			bucket[1] += trocCardWeight(tx.getCardLevel());
+		}
+		final List<TrocExchangeTurnPoint> byTurn = byTurnMap.entrySet().stream()
+				.map(e -> new TrocExchangeTurnPoint(e.getKey(), (int) e.getValue()[0], (int) e.getValue()[1])).toList();
+		final List<Integer> sortedCountsPerTurn = byTurn.stream().map(TrocExchangeTurnPoint::count).sorted().toList();
+		final double averageCountPerTurn = sortedCountsPerTurn.isEmpty() ? 0
+				: sortedCountsPerTurn.stream().mapToInt(Integer::intValue).average().orElse(0);
+		final double medianCountPerTurn = computeMedian(sortedCountsPerTurn);
+
+		// Chaque échange implique deux participants (acheteur + vendeur) :
+		// comptée une fois pour chacun - même convention que PlayerExchangeStat.
+		final Map<String, long[]> byPlayerMap = new java.util.LinkedHashMap<>();
+		for (final Player p : pGame.getPlayers())
+			byPlayerMap.put(p.getName(), new long[2]);
+		for (final Transaction tx : swaps)
+		{
+			final int value = trocCardWeight(tx.getCardLevel());
+			if (tx.getBuyer() != null)
+			{
+				final long[] b = byPlayerMap.computeIfAbsent(tx.getBuyer().getName(), k -> new long[2]);
+				b[0]++;
+				b[1] += value;
+			}
+			if (tx.getSeller() != null)
+			{
+				final long[] s = byPlayerMap.computeIfAbsent(tx.getSeller().getName(), k -> new long[2]);
+				s[0]++;
+				s[1] += value;
+			}
+		}
+		final List<TrocPlayerExchangeStat> byPlayer = byPlayerMap.entrySet().stream()
+				.map(e -> new TrocPlayerExchangeStat(e.getKey(), (int) e.getValue()[0], (int) e.getValue()[1]))
+				.sorted(Comparator.comparingInt(TrocPlayerExchangeStat::count).reversed()).toList();
+
+		return new TrocExchangeStats(globalCount, (int) globalValue, round1(averageValuePerExchange),
 				round1(medianValuePerExchange), round1(averageCountPerTurn), round1(medianCountPerTurn), byTurn,
 				byPlayer);
 	}

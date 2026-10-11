@@ -1311,6 +1311,46 @@ msgstr "Unités monétaires"
 msgid "report.mass_chart_delta_legend"
 msgstr "Variation de la masse monétaire"
 
+# ============ Échanges troc (étape 3, smartphone, 11/10/2026 - parité des écrans Statistiques) ============
+msgid "report.troc_exchange_section_title"
+msgstr "Échanges troc"
+
+msgid "report.troc_exchange_section_explainer"
+msgstr "Valeurs exprimées en valeur troc (pondération faible=1, moyenne=4, forte/très forte=16), jamais en unités monétaires - le troc n'en utilise aucune."
+
+msgid "report.troc_exchange_chart_by_turn_title"
+msgstr "Échanges par tour (nombre et valeur)"
+
+msgid "report.troc_exchange_chart_by_player_title"
+msgstr "Échanges par joueur"
+
+msgid "report.troc_exchange_stat_count"
+msgstr "Échanges au total"
+
+msgid "report.troc_exchange_stat_value"
+msgstr "Valeur totale échangée"
+
+msgid "report.troc_exchange_stat_avg_value"
+msgstr "Valeur moyenne / échange"
+
+msgid "report.troc_exchange_stat_median_value"
+msgstr "Valeur médiane / échange"
+
+msgid "report.troc_exchange_stat_avg_per_turn"
+msgstr "Échanges moyens / tour"
+
+msgid "report.troc_exchange_stat_median_per_turn"
+msgstr "Échanges médians / tour"
+
+msgid "report.troc_exchange_chart_value_legend"
+msgstr "Valeur échangée"
+
+msgid "report.troc_exchange_chart_value_axis"
+msgstr "Valeur troc"
+
+msgid "report.troc_stat_final_exchanges"
+msgstr "Échanges au total"
+
 # ============ "Toutes les parties" et "Comparer des parties" ============
 msgid "games.all_title"
 msgstr "Toutes les parties"

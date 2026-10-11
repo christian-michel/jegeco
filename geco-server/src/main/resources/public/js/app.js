@@ -437,6 +437,10 @@ const Api = {
 	getSuggestedDeaths: (gameId) => api(`/api/games/${gameId}/suggested-deaths`),
 	getWealthOverTime: (id) => api(`/api/games/${id}/wealth-over-time`),
 	getExchangeStats: (id) => api(`/api/games/${id}/exchange-stats`),
+	// Équivalent troc de getExchangeStats ci-dessus (11/10/2026, parité des
+	// écrans Statistiques demandée par l'utilisateur) - voir
+	// StatsService.computeTrocExchangeReport.
+	getTrocExchangeStats: (id) => api(`/api/games/${id}/troc-exchange-stats`),
 	getNetworkInfo: () => api(`/api/network-info`),
 	deleteGame: (id) => api(`/api/games/${id}`, { method: "DELETE" }),
 	addPlayer: (gameId, name) => api(`/api/games/${gameId}/players`, { method: "POST", body: JSON.stringify({ name }) }),
@@ -695,6 +699,15 @@ function setConnStatus(online) {
 // ---------- Thème dynamique (bleu = monnaie dette, vert = monnaie libre) ----------
 function setMoneyTheme(moneySystem) {
 	document.body.classList.toggle("money-libre", moneySystem === 0);
+	// Troc (11/10/2026, parité des écrans demandée par l'utilisateur) : avant
+	// ce chantier, seule .money-libre était basculée ici - une partie troc
+	// retombait donc silencieusement sur le thème bleu "dette" (styles par
+	// défaut implicites dans style.css) sur toute l'application, sauf aux
+	// quelques endroits ponctuellement adaptés au fil du temps. Voir
+	// body.money-troc dans style.css (mêmes règles que body.money-libre,
+	// couleur grise déjà utilisée ailleurs pour le troc - .money-neutral-color/
+	// .badge-troc - plutôt qu'une nouvelle couleur inventée ici).
+	document.body.classList.toggle("money-troc", moneySystem === 2);
 }
 
 // ---------- Écran "Nouvelle partie" : mise à jour du résumé ----------
@@ -3497,6 +3510,9 @@ async function renderTransactionsPanel(gameId) {
 const reportCharts = {
 	histogram: null, moneyMass: null, galilee: null, compare: null, bankProfit: null,
 	exchangeByTurn: null, exchangeByPlayer: null, moneyMassDelta: null, moneyMassPerPlayer: null,
+	// Équivalent troc des deux premiers ci-dessus (11/10/2026, parité des
+	// écrans Statistiques) - voir renderTrocExchangeStatsSection.
+	trocExchangeByTurn: null, trocExchangeByPlayer: null,
 	// Étape 3, 04/10/2026 : richesse dans le temps désormais éclatée en 3
 	// graphiques distincts (voir renderGalileeChart/renderWealthCombinedChart/
 	// renderWealthCardsOnlyChart) plutôt qu'un seul mélangeant jetons et cartes.
@@ -3669,6 +3685,10 @@ async function renderReport(gameId, includeBank = false) {
 	const activity = await Api.getActivity(gameId).catch(() => null);
 	const wealthOverTime = await Api.getWealthOverTime(gameId).catch(() => null);
 	const exchangeReport = await Api.getExchangeStats(gameId).catch(() => null);
+	// Équivalent troc de exchangeReport ci-dessus (11/10/2026, parité des
+	// écrans Statistiques demandée par l'utilisateur) - voir
+	// renderTrocExchangeStatsSection plus bas.
+	const trocExchangeReport = await Api.getTrocExchangeStats(gameId).catch(() => null);
 	const isDebt = game.moneySystem === 1;
 	const isTroc = game.moneySystem === 2;
 	// Corrigé le 27/09/2026 (relecture indépendante) : un bloc de commentaire
@@ -3683,12 +3703,22 @@ async function renderReport(gameId, includeBank = false) {
 	// suit exchangeReport.applicable, décidé côté serveur
 	// (StatsService.computeExchangeAndMoneyReport, même discriminant
 	// startingCardsJson que hasStartingAllocation).
-	const accent = isDebt ? "#2563eb" : "#16a34a";
+	// BUG TROUVÉ ET CORRIGÉ (11/10/2026, parité des écrans Statistiques
+	// demandée par l'utilisateur) : ce binaire isDebt ? X : Y n'avait jamais
+	// de branche troc - une partie troc retombait donc silencieusement sur
+	// l'accent vert ET l'icône "leaf" de la monnaie LIBRE sur tout cet écran
+	// (icône du titre, barres de l'histogramme, courbe "masse monétaire"...),
+	// pourtant un système totalement différent. Même motif à 3 voies que
+	// celui déjà en place et déjà correct ailleurs dans ce fichier (voir
+	// renderCharts(), tableau de bord "Partie en cours") - gris, cohérent
+	// avec .money-neutral-color/.badge-troc utilisés ailleurs pour le troc.
+	const accent = isDebt ? "#2563eb" : (isTroc ? "#6b7280" : "#16a34a");
 	setMoneyTheme(game.moneySystem);
 
 	el("reportTitle").textContent = `${t("report.title")} ${game.description || ""}`;
-	el("reportMoneyIcon").dataset.icon = isDebt ? "bank" : "leaf";
-	el("reportMoneyIcon").className = "money-choice-icon " + (isDebt ? "money-debt-color" : "money-libre-color");
+	el("reportMoneyIcon").dataset.icon = isDebt ? "bank" : (isTroc ? "repeat" : "leaf");
+	el("reportMoneyIcon").className = "money-choice-icon "
+		+ (isDebt ? "money-debt-color" : (isTroc ? "money-neutral-color" : "money-libre-color"));
 	renderIcons(el("reportMoneyIcon"));
 
 	// Remonté par un utilisateur, avec un document de spécification détaillé
@@ -3718,11 +3748,21 @@ async function renderReport(gameId, includeBank = false) {
 		warning.classList.add("hidden");
 	}
 
+	// BUG TROUVÉ ET CORRIGÉ (11/10/2026, parité des écrans Statistiques
+	// demandée par l'utilisateur) : la carte "Masse monétaire finale"
+	// affichait TOUJOURS 0 en troc (aucune masse monétaire dans ce système,
+	// voir plugins/troc/manifest.json, hasMoneyMass: false) - remplacée pour
+	// lui par le nombre total d'échanges carte-contre-carte réalisés
+	// (trocExchangeReport, déjà récupéré plus haut), une statistique qui, elle,
+	// a un sens pour le troc. Inchangé pour dette/libre.
+	const fourthStatCard = isTroc
+		? `<div class="stat-card"><span class="stat-icon" data-icon="repeat"></span><div><span class="stat-value">${(trocExchangeReport && trocExchangeReport.applicable) ? trocExchangeReport.exchangeStats.globalCount : 0}</span><span class="stat-label">${t("report.troc_stat_final_exchanges")}</span></div></div>`
+		: `<div class="stat-card"><span class="stat-icon" data-icon="bank"></span><div><span class="stat-value">${report.finalMoneyMass}</span><span class="stat-label">${t("report.stat_final_mass")}</span></div></div>`;
 	el("reportStatCards").innerHTML = `
 		<div class="stat-card"><span class="stat-icon" data-icon="clock"></span><div><span class="stat-value">${report.yearsSimulated}</span><span class="stat-label">${t("report.stat_years")}</span></div></div>
 		<div class="stat-card"><span class="stat-icon" data-icon="calendar"></span><div><span class="stat-value">${report.nbTurnsPlanned}</span><span class="stat-label">${t("report.stat_turns")}</span></div></div>
 		<div class="stat-card"><span class="stat-icon" data-icon="users"></span><div><span class="stat-value">${report.totalPlayers}</span><span class="stat-label">${t("game.stat_players")}</span></div></div>
-		<div class="stat-card"><span class="stat-icon" data-icon="bank"></span><div><span class="stat-value">${report.finalMoneyMass}</span><span class="stat-label">${t("report.stat_final_mass")}</span></div></div>
+		${fourthStatCard}
 		<div class="stat-card"><span class="stat-icon" data-icon="credit"></span><div><span class="stat-value">${report.totalProduction}</span><span class="stat-label">${t("report.stat_total_production")}</span></div></div>`;
 	renderIcons(el("reportStatCards"));
 
@@ -3739,6 +3779,20 @@ async function renderReport(gameId, includeBank = false) {
 	// Activité par joueur : qui a fait le plus de transactions, le plus emprunté,
 	// brassé le plus de volume - triée par volume brassé décroissant (déjà fait
 	// côté serveur), on met juste en valeur la première ligne (le "plus actif").
+	// BUG TROUVÉ ET CORRIGÉ (11/10/2026, parité des écrans Statistiques demandée
+	// par l'utilisateur) : cette section restait affichée pour le troc
+	// (`!isDebt && !isTroc`, donc visible dès que l'un OU l'autre), mais
+	// computeActivityReport ne rejoue QUE les événements liés au CRÉDIT
+	// (NEW_CREDIT/INTEREST_ONLY/REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON,
+	// exactement la raison pour laquelle elle est DÉJÀ masquée pour la libre,
+	// voir le commentaire conservé ci-dessous) - un système sans aucune dette
+	// ni crédit comme le troc affichait donc un tableau "0 transaction, 0 volume
+	// brassé" pour CHAQUE joueur, aussi vide et trompeur que pour la libre.
+	// Recentrée sur la dette SEULE (comme la colonne "Emprunté" déjà juste en
+	// dessous) : le troc a désormais sa PROPRE section équivalente,
+	// "Échanges troc" (voir renderTrocExchangeStatsSection plus bas, basée sur
+	// les vraies Transaction carte-contre-carte - jamais les événements CRÉDIT,
+	// qui n'existent pas en troc).
 	// Vérifié le 27/09/2026 (à la demande d'un utilisateur qui soupçonnait cette
 	// section injustement masquée en libre smartphone) : computeActivityReport ne rejoue QUE les événements liés au
 	// CRÉDIT (NEW_CREDIT/INTEREST_ONLY/REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON),
@@ -3750,9 +3804,9 @@ async function renderReport(gameId, includeBank = false) {
 	// nouvelle section "Échanges monétaires" plus bas (voir renderExchangeStatsSection,
 	// basée sur les vraies Transaction). La colonne "Emprunté" n'a de sens
 	// qu'en monnaie dette (ni la monnaie libre ni le troc n'ont de crédit).
-	el("activitySection").classList.toggle("hidden", !isDebt && !isTroc);
+	el("activitySection").classList.toggle("hidden", !isDebt);
 	el("activityBorrowedCol").classList.toggle("hidden", !isDebt);
-	if (activity && (isDebt || isTroc)) {
+	if (activity && isDebt) {
 		el("activityGlobalVolume").textContent =
 			t("report.activity_global", { count: activity.globalTransactionCount, volume: activity.globalVolumeMoved });
 		el("activityTableBody").innerHTML = activity.byPlayer
@@ -3764,8 +3818,11 @@ async function renderReport(gameId, includeBank = false) {
 					<td>${p.volumeMoved}</td>
 				</tr>`)
 			.join("");
-	} else if (isDebt || isTroc) {
-		el("activityTableBody").innerHTML = `<tr><td colspan="${isDebt ? 4 : 3}" style="color:var(--text-dim)">${t("report.activity_unavailable")}</td></tr>`;
+	} else if (isDebt) {
+		// Toujours 4 colonnes ici désormais : cette branche n'est plus atteinte
+		// que pour la dette (voir le correctif ci-dessus, section recentrée
+		// dette seule) - le troc n'y tombe plus jamais.
+		el("activityTableBody").innerHTML = `<tr><td colspan="4" style="color:var(--text-dim)">${t("report.activity_unavailable")}</td></tr>`;
 	}
 
 	renderGalileeChart(wealthOverTime, "relative");
@@ -3887,21 +3944,31 @@ async function renderReport(gameId, includeBank = false) {
 		},
 	});
 
-	reportCharts.moneyMass = trackChart(el("chartReportMoneyMass"), {
-		type: "line",
-		data: {
-			labels: report.moneyMassHistory.map((p) => t("game.chart_turn_label", { n: p.turn })),
-			datasets: [{ data: report.moneyMassHistory.map((p) => p.moneyMass), borderColor: accent, fill: false, tension: 0.3 }],
-		},
-		options: {
-			plugins: { legend: { display: false } },
-			// Remonté par l'utilisateur (13/09/2026) : clarifie que l'axe Y est une
-			// VALEUR MONÉTAIRE (ex. G1) - voir aussi l'explication textuelle
-			// juste au-dessus du graphique (report.chart_money_mass_explainer).
-			scales: { y: { beginAtZero: true, title: { display: true, text: t("report.chart_money_mass_axis") } } },
-			maintainAspectRatio: false,
-		},
-	});
+	// BUG TROUVÉ ET CORRIGÉ (11/10/2026, parité des écrans Statistiques
+	// demandée par l'utilisateur) : ce graphique restait affiché pour le
+	// troc (aucun garde jusqu'ici), montrant une courbe plate à 0 du début à
+	// la fin - le troc n'a AUCUNE masse monétaire (voir plugins/troc/
+	// manifest.json, hasMoneyMass: false). Même garde déjà en place et déjà
+	// correcte pour le graphique équivalent du tableau de bord "Partie en
+	// cours" (voir chartMoneyMassPanel dans renderCharts()).
+	el("chartReportMoneyMassPanel").classList.toggle("hidden", isTroc);
+	if (!isTroc) {
+		reportCharts.moneyMass = trackChart(el("chartReportMoneyMass"), {
+			type: "line",
+			data: {
+				labels: report.moneyMassHistory.map((p) => t("game.chart_turn_label", { n: p.turn })),
+				datasets: [{ data: report.moneyMassHistory.map((p) => p.moneyMass), borderColor: accent, fill: false, tension: 0.3 }],
+			},
+			options: {
+				plugins: { legend: { display: false } },
+				// Remonté par l'utilisateur (13/09/2026) : clarifie que l'axe Y est une
+				// VALEUR MONÉTAIRE (ex. G1) - voir aussi l'explication textuelle
+				// juste au-dessus du graphique (report.chart_money_mass_explainer).
+				scales: { y: { beginAtZero: true, title: { display: true, text: t("report.chart_money_mass_axis") } } },
+				maintainAspectRatio: false,
+			},
+		});
+	}
 
 	// Remonté par un utilisateur : histogramme dédié à la banque uniquement
 	// (monnaie dette, "Avec banque" activé) - part des bénéfices (intérêts
@@ -3930,6 +3997,7 @@ async function renderReport(gameId, includeBank = false) {
 	}
 
 	renderExchangeStatsSection(exchangeReport, accent);
+	renderTrocExchangeStatsSection(trocExchangeReport, accent);
 }
 
 /**
@@ -4053,6 +4121,84 @@ function renderExchangeStatsSection(exchangeReport, accent) {
 		options: {
 			plugins: { legend: { display: false } },
 			scales: { y: { beginAtZero: true, title: { display: true, text: t("report.chart_money_mass_axis") } } },
+			maintainAspectRatio: false,
+		},
+	});
+}
+
+/**
+ * Section "Échanges troc" (11/10/2026, parité des écrans Statistiques
+ * demandée par l'utilisateur - voir docs/03-architecture-technique.md) :
+ * équivalent troc de renderExchangeStatsSection ci-dessus - échanges
+ * carte-contre-carte individuels, jamais de sous-section "masse monétaire
+ * détaillée" (le troc n'en a aucune, voir plugins/troc/manifest.json,
+ * hasMoneyMass: false). `trocExchangeReport` vaut `null` si l'appel a
+ * échoué et `trocExchangeReport.applicable` vaut faux pour tout système
+ * autre que le troc, ou un troc sans smartphone - dans les deux cas, la
+ * section entière reste masquée plutôt que de montrer un graphique vide.
+ */
+function renderTrocExchangeStatsSection(trocExchangeReport, accent) {
+	const t = window.GecoI18n.t;
+	const section = el("trocExchangeStatsSection");
+	const applicable = trocExchangeReport && trocExchangeReport.applicable;
+	section.classList.toggle("hidden", !applicable);
+	if (!applicable) return;
+
+	const stats = trocExchangeReport.exchangeStats;
+
+	el("trocExchangeStatCards").innerHTML = `
+		<div class="stat-card"><span class="stat-icon" data-icon="repeat"></span><div><span class="stat-value">${stats.globalCount}</span><span class="stat-label">${t("report.troc_exchange_stat_count")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="repeat"></span><div><span class="stat-value">${stats.globalValue}</span><span class="stat-label">${t("report.troc_exchange_stat_value")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.averageValuePerExchange}</span><span class="stat-label">${t("report.troc_exchange_stat_avg_value")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.medianValuePerExchange}</span><span class="stat-label">${t("report.troc_exchange_stat_median_value")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.averageCountPerTurn}</span><span class="stat-label">${t("report.troc_exchange_stat_avg_per_turn")}</span></div></div>
+		<div class="stat-card"><span class="stat-icon" data-icon="bar-chart"></span><div><span class="stat-value">${stats.medianCountPerTurn}</span><span class="stat-label">${t("report.troc_exchange_stat_median_per_turn")}</span></div></div>`;
+	renderIcons(el("trocExchangeStatCards"));
+
+	if (typeof Chart === "undefined") return;
+
+	if (reportCharts.trocExchangeByTurn) reportCharts.trocExchangeByTurn.destroy();
+	if (reportCharts.trocExchangeByPlayer) reportCharts.trocExchangeByPlayer.destroy();
+
+	// Même structure que chartExchangeByTurn (dette/libre) - nombre d'échanges
+	// (barres) + valeur troc des échanges (ligne, second axe) par tour.
+	reportCharts.trocExchangeByTurn = trackChart(el("chartTrocExchangeByTurn"), {
+		data: {
+			labels: stats.byTurn.map((p) => t("game.chart_turn_label", { n: p.turn })),
+			datasets: [
+				{
+					type: "bar", label: t("report.exchange_chart_count_legend"),
+					data: stats.byTurn.map((p) => p.count), backgroundColor: accent, yAxisID: "y", order: 2,
+				},
+				{
+					type: "line", label: t("report.troc_exchange_chart_value_legend"),
+					data: stats.byTurn.map((p) => p.totalValue), borderColor: "#f97316", yAxisID: "y1",
+					tension: 0.3, order: 1,
+				},
+			],
+		},
+		options: {
+			plugins: { legend: { display: true, position: "top", labels: { boxWidth: 20, font: { size: 11 } } } },
+			scales: {
+				y: { beginAtZero: true, position: "left", title: { display: true, text: t("report.exchange_chart_count_axis") } },
+				y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: t("report.troc_exchange_chart_value_axis") } },
+			},
+			maintainAspectRatio: false,
+		},
+	});
+
+	// Répartition des échanges parmi les joueurs - une transaction compte une
+	// fois pour l'acheteur ET une fois pour le vendeur (même convention que
+	// StatsService.PlayerExchangeStat/TrocPlayerExchangeStat).
+	reportCharts.trocExchangeByPlayer = trackChart(el("chartTrocExchangeByPlayer"), {
+		type: "bar",
+		data: {
+			labels: stats.byPlayer.map((p) => p.playerName),
+			datasets: [{ label: t("report.exchange_chart_count_legend"), data: stats.byPlayer.map((p) => p.count), backgroundColor: accent }],
+		},
+		options: {
+			plugins: { legend: { display: false } },
+			scales: { y: { beginAtZero: true }, x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 45 } } },
 			maintainAspectRatio: false,
 		},
 	});

@@ -52,6 +52,17 @@ body {
 	font-weight: 700; font-size: 1.15rem; flex-shrink: 0;
 }
 body.money-libre .logo-mark { background: var(--accent-libre); }
+/* Troc (11/10/2026, parité des écrans demandée par l'utilisateur - voir
+   docs/03-architecture-technique.md) : jusqu'ici, setMoneyTheme() ne
+   basculait QUE .money-libre sur <body> - une partie troc héritait donc
+   silencieusement du thème bleu "dette" (valeur par défaut implicite) sur
+   TOUT le reste de l'application (nav active, boutons primaires, anneau du
+   minuteur...), sauf aux quelques endroits ponctuellement corrigés au fil
+   du temps (badge-troc, accent gris de renderCharts). Complète maintenant
+   le même motif pour .money-troc, avec le même gris déjà utilisé ailleurs
+   pour le troc (.money-neutral-color/.badge-troc, var(--text-dim)/#f1f2f6)
+   plutôt qu'une nouvelle couleur inventée ici. */
+body.money-troc .logo-mark { background: var(--text-dim); }
 .logo-text { font-size: 0.68rem; letter-spacing: 0.06em; line-height: 1.35; }
 .logo-text strong { color: #fff; font-size: 0.82rem; letter-spacing: 0.03em; }
 
@@ -67,6 +78,7 @@ body.money-libre .logo-mark { background: var(--accent-libre); }
 .nav-item:hover { background: var(--sidebar-hover); color: #fff; }
 .nav-item.active { background: var(--accent-debt); color: #fff; }
 body.money-libre .nav-item.active { background: var(--accent-libre); }
+body.money-troc .nav-item.active { background: var(--text-dim); }
 .nav-item.nav-disabled { opacity: 0.4; cursor: not-allowed; }
 .nav-item.nav-disabled:hover { background: none; color: var(--sidebar-text); }
 .nav-icon svg, .stat-icon svg, .money-choice-icon svg { width: 18px; height: 18px; display: block; }
@@ -101,6 +113,7 @@ body.money-libre .nav-item.active { background: var(--accent-libre); }
 .btn:active { transform: scale(0.97); }
 .btn-primary { background: var(--accent-debt); color: #fff; }
 body.money-libre .btn-primary { background: var(--accent-libre); }
+body.money-troc .btn-primary { background: var(--text-dim); }
 .btn-primary:hover { filter: brightness(1.08); }
 .btn-block { width: 100%; margin-top: 1.5rem; padding: 0.8rem; font-size: 0.95rem; }
 .btn-ghost { background: transparent; color: var(--text-dim); }
@@ -231,6 +244,7 @@ body.money-libre .btn-primary { background: var(--accent-libre); }
 	border-radius: 8px; padding: 0.45rem 0.9rem; font-size: 0.85rem; font-weight: 700; cursor: pointer;
 }
 body.money-libre .btn-primary-outline { border-color: var(--accent-libre); color: var(--accent-libre); }
+body.money-troc .btn-primary-outline { border-color: var(--text-dim); color: var(--text-dim); }
 
 .general-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.4em; }
 .general-actions .btn { background: #fff; border: 1px solid var(--border); }
@@ -243,6 +257,7 @@ body.money-libre .btn-primary-outline { border-color: var(--accent-libre); color
 .game-header-left h1 { font-size: 1.4rem; margin: 0; }
 .badge-pill { background: var(--accent-debt); color: #fff; padding: 0.4rem 0.9rem; border-radius: 999px; font-size: 0.85rem; font-weight: 700; }
 body.money-libre .badge-pill { background: var(--accent-libre); }
+body.money-troc .badge-pill { background: var(--text-dim); }
 .game-ended-banner { background: #1f2430 !important; }
 
 .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
@@ -253,6 +268,7 @@ body.money-libre .badge-pill { background: var(--accent-libre); }
 	display: flex; align-items: center; justify-content: center;
 }
 body.money-libre .stat-icon { background: var(--accent-libre-bg); color: var(--accent-libre); }
+body.money-troc .stat-icon { background: #f1f2f6; color: var(--text-dim); }
 .stat-value { display: block; font-size: 1.3rem; font-weight: 700; line-height: 1.2; }
 .stat-label { display: block; font-size: 0.74rem; color: var(--text-dim); }
 
@@ -321,6 +337,7 @@ body.money-libre .stat-icon { background: var(--accent-libre-bg); color: var(--a
 	stroke-dasharray: 326.7; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear;
 }
 body.money-libre .timer-ring-progress { stroke: var(--accent-libre); }
+body.money-troc .timer-ring-progress { stroke: var(--text-dim); }
 .timer-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 700; }
 
 /* ============ Assistant de fin de tour (Phase C) ============ */
@@ -330,6 +347,7 @@ body.money-libre .timer-ring-progress { stroke: var(--accent-libre); }
 .wizard-checklist label { display: flex; align-items: center; gap: 0.6rem; cursor: pointer; }
 .wizard-checklist input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-debt); }
 body.money-libre .wizard-checklist input[type="checkbox"] { accent-color: var(--accent-libre); }
+body.money-troc .wizard-checklist input[type="checkbox"] { accent-color: var(--text-dim); }
 
 /* ============ Connexion joueurs (étape 3, Phase A) ============ */
 .connect-intro { margin-bottom: 1.25rem; }
@@ -372,6 +390,7 @@ body.money-libre .wizard-checklist input[type="checkbox"] { accent-color: var(--
 .player-inactive { color: var(--text-dim); text-decoration: line-through; }
 .event-type { color: var(--accent-debt); font-weight: 600; }
 body.money-libre .event-type { color: var(--accent-libre); }
+body.money-troc .event-type { color: var(--text-dim); }
 .event-meta { color: var(--text-dim); font-size: 0.78rem; white-space: nowrap; }
 
 /* ============ Boîte de dialogue ============ */
@@ -411,6 +430,7 @@ dialog input[type="checkbox"], dialog input[type="radio"] { width: auto; padding
 .docs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
 .money-debt-color-border { border-left: 4px solid var(--accent-debt); }
 .money-libre-color-border { border-left: 4px solid var(--accent-libre); }
+.money-neutral-color-border { border-left: 4px solid var(--text-dim); }
 .docs-list { margin: 0; padding-left: 1.2rem; font-size: 0.88rem; line-height: 1.7; color: var(--text-dim); }
 .docs-list strong { color: var(--text); }
 .docs-online-badge {
@@ -425,6 +445,7 @@ dialog input[type="checkbox"], dialog input[type="radio"] { width: auto; padding
 	display: block; padding: 0.75rem 0.2rem; color: var(--accent-debt); text-decoration: none; font-size: 0.9rem;
 }
 body.money-libre .docs-links a { color: var(--accent-libre); }
+body.money-troc .docs-links a { color: var(--text-dim); }
 .docs-links a:hover { text-decoration: underline; }
 
 @media (max-width: 780px) {
@@ -446,6 +467,7 @@ body.money-libre .docs-links a { color: var(--accent-libre); }
 .galilee-explainer { font-size: 0.8rem; color: var(--text-dim); margin: 0 0 0.85rem; }
 .panel-actions .btn.active-mode { background: var(--accent-debt); color: #fff; }
 body.money-libre .panel-actions .btn.active-mode { background: var(--accent-libre); }
+body.money-troc .panel-actions .btn.active-mode { background: var(--text-dim); }
 
 /* ============ Badges de statut joueur ============ */
 .status-badge {

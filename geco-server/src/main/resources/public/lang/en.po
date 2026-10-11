@@ -1309,6 +1309,46 @@ msgstr "Monetary units"
 msgid "report.mass_chart_delta_legend"
 msgstr "Money mass change"
 
+# ============ Barter exchanges (step 3, smartphone, 10/11/2026 - Statistics screens parity) ============
+msgid "report.troc_exchange_section_title"
+msgstr "Barter exchanges"
+
+msgid "report.troc_exchange_section_explainer"
+msgstr "Values expressed in barter value (weight: weak=1, medium=4, strong/very strong=16), never in currency units - barter uses none."
+
+msgid "report.troc_exchange_chart_by_turn_title"
+msgstr "Exchanges per turn (count and value)"
+
+msgid "report.troc_exchange_chart_by_player_title"
+msgstr "Exchanges per player"
+
+msgid "report.troc_exchange_stat_count"
+msgstr "Total exchanges"
+
+msgid "report.troc_exchange_stat_value"
+msgstr "Total value exchanged"
+
+msgid "report.troc_exchange_stat_avg_value"
+msgstr "Average value / exchange"
+
+msgid "report.troc_exchange_stat_median_value"
+msgstr "Median value / exchange"
+
+msgid "report.troc_exchange_stat_avg_per_turn"
+msgstr "Average exchanges / turn"
+
+msgid "report.troc_exchange_stat_median_per_turn"
+msgstr "Median exchanges / turn"
+
+msgid "report.troc_exchange_chart_value_legend"
+msgstr "Value exchanged"
+
+msgid "report.troc_exchange_chart_value_axis"
+msgstr "Barter value"
+
+msgid "report.troc_stat_final_exchanges"
+msgstr "Total exchanges"
+
 # ============ "All games" and "Compare games" ============
 msgid "games.all_title"
 msgstr "All games"

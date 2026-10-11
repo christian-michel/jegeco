@@ -1132,7 +1132,15 @@ public class GecoServer
 			// comptée comme un joueur de plus) - "sans banque" par défaut si non
 			// précisé, pour rester cohérent avec le comportement d'avant cet ajout.
 			final boolean includeBank = "true".equals(ctx.queryParam("includeBank")); //$NON-NLS-1$ //$NON-NLS-2$
-			ctx.json(mStatsService.computeFinalReport(game, includeBank));
+			// Transactions désormais transmises (11/10/2026, parité des écrans
+			// Statistiques demandée par l'utilisateur) - nécessaires à
+			// StatsService.computeTrocStats pour compter aussi les échanges
+			// carte-contre-carte du troc+smartphone, jamais seulement les
+			// GOODS_TRADE classiques (voir son commentaire détaillé). Même appel
+			// que /exchange-stats juste en dessous - aucun coût supplémentaire
+			// pour les deux autres systèmes (computeTrocStats renvoie
+			// immédiatement une liste vide hors MONEY_TROC).
+			ctx.json(mStatsService.computeFinalReport(game, includeBank, mGameService.listTransactions(id)));
 		});
 
 		// Statistiques d'activité par joueur (qui a fait le plus de transactions, le
@@ -1180,6 +1188,26 @@ public class GecoServer
 			}
 			final List<Transaction> transactions = mGameService.listTransactions(id);
 			ctx.json(mStatsService.computeExchangeAndMoneyReport(game, transactions));
+		});
+
+		// Étape 3, troc+smartphone (11/10/2026, parité des écrans Statistiques
+		// demandée par l'utilisateur) : équivalent troc de /exchange-stats
+		// ci-dessus - échanges carte-contre-carte individuels (nombre, valeur
+		// pondérée 1/4/16, répartition tours/joueurs), voir
+		// StatsService.computeTrocExchangeReport, applicable uniquement en
+		// troc suivi par smartphone (TrocExchangeReport.applicable=false
+		// sinon, jamais une erreur).
+		pApp.get("/api/games/{id}/troc-exchange-stats", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final List<Transaction> transactions = mGameService.listTransactions(id);
+			ctx.json(mStatsService.computeTrocExchangeReport(game, transactions));
 		});
 
 		// --- Connectivité (étape 3, Phase A) ---

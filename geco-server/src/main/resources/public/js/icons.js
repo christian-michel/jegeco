@@ -19,6 +19,12 @@ const ICONS = {
 	"wifi": '<path d="M5 12.5a11 11 0 0 1 14 0M8.5 16a6 6 0 0 1 7 0"/><circle cx="12" cy="20" r="1"/>',
 	"book": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>',
 	"x": '<path d="M18 6 6 18M6 6l12 12"/>',
+	// Troc (11/10/2026, parité des écrans Statistiques demandée par
+	// l'utilisateur) : "repeat" classique (deux flèches en boucle) - seul
+	// système des trois sans icône dédiée jusqu'ici (voir "bank"/dette,
+	// "leaf"/libre), reportMoneyIcon retombait donc sur "leaf" par défaut
+	// (aucune branche dédiée dans le isDebt ? ... : ... d'origine).
+	"repeat": '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
 };
 
 /**
