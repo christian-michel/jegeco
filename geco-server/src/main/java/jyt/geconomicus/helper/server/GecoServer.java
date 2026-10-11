@@ -1363,12 +1363,33 @@ public class GecoServer
 		// existant (recordEvent, type "N"/NEW_CREDIT) : cette route n'ajoute
 		// qu'une couche de demande/notification par-dessus, aucun nouveau
 		// chemin d'écriture dans le moteur.
+		//
+		// BUG TROUVÉ ET CORRIGÉ (11/10/2026, seconde relecture indépendante du
+		// commit 220b6c2, confirmé par un vrai test de concurrence HTTP - voir
+		// le commentaire détaillé de CreditRequestService.tryClaim) : la
+		// vérification "pending" ci-dessous se faisait via un simple get() PUIS
+		// recordEvent() PUIS markResolved(), sans aucun verrou entre les trois -
+		// deux requêtes POST .../approve quasi simultanées pour la MÊME demande
+		// passaient toutes les deux le contrôle et accordaient CHACUNE un
+		// crédit, donc deux fois le montant pour une seule demande (mesuré :
+		// +20 au lieu de +10 en conditions réelles). Même famille de bug que
+		// celui déjà trouvé et corrigé le 27/09/2026 pour les échanges troc par
+		// QR code (voir CLAUDE.md, GameService.withGameLock) - mais
+		// withGameLock, lui, protège l'état DE LA PARTIE pendant recordEvent,
+		// jamais l'état séparé, en mémoire, de CreditRequestService. Corrigé en
+		// réservant atomiquement la demande via tryClaim() AVANT tout appel à
+		// recordEvent : seul l'appelant qui gagne la course continue, l'autre
+		// est rejeté immédiatement (400) sans jamais toucher au moteur.
 		pApp.post("/api/games/{id}/credit-requests/{requestId}/approve", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			requireGamePin(ctx, id);
 			final int requestId = Integer.parseInt(ctx.pathParam("requestId")); //$NON-NLS-1$
 			final CreditRequestService.Request request = mCreditRequestService.get(requestId);
-			if ((request == null) || (request.gameId() != id) || !"pending".equals(request.status())) //$NON-NLS-1$
+			if ((request == null) || (request.gameId() != id))
+			{
+				throw new BadRequestResponse("Cette demande n'existe plus ou a déjà été traitée."); //$NON-NLS-1$
+			}
+			if (!mCreditRequestService.tryClaim(requestId))
 			{
 				throw new BadRequestResponse("Cette demande n'existe plus ou a déjà été traitée."); //$NON-NLS-1$
 			}
@@ -1380,6 +1401,11 @@ public class GecoServer
 			}
 			catch (final PlayerNotFoundException e)
 			{
+				// Réservée mais jamais réellement accordée (le crédit n'a pas été
+				// enregistré) - revient à "pending" pour que l'animateur puisse
+				// réessayer, plutôt que de rester bloquée sur un statut
+				// intermédiaire que l'écran ne sait pas afficher.
+				mCreditRequestService.revertToPending(requestId);
 				throw new BadRequestResponse(e.getMessage());
 			}
 			mCreditRequestService.markResolved(requestId, true);
@@ -1388,12 +1414,19 @@ public class GecoServer
 		});
 
 		// Refus - la demande passe simplement à "declined", rien d'autre à faire.
+		// Même garde tryClaim()/revertToPending() qu'approve() ci-dessus (voir
+		// son commentaire) : deux refus/approbations concurrents pour la même
+		// demande ne doivent jamais tous les deux "gagner".
 		pApp.post("/api/games/{id}/credit-requests/{requestId}/decline", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			requireGamePin(ctx, id);
 			final int requestId = Integer.parseInt(ctx.pathParam("requestId")); //$NON-NLS-1$
 			final CreditRequestService.Request request = mCreditRequestService.get(requestId);
-			if ((request == null) || (request.gameId() != id) || !"pending".equals(request.status())) //$NON-NLS-1$
+			if ((request == null) || (request.gameId() != id))
+			{
+				throw new BadRequestResponse("Cette demande n'existe plus ou a déjà été traitée."); //$NON-NLS-1$
+			}
+			if (!mCreditRequestService.tryClaim(requestId))
 			{
 				throw new BadRequestResponse("Cette demande n'existe plus ou a déjà été traitée."); //$NON-NLS-1$
 			}
