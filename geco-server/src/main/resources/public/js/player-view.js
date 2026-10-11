@@ -234,7 +234,25 @@ const SCREEN_HEADERS = {
 	// intégré (.scanner-header, voir player-view.html), il ne passe plus par
 	// .app-header/updateAppHeader() comme les autres.
 	scanManual: { titleKey: "trade.manual_entry_title", back: "scanCamera" },
-	scanConfirm: { titleKey: "trade.confirm_title", back: "viewContent" },
+	// BUG TROUVÉ ET CORRIGÉ (10/10/2026, second agent de revue - campagne de
+	// validation troc+smartphone, capture
+	// "005-Partie1-4j-troc-v2-refus-reciprocite.png") : cette clé restait
+	// figée sur "trade.confirm_title" ("Confirmer l'achat ?") même en troc,
+	// où renderScanConfirm() adapte pourtant déjà CORRECTEMENT le <h2> du
+	// CORPS de l'écran ("trade.confirm_title_swap", voir son commentaire du
+	// 18/09/2026) - mais resolveCode() appelle renderScanConfirm(offer) PUIS
+	// showScreen("scanConfirm"), et ce second appel (via updateAppHeader
+	// ci-dessous) écrasait toute valeur dynamique avec cette clé statique :
+	// l'EN-TÊTE (.app-header, barre du haut) affichait donc "Confirmer
+	// l'achat ?" pendant que le CORPS affichait "Confirmer l'échange ?" -
+	// repéré sur une capture d'écran réelle d'un échange troc, jamais un
+	// achat (docs/10-etape-plugins-troc.md, règle 6). titleKey accepte
+	// désormais aussi une fonction (voir updateAppHeader plus bas) pour ce
+	// seul écran dont le titre dépend du système monétaire - corrige la
+	// cause racine plutôt que l'ordre d'appel resolveCode (plus robuste si
+	// un futur appelant montre cet écran sans repasser par renderScanConfirm
+	// après showScreen).
+	scanConfirm: { titleKey: () => (isTrocGame() ? "trade.confirm_title_swap" : "trade.confirm_title"), back: "viewContent" },
 	tradeResult: { titleKey: "playerView.nav_home", back: null },
 	historyScreen: { titleKey: "playerView.nav_history", back: "profileScreen" },
 	creditRequestScreen: { titleKey: "playerView.credit_request_title", back: "viewContent" },
@@ -258,7 +276,14 @@ function showScreen(id) {
 function updateAppHeader(id) {
 	const config = SCREEN_HEADERS[id];
 	if (!config) return;
-	el("appHeaderTitle").textContent = t(config.titleKey);
+	// titleKey est une simple clé statique pour la grande majorité des
+	// écrans, mais peut aussi être une fonction qui la calcule au moment de
+	// l'affichage (10/10/2026, voir le commentaire détaillé sur
+	// scanConfirm dans SCREEN_HEADERS ci-dessus) - nécessaire pour le seul
+	// écran dont le titre dépend du système monétaire (isTrocGame()),
+	// jamais figé à l'ouverture du fichier comme le serait une clé simple.
+	const titleKey = typeof config.titleKey === "function" ? config.titleKey() : config.titleKey;
+	el("appHeaderTitle").textContent = t(titleKey);
 	const backBtn = el("appHeaderBack");
 	backBtn.classList.toggle("hidden", !config.back);
 	backBtn.innerHTML = config.back ? iconSvg("chevron-left") : "";

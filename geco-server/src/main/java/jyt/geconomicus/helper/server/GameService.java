@@ -697,6 +697,25 @@ public class GameService
 					// qu'il ne détient plus rien plutôt que sa dernière main
 					// d'avant abandon.
 					writeJsonQuietly(mapper, new java.util.LinkedHashMap<String, Integer>(), player::setStartingCardsJson);
+					// BUG TROUVÉ ET CORRIGÉ (10/10/2026, second agent de revue -
+					// campagne de validation troc+smartphone, en vérifiant en HTTP réel
+					// qu'une sortie de joueur (QUIT) conserve bien les cartes - voir le
+					// correctif goodsCount du commit 6e27f21 pour le carré, même
+					// catégorie de bug) : Player.goodsCount (le "nombre d'objets" du
+					// tableau de bord animateur, voir app.js - playersList affiche CE
+					// champ pour CHAQUE joueur de la liste, actif ou non, "p.quit...
+					// jamais masqué de la liste") restait figé sur sa dernière valeur
+					// d'avant abandon après un QUIT, alors que la main vient JUSTE
+					// d'être vidée juste au-dessus. Mesuré en HTTP réel : un joueur
+					// avec 4 cartes qui quitte se retrouve avec card-inventory={} (0
+					// carte réelle) mais goodsCount=4 inchangé - l'animateur voyait donc
+					// un joueur sorti comme détenant encore des objets qu'il n'a plus.
+					// Jamais pour dette/libre (goodsCount n'a de sens que pour troc,
+					// voir docs/10-etape-plugins-troc.md règle 9) - DEATH n'a pas besoin
+					// de ce correctif, un bloc séparé (Event.java, cas DEATH+MONEY_TROC)
+					// le remet déjà à game.getStartingGoods() pour la renaissance.
+					if (game.getMoneySystem() == Game.MONEY_TROC)
+						player.setGoodsCount(0);
 				}
 				writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
 				player.setCardInventoryResetAt(new java.util.Date());
