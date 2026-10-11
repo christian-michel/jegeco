@@ -54,11 +54,15 @@ import jyt.geconomicus.helper.Player;
  * cas QUIT).
  * <p>
  * 4. {@link #testWealthReportDoubleCountsInventoryAcrossTwoDeathsForTroc} -
- * vérification chiffrée indépendante du problème de conception signalé
- * (NON corrigé) par le premier agent : la richesse troc rapportée cumule le
- * gain de CHAQUE mort au lieu de ne refléter que l'inventaire final (règle 9
- * de docs/10-etape-plugins-troc.md : "richesse finale = nombre d'objets
- * possédés en fin de partie").
+ * vérification chiffrée indépendante du problème de conception signalé par
+ * le premier agent : la richesse troc rapportée cumulait le gain de CHAQUE
+ * mort au lieu de ne refléter que l'inventaire final (règle 9 de
+ * docs/10-etape-plugins-troc.md : "richesse finale = nombre d'objets
+ * possédés en fin de partie"). CORRIGÉ le 11/10/2026 (décision utilisateur
+ * explicite, "Corriger le calcul" - voir StatsService.computeWealthByPlayer,
+ * cas DEATH/QUIT) : ce test vérifie désormais le comportement corrigé (nom
+ * de méthode conservé tel quel pour l'historique/la traçabilité, voir son
+ * propre commentaire pour le détail).
  */
 class GameServiceTrocReviewTest
 {
@@ -487,22 +491,18 @@ class GameServiceTrocReviewTest
 		final int reportedWealth = report.playerWealths().stream().filter(w -> "P1".equals(w.playerName())) //$NON-NLS-1$
 				.findFirst().orElseThrow().wealth();
 
-		// DÉSACCORD CONFIRMÉ avec la règle 9 documentée : la richesse rapportée
-		// vaut le DOUBLE EXACT de l'inventaire réellement détenu en fin de
-		// partie (4+4=8, jamais 4) - comportement actuel non corrigé,
-		// volontairement laissé tel quel ici (décision utilisateur en attente,
-		// voir CLAUDE.md "Pièges déjà rencontrés" et le rapport du premier
-		// agent) : ce test DOCUMENTE le comportement actuel plutôt que
-		// d'imposer un correctif non demandé par l'utilisateur. S'il échoue un
-		// jour, c'est que quelqu'un a changé ce comportement - à mettre à jour
-		// consciemment, pas en CI aveugle.
-		assertEquals(2 * realFinalInventoryValue, reportedWealth,
-				"comportement actuel CONFIRMÉ (pas encore corrigé, décision utilisateur en attente) : " //$NON-NLS-1$
-						+ "la richesse rapportée (" + reportedWealth + ") double l'inventaire réel final (" //$NON-NLS-1$ //$NON-NLS-2$
-						+ realFinalInventoryValue + ") en sommant le gain de chaque DEATH au lieu de ne garder " //$NON-NLS-1$
-						+ "que le dernier - contredit la règle 9 de docs/10-etape-plugins-troc.md"); //$NON-NLS-1$
-		assertFalse(reportedWealth == realFinalInventoryValue,
-				"si cette assertion échoue (égalité), c'est que le bug signalé par le premier agent a été " //$NON-NLS-1$
-						+ "corrigé entre-temps - mettre à jour ce test en conséquence plutôt que l'ignorer"); //$NON-NLS-1$
+		// CORRIGÉ le 11/10/2026 (décision utilisateur explicite : "Corriger le
+		// calcul", voir StatsService.computeWealthByPlayer, cas DEATH/QUIT) :
+		// la richesse rapportée reflète désormais UNIQUEMENT l'inventaire réel
+		// détenu en fin de partie (4, jamais 8) - conforme à la règle 9 de
+		// docs/10-etape-plugins-troc.md. Ce test, qui documentait le bug avant
+		// son correctif (voir l'historique git de ce fichier pour la version
+		// "double comptage confirmé" d'origine), vérifie maintenant le
+		// comportement corrigé - si cette assertion échoue, c'est une
+		// régression du correctif, pas un signal à ignorer.
+		assertEquals(realFinalInventoryValue, reportedWealth,
+				"la richesse troc rapportée doit refléter UNIQUEMENT l'inventaire final (" //$NON-NLS-1$
+						+ realFinalInventoryValue + "), jamais le cumul des gains de chaque DEATH/QUIT (obtenu : " //$NON-NLS-1$
+						+ reportedWealth + ") - voir StatsService.computeWealthByPlayer, correctif du 11/10/2026"); //$NON-NLS-1$
 	}
 }

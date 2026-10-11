@@ -5176,14 +5176,32 @@ async function openEndOfTurnWizard() {
 				const isDying = li.dataset.dying === "1";
 				const player = game.players.find((p) => p.id === playerId);
 				const action = btn.dataset.action;
-				if (action === "interest") {
-					await Api.recordEvent(state.currentGameId, {
-						type: "I", playerId, principal: 0, interest: player.curInterest,
-					});
-				} else if (action === "credit") {
-					await Api.recordEvent(state.currentGameId, {
-						type: "R", playerId, principal: player.curDebt, interest: player.curInterest,
-					});
+				if (action === "interest" || action === "credit") {
+					const principal = action === "credit" ? player.curDebt : 0;
+					const interest = player.curInterest; // remboursé en entier dans les deux cas
+					// BUG TROUVÉ ET CORRIGÉ (11/10/2026, campagne de validation dette+
+					// smartphone, décision utilisateur explicite : "Bloquer au solde
+					// réel") : ces deux boutons rapides envoyaient toujours le montant
+					// NOMINAL dû (player.curDebt+curInterest), sans jamais vérifier que
+					// le joueur possède réellement ce montant en jetons à cet instant
+					// précis (un solde qui a pu baisser depuis l'octroi du crédit, ex.
+					// après un achat) - voir Event.applyEvent(), cas REIMB_CREDIT :
+					// jetonWeak est débité EXACTEMENT du principal+intérêt déclaré ici,
+					// jamais plafonné côté moteur, tandis que la masse monétaire globale
+					// est réduite du même montant NOMINAL, toujours ≥ ce que le joueur
+					// possède réellement une fois son solde insuffisant - un déficit
+					// fantôme mesuré en conditions réelles par les deux agents de revue
+					// (masse finale -8/-17/-28 sur 4/8/16 joueurs dans la campagne
+					// principale). Uniquement pertinent pour un joueur RÉELLEMENT suivi
+					// par smartphone (hasStartingAllocation) - la dette CLASSIQUE n'a
+					// jamais de jetonWeak réel à comparer, comportement historique
+					// inchangé pour elle (bouton toujours actif sans ce contrôle).
+					if (player.hasStartingAllocation && ((principal + interest) > player.jetonWeak)) {
+						alert(t("wiz.quick_repay_insufficient_balance_alert",
+							{ name: player.name, owed: principal + interest, balance: player.jetonWeak }));
+						return;
+					}
+					await Api.recordEvent(state.currentGameId, { type: action === "credit" ? "R" : "I", playerId, principal, interest });
 				} else {
 					// "Ne peut pas payer" pendant le bilan de tour utilise exactement le même
 					// formulaire (avec saisie de cartes et classification automatique) que

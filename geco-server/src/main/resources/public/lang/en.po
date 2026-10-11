@@ -953,6 +953,9 @@ msgstr "No other indebted player this turn."
 msgid "wiz.dying_indebted_alert"
 msgstr "Players who die this turn must first settle their credit with the bank."
 
+msgid "wiz.quick_repay_insufficient_balance_alert"
+msgstr "{name} owes {owed} but only has {balance} coins - the quick repayment is blocked to avoid creating phantom money. Use \"Can't pay\" for a partial seizure instead."
+
 msgid "wiz.end_inventory_title"
 msgstr "All players leave"
 

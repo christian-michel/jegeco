@@ -1392,7 +1392,33 @@ public class StatsService
 				case QUIT:
 					if (playerName != null)
 					{
-						addGain(pGame, event, playerName, achievements, currentFactor, false);
+						// BUG TROUVÉ ET CORRIGÉ (11/10/2026, campagne de validation
+						// troc+smartphone, seconde relecture indépendante, décision
+						// utilisateur explicite : "Corriger le calcul") : addGain()
+						// ACCUMULE le gain de CET événement par-dessus la valeur déjà
+						// enregistrée pour ce joueur - correct pour dette/libre, où
+						// chaque "vie" représente une PRODUCTION supplémentaire gagnée
+						// (voir leur propre docs/règles : la richesse totale cumule bien
+						// sur plusieurs morts/renaissances successives). Mais en TROC,
+						// computeGain() == computeCardsGain() (computeMonetaryGain
+						// toujours nulle, voir son propre commentaire) renvoie la valeur
+						// de l'INVENTAIRE DE CARTES DÉTENU À CET INSTANT PRÉCIS - un
+						// INSTANTANÉ, jamais un delta/une production - ce qui contredit
+						// la règle 9 documentée (docs/10-etape-plugins-troc.md :
+						// "richesse finale = nombre d'objets possédés EN FIN DE partie").
+						// Un joueur mort une fois (4 cartes, valeur 4) puis "finalisé"
+						// en fin de partie avec la MÊME main (aucune carte acquise
+						// entre les deux) se voyait donc rapporter une richesse de 8 -
+						// le double de son inventaire réel, mesuré indépendamment par
+						// les deux agents de revue. Corrigé en REMPLAÇANT (jamais
+						// additionnant) la valeur troc à chaque DEATH/QUIT - seul le
+						// DERNIER événement de fin de vie compte, reflétant fidèlement
+						// l'inventaire final. Jamais pour dette/libre (addGain, cumul
+						// intentionnel et inchangé).
+						if (pGame.getMoneySystem() == Game.MONEY_TROC)
+							achievements.put(playerName, computeGain(pGame, event, currentFactor));
+						else
+							addGain(pGame, event, playerName, achievements, currentFactor, false);
 						// Amorce le suivi delta ci-dessous : un joueur qui quitte en
 						// libre+strict TRM+smartphone (voir Player.quit) va continuer de
 						// recevoir des WEALTH_CHECKPOINT - sans cette valeur de référence,

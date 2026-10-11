@@ -955,6 +955,9 @@ msgstr "Aucun autre joueur endetté ce tour-ci."
 msgid "wiz.dying_indebted_alert"
 msgstr "Les joueurs qui meurent ce tour doivent d'abord régler leur crédit avec la banque."
 
+msgid "wiz.quick_repay_insufficient_balance_alert"
+msgstr "{name} doit {owed} mais n'a que {balance} jetons - le remboursement rapide est bloqué pour ne pas créer de monnaie fantôme. Utilisez \"Ne peut pas payer\" pour une saisie partielle."
+
 msgid "wiz.end_inventory_title"
 msgstr "Sortie de tous les joueurs"
 
