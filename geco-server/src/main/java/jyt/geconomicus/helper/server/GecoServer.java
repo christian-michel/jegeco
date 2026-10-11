@@ -1097,13 +1097,15 @@ public class GecoServer
 		// le tour" (bouton animateur), ni l'expiration automatique du
 		// minuteur à zéro n'appelaient le serveur - les deux restaient
 		// purement locaux au navigateur de l'animateur (voir app.js,
-		// btnEndTurn.onclick et startTurnTimer). Endpoint volontairement SANS
-		// AUCUNE mutation d'état (contrairement à /turn/pause ci-dessus) :
-		// sert uniquement à relayer l'instant exact du clic/de l'expiration à
-		// tous les smartphones connectés, via une diffusion WS dédiée
-		// ("turn_ending"), agnostique du système monétaire (dette/libre/troc)
-		// - même principe que la diffusion "death", jamais réservée à un seul
-		// mode de jeu.
+		// btnEndTurn.onclick et startTurnTimer). Endpoint sert à relayer
+		// l'instant exact du clic/de l'expiration à tous les smartphones
+		// connectés, via une diffusion WS dédiée ("turn_ending"), agnostique
+		// du système monétaire (dette/libre/troc) - même principe que la
+		// diffusion "death", jamais réservée à un seul mode de jeu.
+		// Mutation ajoutée le 11/10/2026 (animation "Prison !", dette+
+		// smartphone) : lève le blocage des joueurs dont le tour en prison
+		// s'achève ICI - voir GameService.clearExpiredPrisonStatus, sa
+		// Javadoc, pour pourquoi ce point précis (avant le prochain TURN).
 		pApp.post("/api/games/{id}/turn/announce-end", ctx -> { //$NON-NLS-1$
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			requireGamePin(ctx, id);
@@ -1113,6 +1115,7 @@ public class GecoServer
 				ctx.status(404);
 				return;
 			}
+			mGameService.clearExpiredPrisonStatus(id);
 			broadcast(id, "turn_ending", null); //$NON-NLS-1$
 			ctx.json(java.util.Map.of("ok", true)); //$NON-NLS-1$
 		});
@@ -1258,7 +1261,7 @@ public class GecoServer
 			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
 					game.getMoneySystem(), mGameService.isTradingAllowed(game), game.getWeakCoinValue(),
 					game.getPausedRemainingSeconds() != null, game.computeCurrentDU(),
-					game.getWeakCardValueInDU(), game.getRevolutionCount()));
+					game.getWeakCardValueInDU(), game.getRevolutionCount(), game.getTurnNumber()));
 		});
 
 		// Inventaire de cartes d'un joueur, par SON PROPRE jeton (voir "Mes
@@ -1610,6 +1613,16 @@ public class GecoServer
 					&& (event.getPlayer().getStartingCardsJson() != null))
 				broadcast(id, "death", //$NON-NLS-1$
 						new Dtos.PlayerDeathAnimationDto(event.getPlayer().getId(), event.getPlayer().getName()));
+			// Animation "Prison !" (11/10/2026, demande utilisateur, dette+
+			// smartphone uniquement) : déclenchée au même instant que
+			// Player.prisonUntilTurn est posé (voir Event.applyEvent, cas
+			// PRISON) - c'est-à-dire ICI, à l'entre-deux-tours, pas au
+			// prochain TURN. Voir Dtos.PlayerPrisonAnimationDto pour le
+			// raisonnement complet.
+			if ((event.getEvt() == Event.EventType.PRISON) && (event.getPlayer() != null)
+					&& (event.getPlayer().getStartingCardsJson() != null))
+				broadcast(id, "prison", //$NON-NLS-1$
+						new Dtos.PlayerPrisonAnimationDto(event.getPlayer().getId(), event.getPlayer().getName()));
 			ctx.status(201).json(EventDto.from(event));
 		});
 

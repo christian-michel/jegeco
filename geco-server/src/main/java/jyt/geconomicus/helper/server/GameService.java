@@ -2064,6 +2064,55 @@ public class GameService
 	}
 
 	/**
+	 * Lève le blocage "Prison !" (voir {@link Player#getPrisonUntilTurn()},
+	 * sa Javadoc) des joueurs pour qui le tour qui s'achève EST le tour pour
+	 * lequel ils étaient bloqués - appelée à l'annonce de fin de tour (voir
+	 * GecoServer, {@code POST /api/games/{id}/turn/announce-end}), AVANT que
+	 * l'événement TURN suivant n'incrémente {@code game.getTurnNumber()}.
+	 * Sans cet appel explicite, la comparaison dérivée
+	 * ({@code prisonUntilTurn == game.getTurnNumber()}) resterait vraie
+	 * pendant tout l'entre-deux-tours suivant (le temps que l'assistant de
+	 * fin de tour tourne et que le prochain TURN soit enregistré), ce qui
+	 * figerait à tort l'écran du joueur un tour de plus que prévu. Demande
+	 * utilisateur du 11/10/2026 ("l'image disparaitra automatiquement à la
+	 * fin du tour") - voir Player.prisonUntilTurn pour le raisonnement
+	 * complet (pourquoi un état dérivé plutôt qu'un simple booléen, et
+	 * pourquoi cet effacement explicite est l'unique exception à ce
+	 * principe).
+	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
+	public void clearExpiredPrisonStatus(final int pGameId)
+	{
+		withGameLock(pGameId, () -> {
+			clearExpiredPrisonStatusUnlocked(pGameId);
+			return null;
+		});
+	}
+
+	private void clearExpiredPrisonStatusUnlocked(final int pGameId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				return;
+			em.getTransaction().begin();
+			for (final Player player : game.getPlayers())
+			{
+				if ((player.getPrisonUntilTurn() != null)
+						&& (player.getPrisonUntilTurn().intValue() == game.getTurnNumber()))
+					player.setPrisonUntilTurn(null);
+			}
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
 	 * Distribue une NOUVELLE dotation de départ de 4 cartes faibles à UN SEUL
 	 * joueur (voir {@link #dealStartingHandsForLibreIfNeeded} pour la version
 	 * "tous les joueurs" utilisée à la toute première mise en place) -

@@ -377,6 +377,13 @@ async function refreshPlayer() {
 		const res = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}`);
 		if (!res.ok) throw new Error("not found");
 		state.player = await res.json();
+		// Synchronise l'overlay "Prison !" sur l'état réel du joueur (voir
+		// syncPrisonOverlayFromPlayerState, plus bas dans ce fichier) - couvre
+		// le rechargement/la reconnexion pendant que le joueur est toujours en
+		// prison, ET le filet de sécurité si le message WS "turn_ending" a été
+		// manqué (même esprit que tous les autres filets de sécurité réseau de
+		// cette fonction).
+		syncPrisonOverlayFromPlayerState();
 		// Remonté par l'utilisateur (09/09/2026, captures du nouveau journal de
 		// diagnostic à l'appui) : un simple accroc wifi passager (quelques
 		// secondes, très courant sur un réseau partagé avec de nombreux
@@ -2458,6 +2465,14 @@ function connectPlayerWs() {
 		// mourir voit l'animation, jamais les autres joueurs de la partie.
 		if ((msg.type === "death") && state.player && (msg.payload.playerId === state.player.id))
 			enqueueDeathAnimation(msg.payload);
+		// Animation "Prison !" (11/10/2026, dette+smartphone uniquement, voir
+		// GecoServer, route POST /api/games/{id}/events, cas PRISON) - diffusée
+		// au même instant que Player.prisonUntilTurn est posé, à l'entre-deux-
+		// tours (voir Dtos.PlayerPrisonAnimationDto). Jamais de file d'attente
+		// ici (contrairement à "death") : playPrisonAnimation() se garde déjà
+		// elle-même contre un double déclenchement (voir mPrisonAnimShown).
+		if ((msg.type === "prison") && state.player && (msg.payload.playerId === state.player.id))
+			playPrisonAnimation();
 		// Révolution économique (22/09/2026, "rotation des valeurs" - voir
 		// Game.revolutionCount/cardPriceInDuTable) : contrairement au carré
 		// lui-même (animation propre au seul joueur concerné, ci-dessus), une
@@ -2544,6 +2559,15 @@ function connectPlayerWs() {
 		// pleine transaction qui ne verra pas "Stop !" n'a pas besoin d'un
 		// sifflet sans contexte visuel.
 		if (msg.type === "turn_ending") {
+			// Referme "Prison !" si elle était affichée (demande explicite :
+			// "L'image disparaitra automatiquement à la fin du tour") - voir
+			// dismissPrisonAnimation(), idempotente (ne fait rien si l'overlay
+			// n'était pas affiché). Appelée AVANT la garde cardModalItem/
+			// scanStream ci-dessous : un joueur en prison ne peut par
+			// construction pas avoir de modal carte/scan ouvert (l'overlay
+			// plein écran, au-dessus de tout, l'en empêche), donc aucun risque
+			// de conflit avec elle.
+			dismissPrisonAnimation();
 			// Correctif anti-doublon : le rafraîchissement périodique
 			// (refreshPlayer, toutes les 5s) détecte LUI AUSSI la fin de tour,
 			// indépendamment de ce message WS (transition tradingAllowed true ->
@@ -3502,6 +3526,174 @@ async function playTurnEndAnimation() {
 			showScreen("profileScreen");
 			setActiveNav("navBtnProfile");
 		}
+	}
+}
+
+// ============================================================
+// Animation "Prison !" (11/10/2026) - dette+smartphone UNIQUEMENT, remonté
+// par l'utilisateur (image jointe "13.jpg", prisonnier derrière des
+// barreaux) : "Appuie toi sur l'animation de la mort mais remplace
+// l'illustration par celle ci-jointe et le texte éditable en html par
+// 'Prison !'. Fait un dézoome rapide de la fenêtre et qui montre toute
+// l'image en reculant rapidement (effet de dezoome)... à la différence de
+// l'animation de la mort, l'image se fige sur l'écran du joueur pendant
+// tout le tour suivant, lui empêchant de jouer. L'image disparaitra
+// automatiquement à la fin du tour." Entrée calquée EXACTEMENT sur
+// playDeathAnimation ci-dessus (mêmes constantes de timing, même technique
+// "transition: none" + reflow forcé pour un état de départ instantané, même
+// titre rendu par js/vendor/cartoon-text.js) - voir son commentaire
+// détaillé plus haut pour le raisonnement complet de chaque correctif déjà
+// appliqué ici dès la première version (police préchargée au chargement de
+// la page, rendu du titre plafonné dans le temps, etc.).
+//
+// DIFFÉRENCE VOLONTAIRE avec "Mort du joueur" : aucune fermeture
+// automatique après un délai fixe - voir dismissPrisonAnimation()/
+// syncPrisonOverlayFromPlayerState() ci-dessous, les deux SEULS points qui
+// referment réellement cet overlay (événement WS "turn_ending", ou
+// détection que PlayerSelfViewDto.inPrisonThisTurn est repassé à false au
+// prochain rafraîchissement périodique - filet de sécurité si ce message WS
+// était manqué, même esprit que les nombreux filets de sécurité réseau déjà
+// en place ailleurs dans ce fichier, voir refreshPlayer).
+//
+// mPrisonAnimShown : vrai dès que l'overlay est visible (entrée jouée OU
+// restauré directement figé après un rechargement/une reconnexion pendant
+// que le joueur est toujours en prison, voir showPrisonOverlayFrozen) - sert
+// à la fois de garde anti-double-déclenchement (un message WS "prison"
+// rejoué ne doit jamais relancer l'entrée en plein milieu d'un overlay déjà
+// figé) et de mémoire pour savoir si une fermeture est nécessaire.
+let mPrisonAnimShown = false;
+
+const PRISON_ANIM_ZOOM_START_DELAY_MS = 50;
+const PRISON_ANIM_DEZOOM_MS = 550;
+const PRISON_ANIM_IMPACT_MS = 450;
+
+// Déclenchée directement par l'événement WebSocket "prison" (voir
+// connectPlayerWs plus haut) - jamais via une file d'attente comme "Mort du
+// joueur" : un joueur ne peut être envoyé en prison qu'une seule fois par
+// entre-deux-tours, et mPrisonAnimShown empêche déjà tout chevauchement en
+// cas de double message (reconnexion, rejeu réseau...).
+async function playPrisonAnimation() {
+	if (mPrisonAnimShown) return; // déjà affichée (entrée déjà jouée, ou restaurée figée après un rechargement) - jamais rejouée par-dessus elle-même
+	mPrisonAnimShown = true;
+
+	const overlay = el("prisonAnimOverlay");
+	const zoom = el("prisonAnimZoom");
+	const titleHost = el("prisonAnimTitleHost");
+
+	// Même truc "transition: none" + reflow forcé que playDeathAnimation
+	// (voir son commentaire détaillé plus haut) : l'état de départ
+	// "zoomed-in" doit s'appliquer INSTANTANÉMENT, sans quoi la transition
+	// CSS prévue pour le dézoom s'appliquerait aussi à cette mise en place.
+	zoom.style.transition = "none";
+	zoom.classList.remove("zoomed-out", "shake-impact");
+	zoom.classList.add("zoomed-in");
+	void zoom.offsetWidth; // force le calcul du style avant de rétablir la transition
+	zoom.style.transition = "";
+	titleHost.classList.remove("stamp-in");
+	titleHost.style.opacity = "0";
+
+	overlay.style.transition = "none";
+	overlay.classList.add("active");
+	void overlay.offsetWidth;
+	overlay.style.transition = "";
+
+	// Contrairement à playDeathAnimation : PAS de finally qui referme
+	// l'overlay - une exception ici (ex. échec de rendu du titre) laisse
+	// volontairement l'écran figé (overlay déjà "active" ci-dessus) : mieux
+	// vaut un titre manquant qu'un joueur en prison qui retrouverait la main
+	// par accident à cause d'une simple erreur de rendu. Voir
+	// dismissPrisonAnimation()/syncPrisonOverlayFromPlayerState(), les deux
+	// seuls points qui referment réellement cet overlay.
+	try {
+		await new Promise((r) => setTimeout(r, PRISON_ANIM_ZOOM_START_DELAY_MS));
+
+		// Dézoom rapide (demande explicite : "Fait un dézoome rapide de la
+		// fenêtre et qui montre toute l'image en reculant rapidement") - même
+		// mécanique que playDeathAnimation ci-dessus.
+		zoom.classList.remove("zoomed-in");
+		zoom.classList.add("zoomed-out");
+		await new Promise((r) => setTimeout(r, PRISON_ANIM_DEZOOM_MS));
+
+		titleHost.style.opacity = "";
+		await renderAnimTitle(titleHost, t("playerView.prison_anim_title"));
+		titleHost.classList.add("stamp-in");
+		zoom.classList.add("shake-impact");
+		playDeathImpactSound();
+		await new Promise((r) => setTimeout(r, PRISON_ANIM_IMPACT_MS));
+		zoom.classList.remove("shake-impact");
+		// ÉTAPE 3 : contrairement à "Mort du joueur", AUCUNE fermeture
+		// automatique ici - l'overlay reste "active" (pointer-events: auto,
+		// écran figé) jusqu'à dismissPrisonAnimation()/
+		// syncPrisonOverlayFromPlayerState() ci-dessous.
+	} catch (err) {
+		pushDebugLog("ERREUR", "Animation \"Prison !\" interrompue (reste affichée, voir le commentaire de tête de fonction) :", err);
+	}
+}
+
+// Affiche l'overlay DIRECTEMENT dans son état final figé (sans rejouer le
+// dézoom/le coup de tampon) - utilisée UNIQUEMENT par
+// syncPrisonOverlayFromPlayerState() ci-dessous, pour le cas d'un
+// rechargement de page/une reconnexion pendant que le joueur est TOUJOURS en
+// prison (son téléphone a par exemple été verrouillé puis rouvert en plein
+// milieu du tour de blocage) : le message WebSocket "prison" d'origine, lui,
+// n'est jamais rediffusé pour une simple reconnexion - sans cette fonction,
+// le joueur retrouverait un écran normal, jouable, alors qu'il devrait
+// rester bloqué.
+async function showPrisonOverlayFrozen() {
+	mPrisonAnimShown = true;
+	const overlay = el("prisonAnimOverlay");
+	const zoom = el("prisonAnimZoom");
+	const titleHost = el("prisonAnimTitleHost");
+
+	zoom.style.transition = "none";
+	zoom.classList.remove("zoomed-in", "shake-impact");
+	zoom.classList.add("zoomed-out");
+	void zoom.offsetWidth;
+	zoom.style.transition = "";
+
+	overlay.style.transition = "none";
+	overlay.classList.add("active");
+	void overlay.offsetWidth;
+	overlay.style.transition = "";
+
+	titleHost.classList.remove("stamp-in");
+	titleHost.style.opacity = "";
+	await renderAnimTitle(titleHost, t("playerView.prison_anim_title"));
+	titleHost.classList.add("stamp-in");
+}
+
+// Referme l'overlay "Prison !" avec le fondu normal (0,25s, voir
+// .prison-anim-overlay dans player.css) - appelée depuis connectPlayerWs sur
+// l'événement WS "turn_ending" (fin du tour de blocage, demande explicite :
+// "L'image disparaitra automatiquement à la fin du tour") ET depuis
+// syncPrisonOverlayFromPlayerState() ci-dessous (filet de sécurité si ce
+// message WS était manqué). Idempotente (ne fait rien si l'overlay n'est pas
+// affiché) - sans danger d'appel superflu.
+function dismissPrisonAnimation() {
+	if (!mPrisonAnimShown) return;
+	mPrisonAnimShown = false;
+	const overlay = el("prisonAnimOverlay");
+	if (overlay) overlay.classList.remove("active");
+}
+
+// Appelée depuis refreshPlayer() à chaque rafraîchissement (voir plus haut
+// dans ce fichier) - synchronise l'overlay "Prison !" sur l'état RÉEL du
+// joueur (PlayerSelfViewDto.inPrisonThisTurn, voir Dtos.java côté serveur)
+// plutôt que de dépendre uniquement des messages WebSocket "prison"/
+// "turn_ending" ponctuels : couvre à la fois (1) un rechargement de page ou
+// une reconnexion pendant que le joueur est toujours en prison (le message
+// WS d'origine n'a jamais été rediffusé pour cette reconnexion - voir
+// showPrisonOverlayFrozen ci-dessus) et (2) un message "turn_ending" manqué
+// (accroc réseau documenté ailleurs dans ce fichier comme un risque connu de
+// ce mode multi-téléphones) - le rafraîchissement périodique (5s) reste ici
+// aussi le filet de sécurité final, même principe que la détection de fin de
+// tour déjà en place plus haut dans refreshPlayer().
+function syncPrisonOverlayFromPlayerState() {
+	if (!state.player) return;
+	if (state.player.inPrisonThisTurn && !mPrisonAnimShown) {
+		showPrisonOverlayFrozen();
+	} else if (!state.player.inPrisonThisTurn && mPrisonAnimShown) {
+		dismissPrisonAnimation();
 	}
 }
 

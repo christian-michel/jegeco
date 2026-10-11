@@ -75,11 +75,12 @@ public class Dtos
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
 			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused, int jetonWeak,
 			int jetonMedium, int jetonStrong, int currentDuValue, double weakCardValueInDU,
-			boolean hasStartingAllocation, int revolutionCount, boolean quit)
+			boolean hasStartingAllocation, int revolutionCount, boolean quit, boolean inPrisonThisTurn)
 	{
 		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
 				final boolean pTradingAllowed, final double pWeakCoinValue, final boolean pIsPaused,
-				final int pCurrentDuValue, final double pWeakCardValueInDU, final int pRevolutionCount)
+				final int pCurrentDuValue, final double pWeakCardValueInDU, final int pRevolutionCount,
+				final int pGameTurnNumber)
 		{
 			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
@@ -105,7 +106,17 @@ public class Dtos
 					// haut) - permet à player-view.js d'afficher un message distinct
 					// ("vous continuez de toucher le DU") plutôt que le simple
 					// "partie terminée pour vous" d'un joueur inactif ordinaire.
-					p.isQuit());
+					p.isQuit(),
+					// inPrisonThisTurn : ajouté le 11/10/2026 (dette+smartphone,
+					// animation "Prison !" demandée par l'utilisateur) - état DÉRIVÉ
+					// (voir Player.prisonUntilTurn, sa Javadoc) plutôt qu'un booléen
+					// persistant séparé : vrai seulement si ce joueur doit rester
+					// bloqué PENDANT le tour en cours actuellement côté partie. Permet
+					// à player-view.js de savoir, à chaque refreshPlayer() (y compris
+					// au rechargement/reconnexion, pas seulement à la réception du
+					// message WebSocket qui déclenche l'animation), s'il doit garder
+					// l'écran figé.
+					(p.getPrisonUntilTurn() != null) && p.getPrisonUntilTurn().intValue() == pGameTurnNumber);
 		}
 	}
 
@@ -212,6 +223,23 @@ public class Dtos
 	 * partie. Voir GecoServer, route POST /api/games/{id}/events.
 	 */
 	public record PlayerDeathAnimationDto(Integer playerId, String playerName)
+	{
+	}
+
+	/**
+	 * Notification de l'animation "Prison !" (11/10/2026, demande
+	 * utilisateur, dette+smartphone uniquement) - diffusée via WebSocket
+	 * UNIQUEMENT au joueur concerné (playerId filtré côté client), au même
+	 * instant que l'événement PRISON est enregistré (voir GecoServer, route
+	 * POST /api/games/{id}/events) - c'est-à-dire à l'entre-deux-tours,
+	 * PENDANT l'assistant de fin de tour, bien avant que le prochain
+	 * événement TURN n'incrémente le numéro de tour. Voir
+	 * Player.prisonUntilTurn pour la mécanique de persistance complète
+	 * (contrairement à "death", cette animation ne se referme pas toute
+	 * seule après quelques secondes - elle reste figée jusqu'à la fin du
+	 * tour suivant).
+	 */
+	public record PlayerPrisonAnimationDto(Integer playerId, String playerName)
 	{
 	}
 

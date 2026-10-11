@@ -501,6 +501,19 @@ public class Game implements Serializable
 			// Event.applyEvent() au fil des QUIT réellement rencontrés.
 			player.setQuit(false);
 			player.setVisitedBank(true);
+			// prisonUntilTurn (11/10/2026, voir Player.java) : remis à null ici,
+			// comme active/quit juste au-dessus - reconstruit par le rejeu via
+			// Event.applyEvent() au fil des PRISON réellement rencontrés. Sans
+			// cette remise à zéro, un événement PRISON supprimé/annulé (voir
+			// GameService.deleteEvent/undoLastEvent, qui appellent recomputeAll)
+			// laisserait ce champ bloqué sur sa DERNIÈRE valeur connue avant
+			// suppression plutôt que de refléter l'historique réellement rejoué -
+			// contrairement à jetonWeak&co (non traités ici, voir le "Pièges déjà
+			// rencontrés" de CLAUDE.md pour ce problème plus large, distinct et
+			// non résolu), ce champ n'est jamais qu'ÉCRASÉ (jamais accumulé) à
+			// chaque PRISON rejoué : la remise à zéro ci-dessous suffit à le
+			// garder exact, sans redesign plus profond du rejeu.
+			player.setPrisonUntilTurn(null);
 		}
 		interestGained = 0;
 		moneyMass = 0;

@@ -2169,6 +2169,10 @@ msgstr "Commencez !"
 msgid "playerView.turnend_anim_title"
 msgstr "Stop !"
 
+# ============ Animation "Prison !" (11/10/2026, dette+smartphone) ============
+msgid "playerView.prison_anim_title"
+msgstr "Prison !"
+
 # ============ Infobulles temporaires (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"
 msgstr "Vous n'avez pas assez d'unités monétaires"

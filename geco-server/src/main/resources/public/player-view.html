@@ -366,6 +366,29 @@
 		<div class="turnend-anim-title-host" id="turnendAnimTitleHost"></div>
 	</div>
 
+	<!-- ===== Animation "Prison !" (11/10/2026, dette+smartphone uniquement) =====
+	     Remonté par l'utilisateur (image jointe "13.jpg", prisonnier derrière
+	     des barreaux) : "Appuie toi sur l'animation de la mort mais remplace
+	     l'illustration par celle ci-jointe et le texte éditable en html par
+	     'Prison !'... l'image se fige sur l'écran du joueur pendant tout le
+	     tour suivant, lui empêchant de jouer. L'image disparaitra
+	     automatiquement à la fin du tour." Même structure DOM que
+	     .death-anim-overlay (voir plus haut) - MÊME dézoom rapide, texte rendu
+	     par js/vendor/cartoon-text.js pour rester multilingue - mais ne se
+	     referme JAMAIS tout seul après son entrée (voir playPrisonAnimation/
+	     syncPrisonOverlay dans player-view.js) : reste actif jusqu'à la fin du
+	     tour suivant (événement WS "turn_ending", ou détection que
+	     PlayerSelfViewDto.inPrisonThisTurn est repassé à false au prochain
+	     rafraîchissement périodique - filet de sécurité si ce message WS
+	     était manqué). Déclenchée par l'événement WebSocket "prison" (voir
+	     GecoServer.java, route POST /api/games/{id}/events, cas PRISON) - à
+	     l'entre-deux-tours, pas au prochain TURN (voir
+	     Player.prisonUntilTurn pour le raisonnement complet du timing). -->
+	<div class="prison-anim-overlay" id="prisonAnimOverlay">
+		<div class="prison-anim-zoom" id="prisonAnimZoom"></div>
+		<div class="prison-anim-title-host" id="prisonAnimTitleHost"></div>
+	</div>
+
 	<!-- ===== Onglet "Stats" : classement complet ===== -->
 	<div id="leaderboardScreen" class="main-content hidden">
 		<section class="card leaderboard-card">

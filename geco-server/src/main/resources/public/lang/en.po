@@ -2160,6 +2160,10 @@ msgstr "Start!"
 msgid "playerView.turnend_anim_title"
 msgstr "Stop!"
 
+# ============ "Prison!" animation (11/10/2026, debt+smartphone) ============
+msgid "playerView.prison_anim_title"
+msgstr "Prison!"
+
 # ============ Temporary toast notifications (02/09/2026) ============
 msgid "trade.insufficient_balance_toast"
 msgstr "You don't have enough currency units"

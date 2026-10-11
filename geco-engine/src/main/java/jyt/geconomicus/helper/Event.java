@@ -489,6 +489,18 @@ public class Event implements Serializable
 			{
 				final int coinsSeized = EventType.REIMB_CREDIT.equals(evt) ? (principal + interest) : principal;
 				player.setJetonWeak(Math.max(0, player.getJetonWeak() - coinsSeized));
+				// Animation "Prison !" (11/10/2026, demande utilisateur, dette+
+				// smartphone uniquement) : à la différence de BANKRUPT/CANNOT_PAY
+				// (simple saisie, le joueur continue de jouer normalement dès ce
+				// tour), PRISON le bloque pour le PROCHAIN tour entier - voir
+				// Player.prisonUntilTurn, sa Javadoc pour le raisonnement complet
+				// (pourquoi +1, pourquoi une comparaison dérivée plutôt qu'un
+				// booléen à faire vivre). game.getTurnNumber() vaut encore ici
+				// l'ANCIEN tour (celui qui s'achève) - l'événement TURN qui
+				// l'incrémente n'arrive qu'à la toute fin de l'assistant de fin de
+				// tour, après ce bloc.
+				if (EventType.PRISON.equals(evt))
+					player.setPrisonUntilTurn(game.getTurnNumber() + 1);
 			}
 			// and then it's just like quitting: don't break here!
 

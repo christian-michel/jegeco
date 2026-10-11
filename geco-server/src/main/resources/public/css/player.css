@@ -1310,6 +1310,80 @@ body {
 }
 
 /* ============================================================
+   Animation "Prison !" (11/10/2026) - dette+smartphone UNIQUEMENT, remonté
+   par l'utilisateur (image jointe "13.jpg", illustration d'un prisonnier
+   derrière des barreaux) : "Appuie toi sur l'animation de la mort mais
+   remplace l'illustration par celle ci-jointe et le texte éditable en html
+   par 'Prison !'. Fait un dézoome rapide de la fenêtre et qui montre toute
+   l'image en reculant rapidement (effet de dezoome)." - gabarit CSS
+   directement calqué sur .death-anim-overlay ci-dessus (MÊME effet de
+   dézoom depuis un plan serré jusqu'à la scène complète, contrairement à
+   l'effet "explosion" de "Commencez !"/"Stop !" plus haut, volontairement
+   différent et donc non réutilisé ici), MÊME plafond 460px/centrage pour le
+   correctif iPad en paysage du 04/10/2026 ("il faut que sur iPad, on gère
+   comme pour l'animation mort/renaissance" - réponse explicite de
+   l'utilisateur à ce sujet).
+
+   DIFFÉRENCE VOLONTAIRE avec "Mort du joueur" : cette animation NE SE
+   REFERME JAMAIS automatiquement après son entrée (pas de pendant équivalent
+   à .death-anim-overlay avec un simple fondu de sortie après
+   DEATH_ANIM_TOTAL_DISPLAY_MS) - une fois l'entrée jouée, l'overlay RESTE
+   actif (pointer-events: auto, écran figé) pendant tout le tour suivant,
+   bloquant le joueur ("l'image se fige sur l'écran du joueur pendant tout
+   le tour suivant, lui empêchant de jouer"). Voir playPrisonAnimation/
+   syncPrisonOverlay dans player-view.js pour la mécanique d'ouverture ET de
+   fermeture (fermeture explicite uniquement, sur l'événement "turn_ending"
+   ou sur la détection que Player.prisonUntilTurn ne correspond plus au tour
+   en cours - jamais un simple minuteur fixe comme les autres animations de
+   cet écran).
+
+   z-index 3100, AU-DESSUS DE TOUT LE RESTE (carré 3000 < mort 3050 <
+   renaissance 3060 < flash mort/renaissance 3070 < début de tour 3080 < fin
+   de tour 3090 < prison 3100) : contrairement aux autres animations, celle-
+   ci doit rester visible PAR-DESSUS "Commencez !" si le nouveau tour (celui
+   pour lequel le joueur est en prison) vient tout juste de démarrer pendant
+   qu'elle est déjà affichée - le blocage prime toujours sur toute autre
+   animation de cet écran, jamais l'inverse.
+   ============================================================ */
+.prison-anim-overlay {
+	/* position/largeur : voir le commentaire détaillé sur .death-anim-overlay
+	   plus haut dans ce fichier (correctif du 04/10/2026, iPad en paysage). */
+	position: fixed; top: 0; bottom: 0; left: 50%; width: 100%; max-width: 460px;
+	transform: translateX(-50%); z-index: 3100;
+	display: flex; align-items: center; justify-content: center;
+	opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+	overflow: hidden; background: #0a0a0c;
+}
+.prison-anim-overlay.active { opacity: 1; pointer-events: auto; }
+
+.prison-anim-zoom {
+	position: absolute; inset: 0;
+	background-image: url("/img/prison-background.jpg");
+	background-size: cover; background-position: center; background-repeat: no-repeat;
+	transform-origin: 50% 50%;
+	/* Même timing/courbe que .death-anim-zoom ci-dessus (0.55s,
+	   cubic-bezier(0.16,1,0.3,1)) - voir player-view.js, PRISON_ANIM_DEZOOM_MS,
+	   à garder synchronisée. */
+	transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+	will-change: transform;
+}
+.prison-anim-zoom.zoomed-in { transform: scale(3.6); }
+.prison-anim-zoom.zoomed-out { transform: scale(1); }
+.prison-anim-zoom.shake-impact { animation: deathAnimShake 450ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+@media (prefers-reduced-motion: reduce) {
+	.prison-anim-zoom { transition: none; }
+	.prison-anim-zoom.shake-impact { animation: none; }
+}
+
+.prison-anim-title-host {
+	position: relative; z-index: 1; width: 82%; max-width: 420px;
+	opacity: 0; will-change: transform, opacity, filter;
+	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
+}
+.prison-anim-title-host.stamp-in { animation: deathAnimStampSlam 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
+@media (prefers-reduced-motion: reduce) { .prison-anim-title-host.stamp-in { animation: none; opacity: 1; } }
+
+/* ============================================================
    Infobulles temporaires (02/09/2026) - remonté par l'utilisateur : "solde
    insuffisant" pendant un achat, "fin du tour" à l'expiration du minuteur.
    Voir showToast() dans player-view.js.

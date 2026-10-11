@@ -70,6 +70,24 @@ public class Player implements Serializable
 	// silencieusement de la masse au tour suivant (même incohérence entre
 	// "compté une fois" et "exclu ensuite" qui causait ce bug).
 	private boolean quit;
+	// Dette+smartphone uniquement (11/10/2026, demande utilisateur : animation
+	// "Prison !" plein écran, modélisée sur mort/renaissance) : numéro du tour
+	// pour lequel ce joueur est en prison (null = pas en prison). Posé à
+	// game.getTurnNumber()+1 au moment où l'événement PRISON est appliqué (voir
+	// Event.applyEvent, cas PRISON) - le tour en cours à cet instant précis est
+	// encore l'ANCIEN tour (l'événement TURN qui l'incrémente n'arrive qu'à la
+	// toute fin de l'assistant de fin de tour), donc +1 cible bien le PROCHAIN
+	// tour, celui pendant lequel le joueur doit rester bloqué. "En prison POUR
+	// le tour N" se déduit ensuite par simple comparaison (prisonUntilTurn ==
+	// game.getTurnNumber()) côté DTO - jamais un booléen à remettre à jour
+	// explicitement à chaque tour (même philosophie que Player.quit/isActive :
+	// un état dérivé, recalculable à tout moment, plutôt qu'un drapeau à faire
+	// vivre manuellement). Remis à null explicitement à l'annonce "fin de tour"
+	// (voir GameService, nouvelle route /turn/announce-end) pour que l'état ne
+	// reste jamais "vrai" ne serait-ce que le temps de l'entre-deux-tours
+	// suivant, où la comparaison ci-dessus resterait sinon encore vraie jusqu'au
+	// prochain TURN.
+	private Integer prisonUntilTurn;
 	// The current debt of the player towards the bank
 	private int curDebt;
 	// The current interest owed by the player towards the bank. Note that we could easily
@@ -320,6 +338,16 @@ public class Player implements Serializable
 	public void setQuit(boolean pQuit)
 	{
 		quit = pQuit;
+	}
+
+	public Integer getPrisonUntilTurn()
+	{
+		return prisonUntilTurn;
+	}
+
+	public void setPrisonUntilTurn(Integer pPrisonUntilTurn)
+	{
+		prisonUntilTurn = pPrisonUntilTurn;
 	}
 
 	public int getCurDebt()
