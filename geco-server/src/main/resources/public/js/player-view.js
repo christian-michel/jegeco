@@ -377,13 +377,6 @@ async function refreshPlayer() {
 		const res = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}`);
 		if (!res.ok) throw new Error("not found");
 		state.player = await res.json();
-		// Synchronise l'overlay "Prison !" sur l'état réel du joueur (voir
-		// syncPrisonOverlayFromPlayerState, plus bas dans ce fichier) - couvre
-		// le rechargement/la reconnexion pendant que le joueur est toujours en
-		// prison, ET le filet de sécurité si le message WS "turn_ending" a été
-		// manqué (même esprit que tous les autres filets de sécurité réseau de
-		// cette fonction).
-		syncPrisonOverlayFromPlayerState();
 		// Remonté par l'utilisateur (09/09/2026, captures du nouveau journal de
 		// diagnostic à l'appui) : un simple accroc wifi passager (quelques
 		// secondes, très courant sur un réseau partagé avec de nombreux
@@ -467,6 +460,35 @@ async function refreshPlayer() {
 		state.refreshInFlight = false;
 	}
 	el("mobileContainer").classList.remove("hidden");
+	// Synchronise l'overlay "Prison !" sur l'état réel du joueur (voir
+	// syncPrisonOverlayFromPlayerState, plus bas dans ce fichier) - couvre le
+	// rechargement/la reconnexion pendant que le joueur est toujours en
+	// prison, ET le filet de sécurité si le message WS "turn_ending" a été
+	// manqué (même esprit que tous les autres filets de sécurité réseau de
+	// cette fonction).
+	//
+	// BUG TROUVÉ ET CORRIGÉ (11/10/2026, agent d'audit indépendant, seconde
+	// relecture de la campagne de validation Prison) : cet appel vivait
+	// auparavant juste après `state.player = await res.json();`, donc AVANT
+	// la ligne ci-dessus qui retire la classe "hidden" de #mobileContainer.
+	// Or #prisonAnimOverlay/#prisonAnimTitleHost sont des DESCENDANTS de
+	// #mobileContainer (voir player-view.html) - tant que ce conteneur
+	// porte encore "hidden" (display:none, qui supprime le rendu de TOUT le
+	// sous-arbre, quel que soit le position:fixed des descendants), le titre
+	// SVG vectoriel (js/vendor/cartoon-text.js, fitViewBox() via
+	// svg.getBBox()) mesure une boîte de 0×0 au moment du tout premier
+	// rafraîchissement d'une page qui vient de charger/recharger : le mot
+	// "Prison !" se retrouvait bien dans le DOM mais avec un viewBox
+	// dégénéré, donc invisible - reproduit par capture d'écran puis
+	// confirmé par inspection du DOM (textContent correct, bbox vide).
+	// playPrisonAnimation() (déclenchée en direct par le message WebSocket
+	// "prison", jamais au tout premier rafraîchissement d'une page) n'était
+	// JAMAIS affectée : #mobileContainer est alors déjà visible depuis
+	// longtemps. Corrigé en déplaçant cet appel ICI, après que
+	// #mobileContainer soit garanti visible - showPrisonOverlayFrozen()
+	// peut alors mesurer correctement le SVG du titre, comme pour l'entrée
+	// "en direct".
+	syncPrisonOverlayFromPlayerState();
 	// Ne bascule sur le hub que si aucun autre écran d'échange n'est déjà affiché
 	// (le rafraîchissement périodique ne doit pas interrompre une vente/un achat en cours).
 	if (SCREENS.every((s) => el(s).classList.contains("hidden"))) showScreen("viewContent");
