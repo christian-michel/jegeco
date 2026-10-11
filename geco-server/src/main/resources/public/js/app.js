@@ -1900,7 +1900,16 @@ function openPlayerQuitDialog() {
 		`, async () => {
 			const playerId = parseInt(el("fQuitPlayer").value, 10);
 			const player = activePlayers.find((p) => p.id === playerId);
-			if (player.curDebt > 0) renderDebtSettlement(player); else renderInventory(player);
+			// "await" indispensable depuis que renderInventory() est devenue
+			// asynchrone (préremplissage dette+smartphone, 11/10/2026) : SANS lui,
+			// ce onSubmit() (lui-même déjà "await"-é par le gestionnaire générique
+			// d'openDialog(), voir mySeq/dlgOpenSeq) renverrait la main AVANT que
+			// renderInventory() ait eu le temps d'ouvrir sa propre boîte (son
+			// premier "await" interne, computeCannotPayPrefill, n'a pas encore
+			// posé la nouvelle génération sur dlgOpenSeq) - reproduirait exactement
+			// le même bug de fermeture prématurée que le correctif mySeq vient de
+			// résoudre, pour la toute nouvelle raison qui vient d'être introduite.
+			if (player.curDebt > 0) renderDebtSettlement(player); else await renderInventory(player);
 		});
 	}
 
@@ -1918,7 +1927,7 @@ function openPlayerQuitDialog() {
 				type: "R", playerId: player.id, principal: player.curDebt, interest: player.curInterest,
 			});
 			state.currentGame = await Api.getGame(state.currentGameId);
-			renderInventory(state.currentGame.players.find((p) => p.id === player.id));
+			await renderInventory(state.currentGame.players.find((p) => p.id === player.id));
 		};
 		el("fQuitCannotPay").onclick = () => {
 			dlg.close();
@@ -1940,7 +1949,7 @@ function openPlayerQuitDialog() {
 	const isDebt = game.moneySystem === 1;
 	const isTroc = game.moneySystem === 2;
 
-	function renderInventory(player) {
+	async function renderInventory(player) {
 		if (isTroc) {
 			openDialog(t("game.quit_inventory_title", { name: escapeHtml(player.name) }), `
 				<p>${t("game.quit_inventory_body", { name: escapeHtml(player.name) })}</p>
@@ -1968,16 +1977,51 @@ function openPlayerQuitDialog() {
 	// d'alignement sur un tableur transmis qui ne reflétait pas fidèlement les
 	// règles réelles - voir StatsService.computeGain pour l'historique complet.
 	if (isDebt) {
+		// BUG TROUVÉ ET CORRIGÉ (11/10/2026, seconde relecture indépendante,
+		// scénario explicitement demandé par l'utilisateur final : "vérifie que
+		// les comptages de cartes et des jetons sont bons même lorsqu'un joueur
+		// quitte la partie") : ces 4 champs ("Monnaie restante" + 3 cartes)
+		// restaient figés à 0 par défaut, JAMAIS préremplis depuis le VRAI
+		// solde/inventaire smartphone du joueur - contrairement à la boîte
+		// "Ne peut pas payer" (voir computeCannotPayPrefill, même source de
+		// données, déjà utilisée pour ce cas précis depuis le 18/09/2026).
+		// Risque concret en dette+smartphone : si l'animateur valide sans
+		// connaître/vérifier le VRAI solde du joueur sur son téléphone (rien
+		// dans le tableau de bord n'affiche son jetonWeak ligne par ligne, lui
+		// seul le voit), "principal" envoyé au serveur vaut 0 alors que son
+		// jetonWeak réel peut être largement positif. Or Event.applyEvent()
+		// remet INCONDITIONNELLEMENT jetonWeak à 0 pour un vrai QUIT (voir le
+		// commentaire du 10/10/2026 un peu plus bas dans ce fichier côté moteur,
+		// Event.java) - mais ne réduit la masse monétaire globale QUE du
+		// "principal" déclaré ici. Un "principal" sous-déclaré par erreur crée
+		// donc une masse monétaire FANTÔME (trop élevée par rapport à ce que les
+		// joueurs actifs possèdent réellement) - l'inverse exact du déficit déjà
+		// documenté pour le bouton rapide "Rembourser le crédit" (voir le
+		// commentaire du 10/10/2026 sur REIMB_CREDIT/BANKRUPT/PRISON/CANNOT_PAY
+		// un peu plus haut). Reproduit et vérifié en conditions réelles
+		// (Playwright, partie réelle) : masse monétaire globale ET jetonWeak de
+		// l'ex-joueur strictement cohérents (0 partout) une fois ce préremplissage
+		// en place, APRÈS avoir aussi corrigé le bug de fermeture prématurée de
+		// la boîte de dialogue elle-même (voir le commentaire de mySeq/
+		// dlgOpenSeq dans openDialog()) qui empêchait jusqu'ici d'atteindre cette
+		// étape pour un joueur sans dette en cours. Repli à 0 inchangé pour la
+		// dette CLASSIQUE (computeCannotPayPrefill renvoie null quand
+		// !hasStartingAllocation) - comportement historique préservé.
+		const prefill = await computeCannotPayPrefill(player);
+		const pfMoney = prefill ? prefill.money : 0;
+		const pfWeak = prefill ? prefill.weak : 0;
+		const pfMedium = prefill ? prefill.medium : 0;
+		const pfStrong = prefill ? prefill.strong : 0;
 		openDialog(t("game.quit_inventory_title", { name: escapeHtml(player.name) }), `
 			<p>${t("game.quit_inventory_body", { name: escapeHtml(player.name) })}</p>
 			<label>${t("game.field_remaining_money")}</label>
-			<input id="fQuitMoney" type="number" value="0">
+			<input id="fQuitMoney" type="number" value="${pfMoney}">
 			<label>${t("game.field_weak_cards")}</label>
-			<input id="fQuitWeak" type="number" value="0">
+			<input id="fQuitWeak" type="number" value="${pfWeak}">
 			<label>${t("game.field_medium_cards")}</label>
-			<input id="fQuitMedium" type="number" value="0">
+			<input id="fQuitMedium" type="number" value="${pfMedium}">
 			<label>${t("game.field_strong_cards")}</label>
-			<input id="fQuitStrong" type="number" value="0">
+			<input id="fQuitStrong" type="number" value="${pfStrong}">
 		`, async () => {
 			await Api.recordEvent(state.currentGameId, {
 				type: "Q", playerId: player.id,
@@ -6009,7 +6053,42 @@ function showView(id) {
 }
 
 // ---------- Dialogues ----------
+// Compteur global de "génération" d'ouverture - voir son usage dans
+// openDialog() ci-dessous (bug trouvé le 11/10/2026, seconde relecture
+// indépendante du chantier dette+smartphone : "Un joueur quitte").
+let dlgOpenSeq = 0;
 function openDialog(title, bodyHtml, onSubmit, onCancel) {
+	// BUG TROUVÉ ET CORRIGÉ (11/10/2026, seconde relecture indépendante de la
+	// campagne de test dette+smartphone, scénario explicitement demandé par
+	// l'utilisateur final : "vérifie que les comptages de cartes et des
+	// jetons sont bons même lorsqu'un joueur quitte la partie") : un numéro de
+	// génération, incrémenté et posé sur <dialog id="dlg"> à CHAQUE appel
+	// d'openDialog(), capturé ici dans "mySeq" AVANT que onSubmit() ne
+	// s'exécute plus bas. Nécessaire car openPlayerQuitDialog() (et tout
+	// futur appelant du même genre) enchaîne plusieurs ÉTAPES dans la MÊME
+	// boîte de dialogue en rappelant openDialog() DEPUIS l'intérieur de
+	// onSubmit() (ex: "Un joueur quitte" → sélection du joueur → onSubmit
+	// appelle renderInventory(player), qui rouvre la boîte avec le
+	// formulaire "jetons/cartes réels restants" pour CE joueur) : sans cette
+	// garde, le `dlg.close()` générique ci-dessous s'exécutait TOUJOURS
+	// après `await onSubmit()`, y compris quand onSubmit() venait tout juste
+	// de rouvrir la boîte avec le contenu de l'ÉTAPE SUIVANTE - la refermant
+	// donc IMMÉDIATEMENT, avant que l'animateur ait pu la voir ou la
+	// remplir, sans la moindre erreur visible. Confirmé par capture d'écran
+	// et inspection directe de `dlg.open` (Playwright, partie réelle) :
+	// `dlgTitle` passait bien à "Alice quitte — inventaire de départ" mais
+	// `dlg.open` retombait à `false` dans la foulée. Conséquence en usage
+	// réel : "Un joueur quitte" n'enregistrait JAMAIS l'événement QUIT pour
+	// un joueur sans dette en cours (curDebt<=0) - de très loin le cas le
+	// plus fréquent, et le SEUL cas possible en monnaie libre/troc (qui
+	// n'ont jamais de dette) - le joueur restait actif malgré le clic de
+	// l'animateur, sans aucun message d'erreur. Avec cette garde, le
+	// `dlg.close()` de CETTE génération ne s'exécute que si aucun appel
+	// imbriqué plus récent à openDialog() n'a entre-temps fait avancer la
+	// boîte vers une étape suivante (mySeq toujours courant) - cas normal
+	// (pas de ré-ouverture imbriquée) inchangé, puisque dlgOpenSeq reste
+	// alors égal à mySeq.
+	const mySeq = ++dlgOpenSeq;
 	el("dlgTitle").textContent = title;
 	el("dlgBody").innerHTML = bodyHtml;
 	renderIcons(el("dlgBody"));
@@ -6035,7 +6114,10 @@ function openDialog(title, bodyHtml, onSubmit, onCancel) {
 		// attendre, quel que soit le résultat de l'action.
 		try {
 			await onSubmit();
-			dlg.close();
+			// Voir le commentaire détaillé de mySeq/dlgOpenSeq ci-dessus : ne ferme
+			// CETTE génération de la boîte que si onSubmit() n'en a pas entre-temps
+			// ouvert une PLUS RÉCENTE (étape suivante d'un enchaînement).
+			if (dlgOpenSeq === mySeq) dlg.close();
 		}
 		catch (err) {
 			console.error(err);
