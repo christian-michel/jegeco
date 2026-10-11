@@ -116,7 +116,41 @@ public class Dtos
 					// au rechargement/reconnexion, pas seulement à la réception du
 					// message WebSocket qui déclenche l'animation), s'il doit garder
 					// l'écran figé.
-					(p.getPrisonUntilTurn() != null) && p.getPrisonUntilTurn().intValue() == pGameTurnNumber);
+					//
+					// BUG TROUVÉ ET CORRIGÉ (11/10/2026, agent de contrôle, campagne de
+					// test dette+smartphone réelle) : cette comparaison était une
+					// égalité stricte ("=="), jamais ">=" - or prisonUntilTurn vaut
+					// game.getTurnNumber()+1 au moment PRÉCIS où l'événement PRISON est
+					// enregistré (voir Event.applyEvent, cas PRISON), c'est-à-dire
+					// PENDANT l'assistant de fin de tour, AVANT que le prochain
+					// événement TURN n'incrémente game.getTurnNumber(). À cet instant,
+					// cette comparaison stricte valait donc déjà FAUX
+					// (prisonUntilTurn=N+1, pGameTurnNumber encore égal à N) - seule la
+					// diffusion WebSocket "prison" (déclenchée une seule fois, voir
+					// GecoServer, route POST /events) affichait l'overlay IMMÉDIATEMENT
+					// comme prévu ; mais dès le refreshPlayer() PÉRIODIQUE suivant (5s,
+					// voir player-view.js) - presque systématique si l'animateur met plus
+					// de 5 secondes à terminer l'assistant (très réaliste : solder
+					// d'autres joueurs endettés, accorder de nouveaux crédits...) -
+					// syncPrisonOverlayFromPlayerState() lisait inPrisonThisTurn=false
+					// et REFERMAIT l'overlay À TORT, en PLEIN milieu de
+					// l'entre-deux-tours, bien avant que le tour de blocage n'ait même
+					// commencé. Reproduit en conditions réelles (scénario HTTP complet,
+					// Playwright) : overlay actif juste après l'événement PRISON, fermé
+					// tout seul après ~4-6s d'attente côté assistant animateur (aucun
+					// nouveau tour démarré entre-temps), avant de se réafficher une fois
+					// le vrai tour suivant enregistré - un effet de clignotement qui
+					// laissait le joueur croire, à tort et pendant plusieurs secondes,
+					// qu'il avait retrouvé un écran normal et jouable. Corrigé en ">="
+					// plutôt que "==" : couvre à la fois l'entre-deux-tours (dès l'instant
+					// où PRISON est enregistré, prisonUntilTurn devient strictement
+					// supérieur au tour EN COURS) ET tout le tour de blocage lui-même
+					// (une fois TURN incrémenté, prisonUntilTurn == pGameTurnNumber) -
+					// sans toucher à la remise à null explicite de
+					// GameService.clearExpiredPrisonStatus (toujours une égalité stricte
+					// LÀ-BAS, à dessein : c'est elle qui détermine QUAND lever le
+					// blocage, pas quand l'afficher).
+					(p.getPrisonUntilTurn() != null) && (p.getPrisonUntilTurn().intValue() >= pGameTurnNumber));
 		}
 	}
 
