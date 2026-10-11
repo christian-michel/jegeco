@@ -3637,3 +3637,175 @@ produit ambiguë (faut-il que "Terminer le tour" bloque réellement les
 échanges dès le clic, ou le signal visuel doit-il simplement refléter
 l'intention de l'animateur sans contrainte serveur immédiate ?), à arbitrer
 par l'utilisateur.
+
+## 10-11/10/2026 - Validation dette+smartphone et troc+smartphone (pioche,
+## mort/renaissance, Commencez!/Stop!) : 4 campagnes + 2 revues à deux
+## agents, 7 bugs réels trouvés et corrigés
+
+Suite directe du chantier "Commencez !"/"Stop !" ci-dessus : l'utilisateur a
+demandé de "reporter" (valider en pratique) le comportement de la pioche, de
+l'animation mort/renaissance et des animations début/fin de tour sur les
+parties monnaie DETTE+smartphone et TROC+smartphone - ces trois mécanismes
+étaient déjà conçus pour être agnostiques du système monétaire (voir plus
+haut dans ce document et CLAUDE.md, "Pioche/carré/promotion PARTAGÉE"), mais
+n'avaient jamais été réellement exercés hors de la monnaie libre. Demande
+explicite : 3 parties par système (4/8/16 joueurs, 12 tours/5 min -
+raccourci en pratique pour rester exécutable, voir plus bas), vérification
+des animations/transactions/cohérence téléphone-animateur/stats, et une
+revue à deux agents indépendants par campagne (comme pour le chantier
+précédent).
+
+Quatre agents de contrôle lancés en parallèle (dette, troc), suivis de deux
+agents d'audit indépendants (un par système monétaire, chacun n'ayant vu ni
+le raisonnement ni les hypothèses du premier) - même protocole que pour
+b70216b ci-dessus. **7 commits de correctifs au total**, tous vérifiés par
+la session principale (relecture des diffs, `mvn clean package` sur la
+branche fusionnée) avant fusion :
+
+### Dette+smartphone (5 commits : `9b27879`→`84887b5`)
+
+1. **Aucune UI animateur pour les demandes de crédit smartphone** - le
+   bouton "Demander un crédit" côté joueur et les routes serveur
+   existaient depuis le 30/08/2026, mais rien côté `app.js`/`index.html`
+   ne les affichait ni ne permettait de les traiter : un cul-de-sac
+   complet pour un animateur utilisant l'application normalement (seul un
+   appel direct à l'API pouvait approuver une demande). Corrigé par un
+   panneau "Demandes de crédit" sur le tableau de bord (visible en dette+
+   smartphone), réutilisant telles quelles les routes serveur déjà
+   fonctionnelles.
+2. **Saisie bancaire (BANKRUPT/PRISON/CANNOT_PAY) effaçant tout le solde
+   au lieu du seul montant saisi** - `Event.applyEvent()` débitait
+   d'abord le bon montant, puis un `fallthrough` Java partagé avec QUIT/
+   DEATH remettait `jetonWeak` à 0 INCONDITIONNELLEMENT juste après, pour
+   TOUS les cas tombant dans ce bloc - correct pour une sortie définitive
+   (QUIT/DEATH), faux pour une simple saisie ciblée (le joueur reste
+   actif). Un joueur avec 50 jetons saisi de 10 se retrouvait à tort à 0
+   au lieu de 40 - détecté par une vérification de cohérence masse
+   globale / somme des jetons réels, qui a révélé une masse négative en
+   conditions réelles. Corrigé : la remise à zéro inconditionnelle est
+   désormais strictement limitée à QUIT/DEATH. 2 tests de régression
+   ajoutés à `DebtMoneySystemTest`.
+3. **"Un joueur quitte" n'enregistrait JAMAIS l'événement QUIT pour un
+   joueur sans dette en cours** - trouvé par le SECOND agent (audit),
+   contredisant l'affirmation du premier ("mécanisme vérifié correct par
+   ailleurs"). Bug SÉRIEUX et PRÉ-EXISTANT (jamais introduit par les
+   correctifs 1-2 ci-dessus, mais touchant potentiellement TOUS les modes
+   de jeu, pas seulement dette+smartphone - `curDebt<=0` est le SEUL cas
+   possible en libre et en troc, qui n'ont jamais de dette) : jamais
+   détecté jusqu'ici, probablement parce que les campagnes de test
+   précédentes (dont la campagne QUIT-continue-le-DU du 04/10/2026,
+   `verify_quit_feature.py`) déclenchaient le QUIT par un appel API
+   direct, jamais en cliquant réellement le bouton animateur. Cause
+   racine : `openPlayerQuitDialog()` enchaîne plusieurs étapes dans LA
+   MÊME `<dialog>` en rappelant `openDialog()` depuis l'intérieur du
+   `onSubmit()` de l'étape précédente, mais le gestionnaire générique de
+   `openDialog()` faisait TOUJOURS `dlg.close()` juste après `await
+   onSubmit()` - y compris quand `onSubmit()` venait de ROUVRIR la boîte
+   avec l'étape suivante, la refermant donc instantanément, sans erreur
+   visible, avant que l'animateur ait pu la remplir. Corrigé par un
+   compteur de génération (`dlgOpenSeq`) dans `openDialog()` lui-même
+   (solution générale, le seul appelant chaînant des dialogues de cette
+   façon dans tout le fichier, vérifié par grep) : le `dlg.close()`
+   générique ne s'exécute que si aucun appel imbriqué plus récent n'a
+   entre-temps fait avancer la boîte. Second bug adjacent corrigé au
+   passage : le formulaire "inventaire de départ" de ce même bouton
+   n'était jamais prérempli depuis le vrai solde smartphone (contrairement
+   à "Ne peut pas payer", déjà préremplie depuis le 18/09/2026) - risque
+   de masse monétaire FANTÔME (l'inverse du déficit du point 4 ci-dessous)
+   si l'animateur valide à 0 sans connaître le vrai solde. Corrigé par
+   réutilisation de `computeCannotPayPrefill`.
+4. **Problème signalé, NON corrigé** (décision produit) : le bouton
+   rapide "Rembourser le crédit" envoie le montant NOMINAL de la dette
+   sans jamais vérifier le solde réel du joueur à cet instant - `jetonWeak`
+   clampé à 0 côté joueur, mais la masse monétaire globale réduite du
+   montant nominal intégral → déficit fantôme. Confirmé indépendamment par
+   les DEUX agents avec des scénarios chiffrés différents - le second a
+   précisé que ce n'est PAS un cas limite nécessitant une dépense
+   intermédiaire comme le laissait entendre le premier : l'écart entre
+   `principal` (crédité en jetons) et `principal+interest` (dette
+   nominale) suffit à lui seul dès qu'un crédit a un intérêt non nul (cas
+   par défaut de l'UI) - donc systématique, pas occasionnel. Trois options
+   restent ouvertes (bloquer au solde réel, plafonner silencieusement,
+   documenter comme limite acceptable) - décision utilisateur nécessaire.
+5. **Bug de sécurité/intégrité trouvé par le second agent dans le
+   correctif du premier (panneau crédit, point 1)** : `POST .../approve`
+   et `/decline` vérifiaient le statut "pending" d'une demande via un
+   simple `get()`, PUIS appelaient `recordEvent()`, PUIS marquaient la
+   demande résolue - un contrôle-puis-écriture (TOCTOU) SANS AUCUN verrou
+   entre ces étapes. `GameService.withGameLock` protège bien l'état DE LA
+   PARTIE pendant `recordEvent`, mais jamais l'état séparé, en mémoire, de
+   `CreditRequestService`. Exactement la même famille de bug que celui
+   trouvé le 27/09/2026 sur les échanges troc (+31073 unités créées de
+   rien, voir "Pièges déjà rencontrés" plus bas) - reproduit à l'identique
+   avec un vrai test de concurrence HTTP (5 requêtes `/approve` parallèles
+   sur la même demande = 5× le crédit accordé). Corrigé par une réservation
+   atomique (`CreditRequestService.tryClaim()`, `computeIfPresent`) AVANT
+   tout appel à `recordEvent` - seul l'appelant qui gagne la course
+   continue, les autres sont rejetés (400) sans jamais toucher au moteur.
+
+### Troc+smartphone (2 commits : `a93c281`, `f94d02d`)
+
+1. **`Player.goodsCount` (tableau de bord animateur) jamais mis à jour par
+   un carré troc+smartphone** - resté figé sur la dotation de départ,
+   alors que le téléphone du joueur affichait le bon total : `checkAndCashInSquaresUnlocked`
+   ne touchait jamais ce champ (seul l'ancien mécanisme "carte-contre-
+   jetons", remplacé le 18/09/2026, et la renaissance le faisaient).
+   Corrigé en ajustant `goodsCount` du même delta exact que les cartes
+   réellement échangées, gated à `Game.MONEY_TROC` uniquement. Corrigé au
+   passage : le titre de l'écran de résultat d'un échange réussi affichait
+   "Achat réussi !" au lieu d'un intitulé propre au troc.
+2. **Deux bugs supplémentaires trouvés par le second agent** : (a) l'EN-TÊTE
+   de l'écran de confirmation d'échange restait figé sur "Confirmer
+   l'achat ?" même en troc (repéré par la session principale sur une
+   capture d'écran du premier agent, absent de son rapport) - le corps de
+   l'écran affichait pourtant déjà "Confirmer l'échange ?" correctement
+   depuis le 18/09/2026 ; cause : `SCREEN_HEADERS.scanConfirm.titleKey`
+   était une chaîne statique, écrasée à chaque `showScreen()` APRÈS que le
+   corps ait posé le bon texte - corrigé en acceptant une fonction pour
+   `titleKey` (seul écran concerné). (b) `Player.goodsCount` jamais remis
+   à 0 à un QUIT en troc+smartphone - même catégorie de bug que le
+   correctif du premier agent pour le carré, trouvé en vérifiant
+   empiriquement qu'une sortie de joueur rend bien ses cartes : son
+   inventaire réel passait bien à `{}`, mais le tableau de bord continuait
+   d'afficher son ancien nombre d'objets. Corrigé dans le même bloc qui
+   vide déjà `startingCardsJson` au QUIT.
+3. **Problème signalé, NON corrigé** (décision produit, confirmé
+   numériquement par les deux agents indépendamment) : la "richesse" troc
+   rapportée par `/report` additionne le gain de CHAQUE mort/sortie
+   successive au lieu de ne refléter que l'inventaire final - contredit
+   la règle 9 documentée (`docs/10-etape-plugins-troc.md` : "richesse
+   finale = nombre d'objets possédés EN FIN DE partie", une valeur
+   instantanée, pas cumulative). Exemple chiffré : un joueur mort une
+   fois (4 cartes, valeur 4) puis "finalisé" en fin de partie avec la
+   MÊME main (aucune carte acquise entre les deux) se voit rapporter une
+   richesse de 8, le double de son inventaire réel. Deux options restent
+   ouvertes (garder le cumul et corriger la règle écrite ; ou faire que
+   `StatsService.computeWealthByPlayer` REMPLACE au lieu d'additionner
+   pour le troc, sans toucher dette/libre) - décision utilisateur
+   nécessaire.
+
+### Vérifications transverses, confirmées par les deux campagnes
+
+Pioche/carré/promotion, mort/renaissance et Commencez!/Stop! fonctionnent
+correctement dans les deux systèmes (captures d'écran à l'appui pour
+chacun) - l'architecture déjà partagée (voir "Pioche/carré/promotion
+PARTAGÉE" dans CLAUDE.md) tenait donc bien ses promesses, les bugs trouvés
+ci-dessus étant tous dans du code ADJACENT (affichage animateur, dialogues,
+concurrence), jamais dans le cœur du mécanisme partagé lui-même. Garde
+anti-interruption des animations Commencez!/Stop! (voir le chantier
+précédent) revérifiée fonctionnelle dans les deux systèmes. Conservation
+totale des cartes (pioche + mains de tous les joueurs) revérifiée après
+carré ET après QUIT dans les deux systèmes. 82 tests verts après fusion de
+l'ensemble des 7 commits (28 geco-engine + 54 geco-server, dont 8 tests
+nouveaux : 2 dette + 4 troc + audit troc), script i18n relancé (aucune clé
+manquante fr/en).
+
+**Point de fluidité non tranché** (signalé par le second agent dette,
+budget de temps insuffisant pour l'approfondir) : la campagne principale
+dette (échanges réels via Playwright) n'a réussi que 45/253 tentatives
+d'échange (18%), attribué par le premier agent à un défaut de SON script
+(modale de carte parfois bloquée après un échec) plutôt qu'à l'application
+- plausible (un test ciblé séparé a produit 47 carrés en cascade sans
+difficulté), mais jamais confirmé de façon indépendante. Si des animateurs
+réels rapportent une difficulté à échanger à grande échelle en dette+
+smartphone, ce point mériterait d'être réexaminé en priorité.

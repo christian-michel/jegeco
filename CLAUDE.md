@@ -332,3 +332,33 @@ ajoutes, pas seulement via ce script.
   (seul système où ce champ a un sens, voir
   `docs/10-etape-plugins-troc.md` règle 9) — jamais pour dette/libre.
   76 tests toujours verts après correctif (aucune régression).
+- **Motif récurrent à surveiller** (confirmé une troisième fois le
+  11/10/2026, panneau "Demandes de crédit" dette+smartphone — voir
+  `docs/03-architecture-technique.md`, entrée du 10-11/10/2026, pour le
+  détail complet) : `GameService.withGameLock` protège l'état DE LA
+  PARTIE pendant `recordEvent`, mais tout état séparé maintenu ailleurs
+  (ex. `CreditRequestService`, une simple `ConcurrentHashMap` en mémoire)
+  n'est PAS couvert par ce verrou. Un contrôle-puis-écriture (TOCTOU) sur
+  cet état séparé — vérifier un statut "pending" puis appeler
+  `recordEvent` séparément, sans rien entre les deux — reproduit
+  exactement la même classe de bug que le 27/09/2026 ci-dessus (ici :
+  double octroi de crédit via deux approbations concurrentes). Avant
+  d'ajouter un nouveau panneau/une nouvelle route qui lit-puis-écrit un
+  état en mémoire propre à elle (pas le moteur de jeu lui-même), prévoir
+  une transition atomique dès le départ (voir
+  `CreditRequestService.tryClaim()`, `computeIfPresent`, comme modèle).
+- **Corrigé le 11/10/2026** (seconde relecture indépendante, campagne
+  dette+smartphone — voir `docs/03-architecture-technique.md` pour le
+  détail complet) : un dialogue enchaînant plusieurs étapes dans LA MÊME
+  `<dialog>` (en rappelant `openDialog()` depuis l'intérieur du
+  `onSubmit()` de l'étape précédente, voir `openPlayerQuitDialog`) se
+  faisait refermer INSTANTANÉMENT par le `dlg.close()` générique
+  d'`openDialog()`, qui s'exécutait TOUJOURS après `await onSubmit()` —
+  y compris quand `onSubmit()` venait tout juste de rouvrir la boîte avec
+  l'étape suivante. Aucune erreur visible ; le bouton "Un joueur quitte"
+  n'enregistrait tout simplement jamais l'événement QUIT pour le cas le
+  plus fréquent (joueur sans dette), silencieusement, depuis l'origine de
+  cette fonctionnalité. Corrigé par un compteur de génération
+  (`dlgOpenSeq`) dans `openDialog()` lui-même — avant d'enchaîner un
+  second `openDialog()` depuis un `onSubmit()`, vérifier que ce motif
+  n'est pas déjà couvert par ce garde-fou, ou le réutiliser tel quel.
