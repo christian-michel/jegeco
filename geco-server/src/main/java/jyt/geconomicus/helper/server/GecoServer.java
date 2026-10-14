@@ -1049,8 +1049,25 @@ public class GecoServer
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			requireGamePin(ctx, id);
 			final Game game = mGameService.startGame(id);
+			// Mise en place smartphone (14/10/2026, remonté par l'utilisateur, PDF
+			// "Retours - 20261014" : un joueur qui demande/reçoit un crédit AVANT
+			// le premier tour ("Démarrer la partie" cliqué, mais aucun "Nouveau
+			// tour" encore enregistré) voyait son crédit bien accepté côté
+			// animateur, mais JAMAIS versé sur son "Solde jetons" smartphone -
+			// voir performSmartphoneMiseEnPlaceIfNeeded() ci-dessous pour la cause
+			// exacte (Event.isSmartphoneTrackedGame() ne peut pas encore voir
+			// cette partie comme suivie par smartphone tant qu'aucun joueur n'a
+			// startingCardsJson, lui-même posé seulement ici). Avancée ICI, au
+			// moment naturel de la "mise en place" (plutôt que d'attendre le
+			// premier événement TOUR, qui ne reflète que le moment où l'animateur
+			// clique sur "Nouveau tour", potentiellement bien après que des
+			// joueurs aient déjà commencé à interagir) - l'appel équivalent au
+			// premier TOUR (voir plus bas, POST /events) reste en place tel quel,
+			// par prudence et rétrocompatibilité (idempotent, donc sans effet
+			// si déjà fait ici).
+			performSmartphoneMiseEnPlaceIfNeeded(id);
 			broadcast(id, "game_started", null); //$NON-NLS-1$
-			ctx.json(GameDetailDto.from(game));
+			ctx.json(GameDetailDto.from(mGameService.getGame(id)));
 		});
 
 		// Prolonge le tour en cours (bouton "+30s" du minuteur) : avance l'horodatage
@@ -1488,7 +1505,29 @@ public class GecoServer
 			final CreditRequestService.Request request = mCreditRequestService.findLatestForPlayer(id, player.getId());
 			if (request == null)
 			{
-				ctx.status(404);
+				// Corrigé le 14/10/2026 (remonté par l'utilisateur, PDF "Retours -
+				// 20261014", log console à l'appui) : un 404 ici signifiait
+				// auparavant "aucune demande encore faite par ce joueur", un état
+				// NORMAL et même le plus fréquent (tout joueur qui n'a jamais
+				// demandé de crédit) - jamais une vraie erreur. Or le
+				// correcteur-réseau global côté client (pushDebugLog(), voir
+				// CLAUDE.md "Système de journalisation") journalise AUTOMATIQUEMENT
+				// toute réponse HTTP non-OK comme "Requête échouée", quel que soit
+				// le code - ce 404 déclenchait donc une fausse alerte d'erreur
+				// (badge 🐞) à chaque tout premier affichage de cet écran pour
+				// CHAQUE joueur, sans qu'il se soit rien passé d'anormal. Corrigé
+				// en renvoyant 200 avec un corps JSON `null` plutôt qu'un 404 -
+				// voir renderCreditRequest() côté player-view.js, qui distingue
+				// désormais explicitement "aucune demande" (corps null) d'une
+				// vraie erreur réseau. 404 reste utilisé juste au-dessus pour une
+				// partie/un jeton réellement inconnu - ça, c'est une vraie erreur.
+				//
+				// ctx.json(null) lève une NullPointerException (Javalin refuse
+				// explicitement un argument null, vérifié en conditions réelles -
+				// 500 au lieu du 200 attendu) - ctx.result() avec le littéral
+				// JSON "null" écrit directement, même type de contenu, contourne
+				// cette limite sans y être soumis.
+				ctx.status(200).contentType("application/json").result("null"); //$NON-NLS-1$ //$NON-NLS-2$
 				return;
 			}
 			ctx.json(Dtos.CreditRequestDto.from(request));
@@ -1571,30 +1610,15 @@ public class GecoServer
 					req.counterpartyPlayerId(), req.goodsFromPlayer(), req.goodsFromCounterparty(),
 					req.weakCoins(), req.mediumCoins(), req.strongCoins(),
 					req.weakGoodsFromCounterparty(), req.mediumGoodsFromCounterparty(), req.strongGoodsFromCounterparty());
-			// Étape 3, monnaie libre, mode smartphone : à chaque TOUR enregistré,
-			// on tente de capturer le nombre de joueurs de la mise en place -
-			// sans effet en dehors du tout premier tour (voir
-			// captureDeckPlayerCountIfNeeded, entièrement idempotent). Vérifié
-			// ICI (mode smartphone actif) plutôt que dans GameService, qui n'a
-			// jamais accès aux réglages globaux.
-			if ("T".equals(req.type()) //$NON-NLS-1$
-					&& AppSettings.GAME_MODE_SMARTPHONE.equals(mAppSettings.getGameMode()))
-			{
-				mGameService.captureDeckPlayerCountIfNeeded(id);
-				// Mise en place complète (4 pioches préparées, distribution des
-				// cartes faible + dotation en jetons) - voir
-				// dealStartingHandsForLibreIfNeeded, entièrement idempotente
-				// (ne fait rien si déjà effectuée). Le catalogue est résolu ICI
-				// (GecoServer a accès à mCardCatalogService, GameService jamais
-				// directement) - regroupé par niveau, les 4 pioches (faible/
-				// moyenne/forte/tresforte) étant TOUTES préparées dès le départ
-				// (modèle simplifié, voir docs/04-etape3-catalogue-cartes.md).
-				final java.util.Map<String, List<String>> cardIdsByLevel = mCardCatalogService.list().stream()
-						.collect(java.util.stream.Collectors.groupingBy(c -> (String) c.get("niveau"), //$NON-NLS-1$
-								java.util.stream.Collectors.mapping(c -> (String) c.get("id"), //$NON-NLS-1$
-										java.util.stream.Collectors.toList())));
-				mGameService.dealStartingHandsForLibreIfNeeded(id, cardIdsByLevel);
-			}
+			// Étape 3, mode smartphone : filet de sécurité, voir
+			// performSmartphoneMiseEnPlaceIfNeeded() - la mise en place a
+			// normalement déjà eu lieu au clic sur "Démarrer la partie" (voir
+			// POST /api/games/{id}/start, 14/10/2026) ; cet appel-ci reste pour
+			// toute partie démarrée par un autre chemin (ex. anciens tests,
+			// partie reprise après redémarrage serveur) - entièrement
+			// idempotent, sans effet si déjà fait.
+			if ("T".equals(req.type())) //$NON-NLS-1$
+				performSmartphoneMiseEnPlaceIfNeeded(id);
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
 			// Animation "Mort du joueur" (26/09/2026, demande utilisateur : "à
 			// l'entre deux tours, lorsque les morts sont annoncés... les
@@ -2129,6 +2153,33 @@ public class GecoServer
 				// un joueur (POST, exemptée) ; liste/approbation/refus
 				// restent réservés à l'animateur.
 				|| (pCtx.path().endsWith("/credit-requests") && (pCtx.method() == io.javalin.http.HandlerType.POST)); //$NON-NLS-1$
+	}
+
+	/**
+	 * Mise en place smartphone (pioches + distribution de la main/des jetons
+	 * de départ) - voir {@link GameService#captureDeckPlayerCountIfNeeded}/
+	 * {@link GameService#dealStartingHandsForLibreIfNeeded}, entièrement
+	 * idempotentes (sans effet si déjà faites). Appelée depuis deux points
+	 * (voir leurs commentaires respectifs) : {@code POST /api/games/{id}/start}
+	 * (14/10/2026, point principal depuis ce correctif) et le premier
+	 * événement TOUR (filet de sécurité, ancien point d'appel unique avant ce
+	 * correctif). Sans effet si le mode smartphone n'est pas actif
+	 * globalement (réglage animateur, voir AppSettings.gameMode).
+	 */
+	private void performSmartphoneMiseEnPlaceIfNeeded(final int pGameId)
+	{
+		if (!AppSettings.GAME_MODE_SMARTPHONE.equals(mAppSettings.getGameMode()))
+			return;
+		mGameService.captureDeckPlayerCountIfNeeded(pGameId);
+		// Catalogue résolu ICI (GecoServer a accès à mCardCatalogService,
+		// GameService jamais directement) - regroupé par niveau, les 4
+		// pioches (faible/moyenne/forte/tresforte) étant TOUTES préparées dès
+		// le départ (modèle simplifié, voir docs/04-etape3-catalogue-cartes.md).
+		final java.util.Map<String, List<String>> cardIdsByLevel = mCardCatalogService.list().stream()
+				.collect(java.util.stream.Collectors.groupingBy(c -> (String) c.get("niveau"), //$NON-NLS-1$
+						java.util.stream.Collectors.mapping(c -> (String) c.get("id"), //$NON-NLS-1$
+								java.util.stream.Collectors.toList())));
+		mGameService.dealStartingHandsForLibreIfNeeded(pGameId, cardIdsByLevel);
 	}
 
 	private void requireGamePin(final Context pCtx, final int pGameId)

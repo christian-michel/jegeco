@@ -386,4 +386,43 @@ class GameServicePileConservationTest
 		assertEquals(7.2, leaderboard.get(0).value(), 0.01,
 				"le classement doit afficher une VALEUR MONÉTAIRE (jetons × weakCoinValue), pas un nombre de jetons bruts"); //$NON-NLS-1$
 	}
+
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (14/10/2026, remonté par l'utilisateur, PDF
+	 * "Retours - 20261014") : la branche ci-dessus (conversion jetons ->
+	 * unités monétaires via weakCoinValue, ajoutée pour la LIBRE le
+	 * 19/09/2026) s'appliquait par erreur aussi à la DETTE+smartphone - sa
+	 * condition ne testait que {@code Player.startingCardsJson != null},
+	 * jamais le système monétaire de la partie. Un crédit de 3 unités
+	 * monétaires accordé à un joueur dette+smartphone sur une partie dont
+	 * "Valeur d'une pièce faible" valait 0.5 affichait donc "1.5" au
+	 * classement, alors qu'en dette+smartphone 1 jeton faible = 1 unité
+	 * monétaire TOUJOURS (voir Event.java, cas NEW_CREDIT - jamais mis à
+	 * l'échelle par weakCoinValue, contrairement à la libre où ce réglage
+	 * convertit une dotation de départ RÉELLE en un nombre de jetons
+	 * PHYSIQUES). Corrigé en restreignant cette conversion à
+	 * {@code Game.MONEY_LIBRE} explicitement.
+	 */
+	@Test
+	void testLeaderboardDoesNotScaleDebtSmartphoneByWeakCoinValue() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_DEBT, 12, "AnimTest4", null, "test classement dette", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-10-14", "Ceres", 1, 180, 0.5, false, 0, false, 0.5); //$NON-NLS-1$ //$NON-NLS-2$
+		final int gameId = game.getId();
+		final Player player = sService.addPlayer(gameId, "Solo"); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(8));
+		// Crédit de 3 unités monétaires (intérêt 1, sans incidence sur ce
+		// solde) - voir Event.java, cas NEW_CREDIT : jetonWeak += principal,
+		// jamais mis à l'échelle. Valeur attendue au classement : 3 (PAS
+		// 3 * 0.5 = 1.5).
+		sService.recordEvent(gameId, "N", player.getId(), 3, 1, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		final List<Dtos.LeaderboardEntryDto> leaderboard = sService.computeLeaderboard(gameId);
+		assertEquals(1, leaderboard.size());
+		assertEquals(3.0, leaderboard.get(0).value(), 0.01,
+				"le classement dette+smartphone doit afficher le solde RÉEL en unités monétaires (1 jeton = 1 unité), jamais mis à l'échelle par weakCoinValue"); //$NON-NLS-1$
+	}
 }

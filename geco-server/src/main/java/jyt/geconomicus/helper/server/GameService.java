@@ -1754,7 +1754,7 @@ public class GameService
 			}
 			else if (game.getMoneySystem() == Game.MONEY_TROC)
 				value = p.getWeakGoods() + (4 * p.getMediumGoods()) + (16 * p.getStrongGoods());
-			else if (p.getStartingCardsJson() != null)
+			else if ((game.getMoneySystem() == Game.MONEY_LIBRE) && (p.getStartingCardsJson() != null))
 			{
 				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, PDF "Retours -
 				// 20260919" : classement affiché en JETONS au lieu d'UNITÉS
@@ -1774,6 +1774,22 @@ public class GameService
 				// retour utilisateur, la classique garde son calcul historique
 				// inchangé ci-dessous, même si elle n'utilise de toute façon jamais
 				// concrètement cet écran joueur).
+				//
+				// BUG TROUVÉ ET CORRIGÉ (14/10/2026, remonté par l'utilisateur, PDF
+				// "Retours - 20261014") : cette branche s'appliquait à tort aussi à
+				// la DETTE+smartphone (la condition ne testait que
+				// startingCardsJson, jamais le système monétaire) - un crédit de 3
+				// approuvé pour un joueur dette+smartphone avec "Valeur d'une pièce
+				// faible" = 0.5 affichait "1.5" dans ce classement, alors que le
+				// reste de l'écran (solde, voir renderDashboard côté player-view.js,
+				// corrigé le même jour) affichait correctement "3" - weakCoinValue
+				// est un réglage propre à la LIBRE (conversion valeur réelle ->
+				// nombre de jetons PHYSIQUES), jamais un facteur d'échelle pour la
+				// dette, où 1 jeton faible = 1 unité monétaire TOUJOURS (voir
+				// Event.java, cas NEW_CREDIT). Restreint désormais explicitement à
+				// MONEY_LIBRE - la dette+smartphone retombe sur le "else" générique
+				// juste en dessous (valeur brute de computeTradeBalance, déjà
+				// correcte pour elle).
 				final double weakCoinValue = (game.getWeakCoinValue() == 0) ? 1 : game.getWeakCoinValue();
 				value = Math.round(computeTradeBalance(pGameId, p.getId()) * weakCoinValue * 100) / 100.0;
 			}
@@ -1843,7 +1859,21 @@ public class GameService
 			// portent tous les échanges troc). Plus aucune exclusion par système
 			// monétaire ici : les trois partagent désormais entièrement ce
 			// mécanisme.
-			if ((game.getTurnNumber() != 1) || (game.getDeckPlayerCount() != null))
+			// Condition resserrée le 14/10/2026 (remonté par l'utilisateur, PDF
+			// "Retours - 20261014" : un crédit accordé avant le premier tour
+			// n'était jamais versé sur le smartphone du joueur) : auparavant
+			// "game.getTurnNumber() != 1" - cette méthode n'était alors appelée
+			// QUE depuis le premier événement TOUR (voir son ancien commentaire
+			// de tête), donc turnNumber valait déjà 1 à chaque appel utile.
+			// Désormais appelée AUSSI depuis POST /api/games/{id}/start (voir
+			// GecoServer.performSmartphoneMiseEnPlaceIfNeeded), AVANT que le
+			// premier tour ne soit enregistré (turnNumber encore à 0 à ce
+			// moment précis) - cette condition aurait alors toujours été vraie
+			// (0 != 1), empêchant la capture de se produire à ce nouveau point
+			// d'appel plus précoce. getDeckPlayerCount() == null suffit à lui
+			// seul à garantir l'idempotence voulue (jamais recapturé une fois
+			// posé) - le test sur turnNumber n'apportait rien de plus.
+			if (game.getDeckPlayerCount() != null)
 				return;
 			final long activeCount = game.getPlayers().stream().filter(Player::isActive).count();
 			em.getTransaction().begin();

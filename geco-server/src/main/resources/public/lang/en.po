@@ -1804,7 +1804,7 @@ msgstr "Something went wrong"
 
 # ============ Derived token balance (step 3, trading hub) ============
 msgid "trade.balance_label"
-msgstr "Trade token balance"
+msgstr "Balance"
 
 msgid "trade.balance_label_monetary"
 msgstr "Trade balance"

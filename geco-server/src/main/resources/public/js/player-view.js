@@ -519,28 +519,69 @@ async function renderDashboard() {
 		// jetons brut reste une source de confusion même accompagné d'une
 		// clarification, dès que weakCoinValue != 1). En monnaie libre, le
 		// nombre ET le libellé PRINCIPAUX deviennent donc directement la
-		// valeur monétaire - plus de ligne secondaire "soit...". La monnaie
-		// DETTE, elle, n'est pas concernée par cette demande (prix des cartes
-		// FIXE en jetons, jamais en DU) : elle garde le double affichage déjà
-		// en place (nombre de jetons + ligne "soit X unités monétaires").
+		// valeur monétaire - plus de ligne secondaire "soit...". À l'époque de
+		// CE correctif (13/09/2026), la monnaie DETTE n'était pas concernée
+		// (prix des cartes FIXE en jetons, jamais en DU) et gardait le double
+		// affichage (nombre de jetons + ligne "soit X unités monétaires") -
+		// affirmation PÉRIMÉE depuis le 17/09/2026 (voir isSmartphoneTrackedPlayer/
+		// usesMonetaryUnitsOnly ci-dessus) : la dette+smartphone, une fois
+		// suivie, rejoint elle aussi ce même affichage "unités monétaires
+		// seules" (voir le bloc juste en dessous) - seule la dette CLASSIQUE ou
+		// pas-encore-suivie garde le double affichage historique (bloc "else"
+		// plus bas).
 		if (usesMonetaryUnitsOnly()) {
-			el("balanceCardSubtitle").textContent = t("trade.balance_label_monetary");
+			// BUG TROUVÉ ET CORRIGÉ (14/10/2026, remonté par l'utilisateur, PDF
+			// "Retours - 20261014" : un crédit de 3 jetons approuvé affichait
+			// "1.5 unités monétaires" sur une partie dette+smartphone dont
+			// "Valeur d'une pièce faible" valait 0.5) : jetonsToMonetaryUnits()
+			// multiplie par game.weakCoinValue, un réglage propre à la monnaie
+			// LIBRE (conversion d'une valeur réelle en un nombre de jetons
+			// PHYSIQUES, voir computeStartingJetonsPerPlayer/cardPriceInDU côté
+			// serveur) - jamais un facteur d'échelle pour la dette, où 1 jeton
+			// faible = 1 unité monétaire TOUJOURS (Event.java, cas NEW_CREDIT :
+			// `player.setJetonWeak(player.getJetonWeak() + principal)`, un
+			// ajout direct, jamais mis à l'échelle). Ce bloc (usesMonetaryUnitsOnly
+			// === true) couvre bien la dette+smartphone UNE FOIS suivie (voir
+			// son commentaire ci-dessus, "la dette rejoint cette règle
+			// UNIQUEMENT quand elle est suivie par smartphone") - un ancien
+			// commentaire quelques lignes plus bas (désormais corrigé) affirmait
+			// à tort que "la monnaie DETTE n'est jamais concernée" par ce bloc,
+			// ce qui n'est plus vrai depuis le 17/09/2026 (voir
+			// isSmartphoneTrackedPlayer) : cette affirmation périmée a
+			// vraisemblablement motivé l'oubli de ce cas précis lors de l'ajout
+			// de jetonsToMonetaryUnits() ici. "Valeur d'une pièce faible" reste
+			// un champ réglable pour la dette (voir plugins/dette/manifest.json,
+			// defaut 1 mais jamais verrouillé) - un animateur qui le change
+			// (ex. 2) aurait vu CHAQUE solde dette+smartphone doublé à tort sans
+			// ce correctif, pas seulement ce cas de test à 0.5.
+			el("balanceCardSubtitle").textContent = isLibreGame() ? t("trade.balance_label_monetary") : t("trade.balance_label");
 			// isLibreGame() : voir roundUpIfExactlyHalf() - uniquement en
 			// monnaie libre, jamais en dette+smartphone (hors périmètre du
 			// retour utilisateur du 21/09/2026, non concernée par ce point).
 			el("balanceCardValue").textContent = isLibreGame()
 				? roundUpIfExactlyHalf(jetonsToMonetaryUnits(state.player.tradeBalance))
-				: jetonsToMonetaryUnits(state.player.tradeBalance);
+				: state.player.tradeBalance;
 			el("balanceUnitLabel").textContent = t("playerView.stat_unit_monetary");
 			el("balanceMonetaryEquiv").textContent = "";
 			el("balanceMonetaryEquiv").classList.add("hidden");
 		} else {
+			// Monnaie dette+smartphone (14/10/2026, demande utilisateur
+			// explicite, PDF "Retours - 20261014" : renommer "Solde jetons
+			// (échanges)" en "Solde", et remplacer la ligne secondaire "jetons /
+			// soit X unités monétaires" par une seule ligne "unités
+			// monétaires") - en dette+smartphone, 1 jeton faible = 1 unité
+			// monétaire TOUJOURS (voir CLAUDE.md, "Smartphone... '1 jeton
+			// faible = 1 unité monétaire'" - prix des cartes fixe en jetons
+			// faibles uniquement, jamais de jeton moyen/fort), donc le nombre
+			// affiché (state.player.tradeBalance, inchangé) EST déjà
+			// directement le nombre d'unités monétaires - plus besoin d'une
+			// ligne de conversion séparée. Troc exclu de ce bloc (voir
+			// isTrocGame() plus haut, balanceCard masquée dans ce cas).
 			el("balanceCardSubtitle").textContent = t("trade.balance_label");
 			el("balanceCardValue").textContent = state.player.tradeBalance;
-			el("balanceUnitLabel").textContent = t("playerView.stat_unit_coins");
-			el("balanceMonetaryEquiv").classList.remove("hidden");
-			el("balanceMonetaryEquiv").textContent = t("playerView.balance_monetary_equiv",
-				{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
+			el("balanceUnitLabel").textContent = t("playerView.stat_unit_monetary");
+			el("balanceMonetaryEquiv").textContent = "";
+			el("balanceMonetaryEquiv").classList.add("hidden");
 		}
 	}
 
@@ -575,7 +616,12 @@ async function renderDashboard() {
 		// appliqué ici par cohérence - delta est un mouvement de JETONS
 		// (Transaction.totalCoinsValue), jamais converti. En monnaie libre,
 		// affiché en unités monétaires comme le reste de cet écran.
-		const displayDelta = usesMonetaryUnitsOnly() ? jetonsToMonetaryUnits(delta) : delta;
+		// BUG TROUVÉ ET CORRIGÉ (14/10/2026, même cause que balanceCardValue
+		// dans renderDashboard() ci-dessus : jetonsToMonetaryUnits() ne doit
+		// JAMAIS s'appliquer en dette+smartphone, uniquement en libre - voir
+		// son commentaire détaillé). isLibreGame() plutôt que
+		// usesMonetaryUnitsOnly() seul pour ce choix de conversion précis.
+		const displayDelta = isLibreGame() ? jetonsToMonetaryUnits(delta) : delta;
 		amountEl.textContent = (displayDelta >= 0 ? "+" : "") + displayDelta;
 		amountEl.classList.toggle("negative", displayDelta < 0);
 		renderEvolutionSparkline(thisTurnTxs, state.player.id);
@@ -602,10 +648,16 @@ async function renderDashboard() {
 		// transactions d'une partie) - nouvelle clé dédiée
 		// playerView.transactions_amount_monetary pour ne jamais toucher cet
 		// autre usage.
+		// BUG TROUVÉ ET CORRIGÉ (14/10/2026, même cause que balanceCardValue
+		// dans renderDashboard() ci-dessus) : le CHOIX de libellé ("unités
+		// monétaires" vs "jetons") reste bien piloté par usesMonetaryUnitsOnly()
+		// (dette+smartphone ET libre affichent toutes deux "unités
+		// monétaires", jamais "jetons") - seule la VALEUR ne doit être
+		// multipliée par weakCoinValue (jetonsToMonetaryUnits) qu'en libre.
 		const amountLabel = latest.isGoodsTrade
 			? t("playerView.history_goods_amount_short", { n: latest.buyerWeakGoods + latest.buyerMediumGoods + latest.buyerStrongGoods })
 			: t(usesMonetaryUnitsOnly() ? "playerView.transactions_amount_monetary" : "game.transactions_amount",
-				{ n: usesMonetaryUnitsOnly() ? jetonsToMonetaryUnits(latest.totalCoinsValue) : latest.totalCoinsValue });
+				{ n: isLibreGame() ? jetonsToMonetaryUnits(latest.totalCoinsValue) : latest.totalCoinsValue });
 		el("activityText").innerHTML = t(verbKey, {
 			card: `<strong>${escapeHtmlLocal(cardName)}</strong>`,
 			name: `<strong>${escapeHtmlLocal(partner)}</strong>`,
@@ -697,9 +749,14 @@ async function renderProfile() {
 	} else if (usesMonetaryUnitsOnly()) {
 		// isLibreGame() : voir roundUpIfExactlyHalf() plus haut - même
 		// périmètre que balanceCardValue ci-dessus (onglet Accueil).
+		// BUG TROUVÉ ET CORRIGÉ (14/10/2026, même cause que renderDashboard()
+		// ci-dessus, voir son commentaire détaillé : jetonsToMonetaryUnits()
+		// multiplie par weakCoinValue, un réglage propre à la libre, jamais un
+		// facteur d'échelle en dette+smartphone où 1 jeton faible = 1 unité
+		// monétaire toujours) - même correctif ici, sur l'onglet Profil.
 		el("statCoins").textContent = isLibreGame()
 			? roundUpIfExactlyHalf(jetonsToMonetaryUnits(state.player.tradeBalance))
-			: jetonsToMonetaryUnits(state.player.tradeBalance);
+			: state.player.tradeBalance;
 		el("statCoinsUnitLabel").textContent = t("playerView.stat_unit_monetary");
 		el("statCoinsMonetaryEquiv").textContent = "";
 	} else {
@@ -1460,10 +1517,20 @@ async function renderCreditRequest() {
 	body.innerHTML = `<p style="color:var(--text-muted);font-size:0.85rem;">${t("settings.catalog_loading")}</p>`;
 	try {
 		// Une demande existe-t-elle déjà pour ce joueur (n'importe quel statut) ?
+		// Corrigé le 14/10/2026 (remonté par l'utilisateur, PDF "Retours -
+		// 20261014") : cette route renvoie désormais 200+corps `null` (plutôt
+		// qu'un 404) quand ce joueur n'a encore jamais fait de demande - un
+		// état NORMAL, pas une erreur (voir GecoServer.java pour le détail
+		// complet). `res.ok` seul ne suffit donc plus à distinguer "pas de
+		// demande" d'une vraie erreur réseau : il faut aussi vérifier que le
+		// corps n'est pas `null`.
 		const res = await fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/credit-requests`);
 		if (res.ok) {
-			renderCreditRequestStatus(await res.json());
-			return;
+			const request = await res.json();
+			if (request) {
+				renderCreditRequestStatus(request);
+				return;
+			}
 		}
 	} catch (err) {
 		// Erreur réseau (pas un simple 404 "aucune demande") : on retombe quand
@@ -1473,17 +1540,36 @@ async function renderCreditRequest() {
 	renderCreditRequestForm();
 }
 
+// Montant FIXE d'une demande de crédit smartphone (14/10/2026, demande
+// utilisateur explicite, PDF "Retours - 20261014" : "Par défaut, il est
+// écrit 10. Il faut écrire 3 et que la valeur ne soit pas modifiable.") -
+// remplace l'ancien champ libre (min=1, valeur par défaut 10, modifiable)
+// par une valeur unique imposée, jamais choisie par le joueur. Constante
+// nommée plutôt qu'un "3" répété deux fois (gabarit + soumission) - un seul
+// endroit à changer si ce montant devait un jour être revu.
+const CREDIT_REQUEST_FIXED_AMOUNT = 3;
+
 function renderCreditRequestForm() {
 	el("creditRequestBody").innerHTML = `
 		<label class="field-label" for="creditRequestAmount" data-i18n="playerView.credit_request_amount_label">Montant souhaité</label>
-		<input id="creditRequestAmount" class="field-input" type="number" min="1" value="10">
+		<input id="creditRequestAmount" class="field-input" type="number" value="${CREDIT_REQUEST_FIXED_AMOUNT}" readonly aria-readonly="true">
 		<p id="creditRequestError" class="field-error hidden"></p>
 		<button type="button" class="btn-primary btn-block" id="btnSubmitCreditRequest">${escapeHtmlLocal(t("playerView.credit_request_submit"))}</button>`;
 	el("btnSubmitCreditRequest").addEventListener("click", submitCreditRequest);
 }
 
 async function submitCreditRequest() {
-	const amount = parseInt(el("creditRequestAmount").value, 10);
+	// Toujours le montant fixe (voir CREDIT_REQUEST_FIXED_AMOUNT ci-dessus) -
+	// jamais relu depuis le champ (lecture seule désormais, mais on ne fait
+	// pas non plus confiance à sa valeur DOM par principe : un champ en
+	// lecture seule reste techniquement modifiable via les outils de
+	// développement du navigateur, jamais une vraie barrière - la SEULE
+	// garantie réelle serait côté serveur, mais /api/games/{id}/credit-requests
+	// accepte volontairement n'importe quel montant positif pour rester
+	// réutilisable si ce montant fixe devait un jour redevenir variable ;
+	// imposer la valeur ICI, au moment de la construction de la requête,
+	// suffit au besoin exprimé ("que la valeur ne soit pas modifiable").
+	const amount = CREDIT_REQUEST_FIXED_AMOUNT;
 	const errEl = el("creditRequestError");
 	if (!amount || (amount <= 0)) {
 		errEl.textContent = t("playerView.credit_request_invalid_amount");

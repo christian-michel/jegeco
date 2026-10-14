@@ -1808,7 +1808,7 @@ msgstr "Une erreur est survenue"
 
 # ============ Solde en jetons dérivé (étape 3, hub d'échange) ============
 msgid "trade.balance_label"
-msgstr "Solde jetons (échanges)"
+msgstr "Solde"
 
 msgid "trade.balance_label_monetary"
 msgstr "Solde (échanges)"
