@@ -565,23 +565,31 @@ async function renderDashboard() {
 			el("balanceMonetaryEquiv").textContent = "";
 			el("balanceMonetaryEquiv").classList.add("hidden");
 		} else {
-			// Monnaie dette+smartphone (14/10/2026, demande utilisateur
-			// explicite, PDF "Retours - 20261014" : renommer "Solde jetons
-			// (échanges)" en "Solde", et remplacer la ligne secondaire "jetons /
-			// soit X unités monétaires" par une seule ligne "unités
-			// monétaires") - en dette+smartphone, 1 jeton faible = 1 unité
-			// monétaire TOUJOURS (voir CLAUDE.md, "Smartphone... '1 jeton
-			// faible = 1 unité monétaire'" - prix des cartes fixe en jetons
-			// faibles uniquement, jamais de jeton moyen/fort), donc le nombre
-			// affiché (state.player.tradeBalance, inchangé) EST déjà
-			// directement le nombre d'unités monétaires - plus besoin d'une
-			// ligne de conversion séparée. Troc exclu de ce bloc (voir
-			// isTrocGame() plus haut, balanceCard masquée dans ce cas).
+			// CORRECTIF (15/10/2026, trouvé en seconde relecture indépendante du
+			// correctif du 14/10/2026 ci-dessus, PDF "Retours - 20261014") : ce
+			// bloc "else" est celui où usesMonetaryUnitsOnly() est FAUX, donc la
+			// dette CLASSIQUE ou - cas réel et atteignable - un joueur dette
+			// SMARTPHONE pas encore "tracké" (hasStartingAllocation encore faux,
+			// avant que performSmartphoneMiseEnPlaceIfNeeded() n'ait tourné,
+			// c'est-à-dire tant que l'animateur n'a pas encore cliqué "Démarrer
+			// la partie" - fenêtre d'attente explicitement décrite par
+			// l'utilisateur dans le correctif n°2 du 14/10/2026). Un commentaire
+			// précédent affirmait à tort l'inverse ("Monnaie dette+smartphone")
+			// et avait fait remplacer ici l'affichage "jetons + soit X unités
+			// monétaires" par "unités monétaires" seules - incohérent avec
+			// renderProfile() (onglet Profil), resté lui sur l'ancien affichage
+			// pour ce même cas. Restauré à l'identique de renderProfile()/de
+			// l'ancien comportement : ce bloc ne concerne QUE la dette classique
+			// ou pas-encore-trackée, jamais la dette+smartphone une fois trackée
+			// (qui passe par le bloc usesMonetaryUnitsOnly() ci-dessus). Troc
+			// exclu de ce bloc (voir isTrocGame() plus haut, balanceCard masquée
+			// dans ce cas).
 			el("balanceCardSubtitle").textContent = t("trade.balance_label");
 			el("balanceCardValue").textContent = state.player.tradeBalance;
-			el("balanceUnitLabel").textContent = t("playerView.stat_unit_monetary");
-			el("balanceMonetaryEquiv").textContent = "";
-			el("balanceMonetaryEquiv").classList.add("hidden");
+			el("balanceUnitLabel").textContent = t("playerView.stat_unit_coins");
+			el("balanceMonetaryEquiv").classList.remove("hidden");
+			el("balanceMonetaryEquiv").textContent = t("playerView.balance_monetary_equiv",
+				{ n: jetonsToMonetaryUnits(state.player.tradeBalance) });
 		}
 	}
 

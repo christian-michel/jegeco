@@ -425,4 +425,69 @@ class GameServicePileConservationTest
 		assertEquals(3.0, leaderboard.get(0).value(), 0.01,
 				"le classement dette+smartphone doit afficher le solde RÉEL en unités monétaires (1 jeton = 1 unité), jamais mis à l'échelle par weakCoinValue"); //$NON-NLS-1$
 	}
+
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (15/10/2026, seconde relecture indépendante du
+	 * correctif du 14/10/2026 ci-dessus, pour le MÊME symptôme utilisateur -
+	 * un crédit accordé avant que la partie n'ait jamais démarré, jamais versé
+	 * sur le smartphone - reproduit cette fois en HTTP réel plutôt qu'en
+	 * relecture de code). Le correctif du 14/10/2026 déplaçait l'appel à
+	 * {@code GameService.captureDeckPlayerCountIfNeeded}/
+	 * {@code dealStartingHandsForLibreIfNeeded} ("la mise en place") à POST
+	 * /api/games/{id}/start - mais cette route HTTP n'est en réalité JAMAIS
+	 * appelée par l'interface animateur réelle (voir btnStartGame.onclick
+	 * dans app.js, qui enregistre directement un événement TOUR) ; et pour
+	 * POST .../events, l'appel restait placé APRÈS {@code recordEvent()} et
+	 * limité au type "T" - donc TOUJOURS trop tard pour un crédit (direct ou
+	 * via demande+approbation du joueur) enregistré alors qu'aucun événement
+	 * TOUR n'a encore jamais eu lieu. Ce test documente l'invariant que
+	 * {@code GecoServer} doit désormais garantir (voir
+	 * performSmartphoneMiseEnPlaceIfNeeded(), appelée AVANT tout
+	 * recordEvent() depuis le 15/10/2026, dans les deux routes concernées) :
+	 * la mise en place DOIT avoir eu lieu AVANT le crédit, jamais après -
+	 * {@code Event.applyEvent()} (cas NEW_CREDIT) ne recrédite jamais
+	 * rétroactivement un événement déjà appliqué, quelle que soit la mise en
+	 * place effectuée ensuite.
+	 */
+	@Test
+	void testCreditGrantedBeforeMiseEnPlaceNeverCreditsJetonWeakEvenAfterwards() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_DEBT, 12, "AnimTest5", null, "test ordre mise en place", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-10-15", "Ceres", 1, 180, 0.5, false, 0, false, 0.5); //$NON-NLS-1$ //$NON-NLS-2$
+		final int gameId = game.getId();
+		final Player player = sService.addPlayer(gameId, "Anna"); //$NON-NLS-1$
+
+		// Reproduction du bug : crédit accordé AVANT tout événement TOUR, donc
+		// avant toute mise en place (deckPlayerCount/smartphoneCardPileJson
+		// encore nuls - isSmartphoneTrackedGame() encore FAUX pour toute la
+		// partie, voir Event.java).
+		sService.recordEvent(gameId, "N", player.getId(), 3, 1, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		Player reloaded = sService.getGame(gameId).getPlayers().stream().filter(p -> p.getId().equals(player.getId())).findFirst().orElseThrow();
+		assertEquals(3, reloaded.getCurDebt(), "la dette doit être enregistrée normalement, quel que soit l'état de la mise en place"); //$NON-NLS-1$
+		assertEquals(0, reloaded.getJetonWeak(),
+				"BUG CONFIRMÉ (comportement attendu avant tout correctif) : un crédit accordé avant toute mise en place ne peut pas créditer jetonWeak, puisqu'aucun joueur n'a encore startingCardsJson"); //$NON-NLS-1$
+
+		// La partie démarre ENSUITE (premier TOUR, qui déclenche la mise en
+		// place côté GecoServer - simulée ici directement) : ceci ne doit
+		// JAMAIS rejouer/corriger rétroactivement le crédit déjà appliqué
+		// ci-dessus - c'est exactement la perte DÉFINITIVE que le correctif du
+		// 15/10/2026 empêche en amont (mise en place désormais appelée AVANT
+		// recordEvent, jamais après).
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(8));
+		reloaded = sService.getGame(gameId).getPlayers().stream().filter(p -> p.getId().equals(player.getId())).findFirst().orElseThrow();
+		assertEquals(0, reloaded.getJetonWeak(),
+				"une mise en place tardive ne doit JAMAIS rejouer un crédit déjà appliqué - confirme que la seule protection valable est d'appeler la mise en place AVANT le premier événement, jamais après (voir GecoServer.performSmartphoneMiseEnPlaceIfNeeded, appelée désormais avant recordEvent() dans les deux routes concernées)"); //$NON-NLS-1$
+
+		// Preuve que l'ORDRE est bien la seule variable en jeu : un DEUXIÈME
+		// crédit, accordé maintenant que la mise en place a eu lieu (ordre
+		// correct, celui que GecoServer garantit désormais pour TOUT crédit,
+		// même le tout premier), crédite bien jetonWeak normalement.
+		sService.recordEvent(gameId, "N", player.getId(), 5, 1, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		reloaded = sService.getGame(gameId).getPlayers().stream().filter(p -> p.getId().equals(player.getId())).findFirst().orElseThrow();
+		assertEquals(8, reloaded.getCurDebt(), 0.01); //$NON-NLS-1$
+		assertEquals(5, reloaded.getJetonWeak(),
+				"un crédit accordé APRÈS la mise en place doit bien créditer jetonWeak - seul le crédit accordé AVANT (plus haut) reste perdu, jamais les suivants"); //$NON-NLS-1$
+	}
 }

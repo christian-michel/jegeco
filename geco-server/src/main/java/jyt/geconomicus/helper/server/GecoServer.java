@@ -1444,6 +1444,20 @@ public class GecoServer
 			final Dtos.ApproveCreditRequestRequest req = ctx.bodyAsClass(Dtos.ApproveCreditRequestRequest.class);
 			try
 			{
+				// BUG TROUVÉ ET CORRIGÉ (15/10/2026, voir le commentaire détaillé sur
+				// le même correctif dans POST .../events plus bas) : cette route
+				// appelle mGameService.recordEvent() DIRECTEMENT - jamais via POST
+				// .../events - donc jamais couverte par le correctif du 14/10/2026
+				// (qui ne touchait que l'AUTRE route). Un crédit DEMANDÉ PAR LE
+				// JOUEUR (bouton "Demander un crédit", visible même avant que la
+				// partie n'ait jamais démarré, voir btnOpenCreditRequest/isDebtGame()
+				// dans player-view.js) puis approuvé ICI par l'animateur AVANT que
+				// "Démarrer la partie" n'ait jamais été cliqué restait donc
+				// définitivement invisible sur le smartphone du joueur (jetonWeak
+				// jamais crédité, même après le démarrage ultérieur de la partie) -
+				// reproduit en HTTP réel. Même correctif : performSmartphoneMiseEnPlaceIfNeeded()
+				// (idempotente) appelée ICI avant recordEvent().
+				performSmartphoneMiseEnPlaceIfNeeded(id);
 				mGameService.recordEvent(id, "N", request.playerId(), req.principal(), req.interest(), 0, 0, 0, //$NON-NLS-1$
 						null, 0, 0, 0, 0, 0, 0, 0, 0);
 			}
@@ -1605,20 +1619,41 @@ public class GecoServer
 			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
 			requireGamePin(ctx, id);
 			final RecordEventRequest req = ctx.bodyAsClass(RecordEventRequest.class);
+			// BUG TROUVÉ ET CORRIGÉ (15/10/2026, seconde relecture indépendante du
+			// correctif du 14/10/2026 ci-dessus, campagne de test réelle HTTP) : le
+			// correctif du 14/10/2026 avançait la mise en place à POST
+			// /api/games/{id}/start - mais CETTE route (POST .../events) n'est en
+			// réalité JAMAIS appelée APRÈS lui en pratique : "Démarrer la partie"
+			// côté animateur (voir btnStartGame.onclick dans app.js) n'appelle PAS
+			// /start, il enregistre directement un événement TOUR ICI - et c'était
+			// déjà vrai AVANT ce correctif. L'appel à performSmartphoneMiseEnPlaceIfNeeded()
+			// se faisait donc toujours APRÈS mGameService.recordEvent(...) ci-dessous
+			// (et seulement pour le type "T") - beaucoup trop tard pour un crédit
+			// (type "N") enregistré ALORS QUE LA PARTIE N'A JAMAIS ENCORE ÉTÉ
+			// DÉMARRÉE (aucun événement TOUR jamais enregistré) : Event.applyEvent(),
+			// cas NEW_CREDIT, vérifie isSmartphoneTrackedGame(game) - FAUX à ce
+			// moment précis puisqu'AUCUN joueur n'a encore startingCardsJson - le
+			// principal est donc ajouté à curDebt (dette) mais JAMAIS à jetonWeak
+			// (solde smartphone), et cette perte est DÉFINITIVE : la mise en place
+			// qui suit (déclenchée par le "T" du "Démarrer la partie" venant APRÈS)
+			// ne rejoue jamais les événements déjà appliqués. Reproduit en HTTP réel
+			// (partie dette+smartphone, crédit demandé+approuvé AVANT tout "Démarrer
+			// la partie" : curDebt=3 mais jetonWeak=0 et tradeBalance=0, y compris
+			// APRÈS avoir démarré la partie ensuite). Corrigé en appelant cette
+			// méthode (entièrement idempotente, sans effet si déjà faite) ICI, AVANT
+			// mGameService.recordEvent() - pour TOUT type d'événement, pas seulement
+			// "T" : garantit que la mise en place a déjà eu lieu avant que le PREMIER
+			// événement quel qu'il soit (crédit direct inclus) ne soit appliqué,
+			// quel que soit l'ordre réel des clics de l'animateur. Voir aussi
+			// POST .../credit-requests/{requestId}/approve plus haut, qui appelle
+			// mGameService.recordEvent() directement sans jamais passer par cette
+			// route - même correctif appliqué là-bas séparément.
+			performSmartphoneMiseEnPlaceIfNeeded(id);
 			final Event event = mGameService.recordEvent(id, req.type(), req.playerId(), req.principal(),
 					req.interest(), req.weakCards(), req.mediumCards(), req.strongCards(),
 					req.counterpartyPlayerId(), req.goodsFromPlayer(), req.goodsFromCounterparty(),
 					req.weakCoins(), req.mediumCoins(), req.strongCoins(),
 					req.weakGoodsFromCounterparty(), req.mediumGoodsFromCounterparty(), req.strongGoodsFromCounterparty());
-			// Étape 3, mode smartphone : filet de sécurité, voir
-			// performSmartphoneMiseEnPlaceIfNeeded() - la mise en place a
-			// normalement déjà eu lieu au clic sur "Démarrer la partie" (voir
-			// POST /api/games/{id}/start, 14/10/2026) ; cet appel-ci reste pour
-			// toute partie démarrée par un autre chemin (ex. anciens tests,
-			// partie reprise après redémarrage serveur) - entièrement
-			// idempotent, sans effet si déjà fait.
-			if ("T".equals(req.type())) //$NON-NLS-1$
-				performSmartphoneMiseEnPlaceIfNeeded(id);
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
 			// Animation "Mort du joueur" (26/09/2026, demande utilisateur : "à
 			// l'entre deux tours, lorsque les morts sont annoncés... les
@@ -2159,12 +2194,36 @@ public class GecoServer
 	 * Mise en place smartphone (pioches + distribution de la main/des jetons
 	 * de départ) - voir {@link GameService#captureDeckPlayerCountIfNeeded}/
 	 * {@link GameService#dealStartingHandsForLibreIfNeeded}, entièrement
-	 * idempotentes (sans effet si déjà faites). Appelée depuis deux points
-	 * (voir leurs commentaires respectifs) : {@code POST /api/games/{id}/start}
-	 * (14/10/2026, point principal depuis ce correctif) et le premier
-	 * événement TOUR (filet de sécurité, ancien point d'appel unique avant ce
-	 * correctif). Sans effet si le mode smartphone n'est pas actif
-	 * globalement (réglage animateur, voir AppSettings.gameMode).
+	 * idempotentes (sans effet si déjà faites). Appelée depuis {@code POST
+	 * /api/games/{id}/start} (14/10/2026) et, depuis le 15/10/2026, AVANT
+	 * (jamais après) tout enregistrement d'événement - {@code POST
+	 * .../events} (n'importe quel type, plus seulement "T") ET {@code POST
+	 * .../credit-requests/{requestId}/approve} (qui appelle
+	 * {@code GameService.recordEvent()} directement, sans jamais passer par
+	 * la route précédente).
+	 * <p>
+	 * BUG TROUVÉ ET CORRIGÉ (15/10/2026, seconde relecture indépendante,
+	 * campagne de test HTTP réelle) : le correctif du 14/10/2026 avait
+	 * déplacé cet appel à POST /start (jamais appelé par l'interface réelle,
+	 * voir btnStartGame.onclick dans app.js, qui enregistre directement un
+	 * événement TOUR sans jamais appeler /start) et, pour POST .../events,
+	 * seulement APRÈS {@code recordEvent()} et seulement pour le type "T" -
+	 * beaucoup trop tard pour un crédit (direct ou via demande/approbation)
+	 * enregistré alors qu'AUCUN événement TOUR n'a encore jamais eu lieu :
+	 * {@code Event.applyEvent()}, cas NEW_CREDIT, vérifie
+	 * {@code isSmartphoneTrackedGame()} - FAUX à ce moment précis - et cette
+	 * perte (jetonWeak jamais crédité) est DÉFINITIVE, une mise en place
+	 * ultérieure ne rejouant jamais les événements déjà appliqués. Reproduit
+	 * en HTTP réel (curDebt=3 mais jetonWeak=0/tradeBalance=0, y compris
+	 * après démarrage ultérieur de la partie). Corrigé en appelant
+	 * systématiquement cette méthode (idempotente, donc sans risque même
+	 * appelée à chaque requête) AVANT tout {@code recordEvent()}, aux DEUX
+	 * points d'appel concernés - garantit que la mise en place a toujours
+	 * déjà eu lieu avant le tout premier événement, quel qu'il soit et quel
+	 * que soit l'ordre réel des actions de l'animateur/des joueurs.
+	 * <p>
+	 * Sans effet si le mode smartphone n'est pas actif globalement (réglage
+	 * animateur, voir AppSettings.gameMode).
 	 */
 	private void performSmartphoneMiseEnPlaceIfNeeded(final int pGameId)
 	{
