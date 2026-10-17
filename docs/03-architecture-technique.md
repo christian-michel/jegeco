@@ -3809,3 +3809,82 @@ d'échange (18%), attribué par le premier agent à un défaut de SON script
 difficulté), mais jamais confirmé de façon indépendante. Si des animateurs
 réels rapportent une difficulté à échanger à grande échelle en dette+
 smartphone, ce point mériterait d'être réexaminé en priorité.
+
+### 17/10/2026 — "Phase 0" post-diffusion : correction du bug "Annuler" (dette+smartphone)
+
+Première étape d'une feuille de route de préparation à la diffusion externe
+(README, installation facile, remontée de bugs, future monnaie MDBC -
+discutée avec l'utilisateur ce jour, voir le chat pour le plan complet).
+L'utilisateur a demandé de traiter en priorité le bug "Annuler" déjà
+documenté dans `CLAUDE.md` ("Pièges déjà rencontrés", identifié le
+27/09/2026) avant tout le reste.
+
+**Analyse** : ce bug recouvrait en réalité DEUX causes distinctes, jamais
+démêlées jusqu'ici :
+1. Un achat/vente smartphone (`Transaction`) n'est pas un `Event`, donc
+   n'est jamais rejoué par `Game.recomputeAll()` - annuler un événement
+   sans rapport peut remettre les jetons d'un joueur à leur valeur
+   d'avant un achat déjà effectué. **Nécessite un vrai redesign du rejeu**
+   (faire que `Transaction` soit elle aussi rejouable, en plus des
+   `Event`) - décision produit non triviale, laissée en l'état, décision
+   utilisateur toujours nécessaire avant de s'y attaquer.
+2. En dette+smartphone spécifiquement, chaque rejeu réappliquait aussi les
+   crédits (`NEW_CREDIT`), qui rajoutent leur principal aux jetons à
+   CHAQUE rejeu (mesuré à l'époque : "3 'Annuler' après un crédit de 10
+   unités font passer les jetons de 10 à 40"). Cause, une fois le code
+   relu en détail : `Game.recomputeAll()` remet déjà à zéro `curDebt`/
+   `curInterest`/`active`/`quit`/`visitedBank`/`prisonUntilTurn` avant de
+   rejouer tout l'historique depuis le début, mais jamais `jetonWeak`/
+   `jetonMedium`/`jetonStrong` - alors qu'`Event.applyEvent()`, cas
+   NEW_CREDIT (dette+smartphone), fait `jetonWeak += principal` (un AJOUT
+   relatif, exactement comme `curDebt += principal` juste à côté, mais SANS
+   bénéficier de la même remise à zéro). Cette seconde cause, elle, est un
+   simple oubli mécanique, corrigeable immédiatement sans attendre le
+   redesign plus large du point 1 - c'est celle traitée aujourd'hui.
+
+**Correctif** : remise à zéro de `jetonWeak`/`jetonMedium`/`jetonStrong`
+dans `Game.recomputeAll()`, au même endroit que les autres champs dérivés
+- mais **restreinte explicitement à `Game.MONEY_DEBT`**, jamais appliquée
+telle quelle à la monnaie libre. Une première version non restreinte a
+cassé 3 tests existants (`StatsServiceExchangeStatsTest`, détecté avant
+toute mise en production, jamais en usage réel) : en monnaie libre, la
+dotation de départ (7 unités, `GameService.dealStartingHandsForLibreIfNeeded`)
+est posée en DEHORS de tout événement - aucun événement ne la recrée au
+début du rejeu. Tant qu'aucun `WEALTH_CHECKPOINT`/`DEATH` n'a encore eu
+lieu pour un joueur donné (typiquement le tout premier point "tour 1"
+d'un graphique historique), une remise à zéro aveugle écrasait à tort
+cette dotation réelle par 0 avant que le premier `WEALTH_CHECKPOINT` ne la
+rétablisse plus tard dans le même rejeu (mesuré : masse "tour 1" passée de
+14, pour 2 joueurs, à 0). Analyse plus poussée : en monnaie libre,
+`WEALTH_CHECKPOINT` et le cas `DEATH` affectent TOUJOURS ces trois champs
+par une AFFECTATION absolue (valeur transportée par l'événement lui-même,
+jamais dépendante de l'état courant du joueur) - une remise à zéro
+préalable n'y change donc rigoureusement rien d'utile, contrairement à la
+dette qui n'a PAR CONSTRUCTION aucun point de contrôle absolu en cours de
+partie (jamais de dotation gratuite, QUE des ajouts/retraits relatifs
+NEW_CREDIT/INTEREST_ONLY/saisies) - d'où le besoin réel de cette remise à
+zéro, mais pour elle seule.
+
+**Vérifications** : nouveau test de régression
+(`GameServicePileConservationTest.testUndoOfUnrelatedEventNeverDuplicatesDebtSmartphoneCredit`)
+reproduisant EXACTEMENT le scénario documenté (crédit de 10, 3 "Annuler"
+sur des événements sans rapport) - confirmé en échec AVANT correctif
+(10→20 dès la première annulation), confirmé stable à 10 après. Suite
+complète : 244/244 tests verts (aucune régression, y compris les tests
+"module Galilée"/masse monétaire en libre, une fois le correctif restreint
+à la dette). Reproduction HTTP réelle via le vrai bouton "Annuler"
+(`POST /api/games/{id}/undo`, Playwright + fetch direct) : solde confirmé
+stable à 10 après 3 annulations successives. Vérification complémentaire
+du graphique "module Galilée" (`GET /wealth-over-time`) sur une partie
+libre réelle : comportement inchangé, confirmé indépendant de ce
+correctif (ce graphique dérive ses points de `WEALTH_CHECKPOINT`
+directement, jamais de `player.jetonWeak`).
+
+**Reste non corrigé, documenté séparément** (voir `CLAUDE.md`, même
+entrée, et `docs/13-etape3-etat-et-feuille-de-route.md`, item 4bis) : la
+cause n°1 ci-dessus (achat/vente non rejouée) et un bug distinct sur le
+graphique "Évolution de la masse monétaire" (`StatsService.computeMoneyMassHistory`,
+"Tour 1" affiche la masse finale) - confirmé aujourd'hui comme ayant une
+cause DIFFÉRENTE de celle corrigée ici (`Game.moneyMass`, lui, a toujours
+été correctement remis à zéro avant rejeu, y compris pour la dette) -
+cause réelle encore à investiguer séparément si souhaité.

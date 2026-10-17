@@ -514,6 +514,60 @@ public class Game implements Serializable
 			// chaque PRISON rejoué : la remise à zéro ci-dessous suffit à le
 			// garder exact, sans redesign plus profond du rejeu.
 			player.setPrisonUntilTurn(null);
+			// jetonWeak/jetonMedium/jetonStrong, DETTE UNIQUEMENT (17/10/2026,
+			// "Phase 0" de la feuille de route post-diffusion - voir CLAUDE.md,
+			// "Pièges déjà rencontrés", entrée "Connu, non corrigé" du
+			// 27/09/2026) : remis à zéro ici, comme les champs juste au-dessus -
+			// BUG RÉEL CONFIRMÉ ET CORRIGÉ (mesuré à l'époque : "3 'Annuler'
+			// après un crédit de 10 unités font passer les jetons de 10 à 40",
+			// soit +10 par annulation d'un événement SANS AUCUN RAPPORT avec ce
+			// crédit - reproduit à l'identique par
+			// GameServicePileConservationTest.testUndoOfUnrelatedEventNeverDuplicatesDebtSmartphoneCredit
+			// AVANT ce correctif). Cause : Event.applyEvent(), cas NEW_CREDIT
+			// (dette+smartphone uniquement), fait `jetonWeak += principal` (un
+			// AJOUT relatif, jamais une AFFECTATION absolue) - sans cette remise
+			// à zéro, chaque rejeu COMPLET de l'historique (déclenché par
+			// GameService.deleteEvent/editEvent/undoLastEvent à chaque
+			// modification, y compris d'un événement totalement différent)
+			// rempilait un nouvel ajout sur la valeur déjà là depuis le rejeu
+			// PRÉCÉDENT, jamais une vraie reconstruction depuis zéro comme pour
+			// curDebt juste à côté (qui n'a jamais eu ce défaut : NEW_CREDIT fait
+			// aussi `curDebt += principal`, mais curDebt EST bien remis à zéro
+			// ici). INTEREST_ONLY/la saisie BANKRUPT-PRISON-CANNOT_PAY-
+			// REIMB_CREDIT (des SOUSTRACTIONS relatives, même mécanisme, toutes
+			// propres à la dette) ont le même défaut, corrigé par la même remise
+			// à zéro.
+			//
+			// RESTREINT EXPLICITEMENT À MONEY_DEBT - PREMIÈRE VERSION DE CE
+			// CORRECTIF (non restreinte) CASSAIT LA LIBRE, CORRIGÉ DANS LA
+			// FOULÉE (régression détectée par la suite de tests existante,
+			// StatsServiceExchangeStatsTest, jamais en production) : en monnaie
+			// libre, la dotation de départ (7 unités, voir
+			// GameService.dealStartingHandsForLibreIfNeeded) est posée en DEHORS
+			// de tout événement - aucun événement ne la "recrée" au début du
+			// rejeu. Tant qu'aucun WEALTH_CHECKPOINT/DEATH n'a encore eu lieu
+			// pour ce joueur (typiquement : au tout premier point "tour 1" d'un
+			// graphique historique, voir StatsService.computeWealthOverTime/
+			// computeMoneyMassDetailHistory, qui appellent recomputeAll()), une
+			// remise à zéro AVEUGLE écrasait à tort cette dotation réelle par 0,
+			// avant que le premier WEALTH_CHECKPOINT ne la rétablisse plus tard
+			// dans le même rejeu - mesuré : masse "tour 1" passée de 14 (7+7
+			// pour 2 joueurs) à 0. Sans risque équivalent pour la dette : son
+			// "tour 1" démarre toujours à 0 jeton par construction (aucune
+			// dotation gratuite, voir NEW_CREDIT ci-dessus - la dette emprunte,
+			// elle ne reçoit jamais rien gratuitement). Pour la LIBRE, aucune
+			// remise à zéro n'est de toute façon nécessaire : WEALTH_CHECKPOINT
+			// et le cas DEATH y affectent TOUJOURS ces trois champs par une
+			// AFFECTATION absolue (valeur transportée par l'événement lui-même,
+			// jamais dépendante de l'état courant du joueur) - le comportement
+			// déjà en place avant ce correctif (jamais remis à zéro) reste donc
+			// exact pour elle, inchangé ici.
+			if (moneySystem == MONEY_DEBT)
+			{
+				player.setJetonWeak(0);
+				player.setJetonMedium(0);
+				player.setJetonStrong(0);
+			}
 		}
 		interestGained = 0;
 		moneyMass = 0;

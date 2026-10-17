@@ -297,22 +297,56 @@ ajoutes, pas seulement via ce script.
   tous les deux passer (jusqu'à +31073 unités monétaires créées de rien,
   mesuré en HTTP réel). Corrigé par `GameService.withGameLock` (verrou en
   mémoire par partie, voir son commentaire pour le détail).
-- **Connu, non corrigé** (identifié le 27/09/2026, campagne de test 2/4/10
-  joueurs) : "Annuler"/supprimer/éditer un événement rejoue l'historique
-  et écrase les jetons du joueur via un point de contrôle de richesse —
-  mais un achat/vente smartphone n'est PAS un événement. Annuler un
-  événement sans rapport peut donc remettre les jetons d'un joueur à leur
-  valeur d'avant un achat déjà effectué, sans annuler le transfert de
-  carte associé (l'acheteur obtient la carte gratuitement). Plus grave en
-  dette+smartphone : chaque rejeu réapplique aussi les crédits
-  (NEW_CREDIT), qui rajoutent leur principal aux jetons à CHAQUE rejeu —
-  mesuré : 3 "Annuler" après un crédit de 10 unités font passer les
-  jetons de 10 à 40. Nécessite un redesign du rejeu (piste envisagée, non
+- **Corrigé le 17/10/2026** ("Phase 0" de la feuille de route post-
+  diffusion, partie du bug identifié le 27/09/2026 ci-dessous - voir
+  `docs/13-etape3-etat-et-feuille-de-route.md` pour le plan complet) :
+  en dette+smartphone, "Annuler"/supprimer/éditer un événement SANS AUCUN
+  RAPPORT avec un crédit déjà accordé faisait grandir le solde physique du
+  joueur (`Player.jetonWeak`) à CHAQUE annulation — mesuré à l'époque :
+  "3 'Annuler' après un crédit de 10 unités font passer les jetons de 10 à
+  40". Cause : `Game.recomputeAll()` (le rejeu complet de l'historique,
+  déclenché par `GameService.deleteEvent`/`editEvent`/`undoLastEvent` à
+  CHAQUE modification, même d'un événement totalement différent) remettait
+  déjà à zéro `curDebt`/`curInterest`/`active`/`quit`/`visitedBank`/
+  `prisonUntilTurn` avant de rejouer, mais jamais `jetonWeak`/
+  `jetonMedium`/`jetonStrong` — or `Event.applyEvent()`, cas NEW_CREDIT
+  (dette+smartphone), fait `jetonWeak += principal` (un AJOUT relatif,
+  jamais une affectation absolue) : sans remise à zéro préalable, chaque
+  rejeu rempilait un nouvel ajout sur la valeur déjà là depuis le rejeu
+  PRÉCÉDENT. Corrigé en remettant ces trois champs à zéro au même endroit,
+  **restreint explicitement à `Game.MONEY_DEBT`** — une première version
+  non restreinte cassait la monnaie LIBRE (régression détectée par la
+  suite de tests existante avant toute mise en production, jamais en
+  usage réel) : la dotation de départ libre (7 unités) est posée en DEHORS
+  de tout événement, et `WEALTH_CHECKPOINT`/`DEATH` (libre) affectent
+  TOUJOURS ces champs par une affectation absolue déjà replay-safe — la
+  dette, elle, n'a par construction AUCUN de ces points de contrôle
+  absolus en cours de partie (jamais de dotation gratuite, QUE des ajouts/
+  retraits relatifs), d'où le besoin réel de cette remise à zéro, mais
+  pour elle seule. Vérifié par un nouveau test de régression
+  (`GameServicePileConservationTest.testUndoOfUnrelatedEventNeverDuplicatesDebtSmartphoneCredit`,
+  reproduit le bug AVANT correctif puis confirme sa disparition APRÈS) +
+  une reproduction HTTP réelle via le vrai bouton "Annuler"
+  (`POST /api/games/{id}/undo`) + la suite complète (244 tests, aucune
+  régression, y compris les tests "module Galilée"/masse monétaire en
+  libre).
+  **Reste non corrigé** (la seconde moitié du bug du 27/09/2026, distincte
+  et plus profonde — un VRAI redesign du rejeu, pas un simple oubli de
+  remise à zéro, décision utilisateur toujours en attente) : un achat/
+  vente smartphone n'est PAS un événement (c'est une `Transaction`), donc
+  n'est jamais rejoué par `recomputeAll()` — annuler un événement sans
+  rapport peut donc remettre les jetons d'un joueur à leur valeur d'avant
+  un achat déjà effectué, sans annuler le transfert de carte associé
+  (l'acheteur obtient la carte gratuitement). Piste envisagée, non
   appliquée : ajuster les jetons ACTUELS par la différence entre rejouer
   avec/sans l'événement retiré, plutôt que de laisser le rejeu écraser
-  leur valeur) — décision utilisateur en attente. Bug mineur lié : le
-  graphique "masse monétaire" affiche pour "Tour 1" la masse FINALE de la
-  partie au lieu de la masse réelle à ce tour (même mécanisme de rejeu).
+  leur valeur. Bug mineur distinct, également non corrigé (vérifié le
+  17/10/2026 : PAS la même cause que celle corrigée ci-dessus — la masse
+  monétaire globale `Game.moneyMass` a toujours été correctement remise à
+  zéro avant rejeu, y compris pour la dette) : le graphique "Évolution de
+  la masse monétaire" (`StatsService.computeMoneyMassHistory`) affiche
+  pour "Tour 1" la masse FINALE de la partie au lieu de la masse réelle à
+  ce tour — cause réelle encore à investiguer séparément.
 - **Corrigé le 10/10/2026** (campagne de validation troc+smartphone, 3
   parties 4/8/16 joueurs/12 tours, preuve concrète via API+Playwright) :
   `Player.goodsCount` (le "nombre d'objets" affiché au TABLEAU DE BORD

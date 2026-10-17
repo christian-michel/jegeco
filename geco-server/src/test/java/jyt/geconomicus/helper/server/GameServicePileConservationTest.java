@@ -490,4 +490,99 @@ class GameServicePileConservationTest
 		assertEquals(5, reloaded.getJetonWeak(),
 				"un crédit accordé APRÈS la mise en place doit bien créditer jetonWeak - seul le crédit accordé AVANT (plus haut) reste perdu, jamais les suivants"); //$NON-NLS-1$
 	}
+
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (17/10/2026, "Phase 0" de la feuille de route
+	 * post-diffusion - voir CLAUDE.md, section "Pièges déjà rencontrés",
+	 * entrée "Connu, non corrigé" du 27/09/2026) : "Annuler"/supprimer/éditer
+	 * un événement SANS AUCUN RAPPORT avec un crédit dette+smartphone déjà
+	 * accordé faisait grandir le solde physique du joueur (jetonWeak) à
+	 * CHAQUE annulation - mesuré à l'époque : "3 'Annuler' après un crédit de
+	 * 10 unités font passer les jetons de 10 à 40" (soit +10 par annulation,
+	 * alors qu'aucun des événements annulés n'a le moindre rapport avec ce
+	 * crédit).
+	 * <p>
+	 * Cause racine : {@link Game#recomputeAll} (appelée par
+	 * {@link GameService#deleteEvent}/{@code editEvent}/{@code undoLastEvent}
+	 * à chaque modification de l'historique) remet déjà à zéro
+	 * {@code curDebt}/{@code curInterest}/{@code active}/{@code quit}/
+	 * {@code visitedBank}/{@code prisonUntilTurn} avant de rejouer tout
+	 * l'historique depuis le début - mais PAS {@code jetonWeak}/
+	 * {@code jetonMedium}/{@code jetonStrong}. Or {@code Event.applyEvent()},
+	 * cas NEW_CREDIT, fait `jetonWeak += principal` (un AJOUT relatif, jamais
+	 * une AFFECTATION absolue comme le fait WEALTH_CHECKPOINT en monnaie
+	 * libre) : sans remise à zéro préalable, chaque rejeu COMPLET de
+	 * l'historique (y compris le NEW_CREDIT d'origine, toujours présent dans
+	 * la liste tant qu'on n'annule qu'un événement SANS RAPPORT) rempile un
+	 * "+10" supplémentaire sur la valeur déjà là depuis le rejeu précédent -
+	 * jamais une vraie reconstruction depuis zéro comme pour curDebt juste à
+	 * côté. INTEREST_ONLY/la saisie BANKRUPT-PRISON-CANNOT_PAY-REIMB_CREDIT
+	 * (des SOUSTRACTIONS relatives, même mécanisme) auraient le même défaut
+	 * si testées isolément un jour.
+	 * <p>
+	 * Corrigé en remettant {@code jetonWeak}/{@code jetonMedium}/
+	 * {@code jetonStrong} à zéro au même endroit que les autres champs
+	 * dérivés, dans {@link Game#recomputeAll} - exactement le même principe
+	 * déjà appliqué à {@code prisonUntilTurn} le 11/10/2026 (voir son
+	 * commentaire). Analysé pour la monnaie LIBRE avant d'appliquer ce
+	 * correctif plus largement : WEALTH_CHECKPOINT et le cas DEATH (monnaie
+	 * libre) affectent TOUJOURS ces trois champs par une AFFECTATION absolue
+	 * (valeur transportée par l'événement lui-même, jamais dépendante de
+	 * l'état courant du joueur) - une remise à zéro préalable n'y change donc
+	 * rien, le prochain WEALTH_CHECKPOINT/DEATH rejoué écrase de toute façon
+	 * la valeur transitoire. Seule fenêtre résiduelle, non aggravée par ce
+	 * correctif : un joueur libre+smartphone annulant un événement AVANT même
+	 * son tout premier WEALTH_CHECKPOINT verrait transitoirement 0 au lieu de
+	 * sa dotation de départ réelle pendant le rejeu - déjà un état non défini
+	 * aujourd'hui (jetonWeak n'est de toute façon jamais remis à jour par un
+	 * rejeu dans cette fenêtre, ni avant ni après ce correctif), jamais une
+	 * régression par rapport à un comportement correct préexistant.
+	 */
+	@Test
+	void testUndoOfUnrelatedEventNeverDuplicatesDebtSmartphoneCredit() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_DEBT, 12, "AnimTest6", null, "test annuler ne duplique pas le credit", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				"2026-10-17", "Ceres", 1, 180, 1, false, 0, false, 1); //$NON-NLS-1$ //$NON-NLS-2$
+		final int gameId = game.getId();
+		final Player player = sService.addPlayer(gameId, "Anna"); //$NON-NLS-1$
+
+		// Mise en place (premier TOUR) AVANT le crédit, comme le garantit
+		// désormais GecoServer.performSmartphoneMiseEnPlaceIfNeeded (voir le
+		// test précédent) - nécessaire ici pour que isSmartphoneTrackedGame()
+		// soit vrai et que le crédit alimente réellement jetonWeak.
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(8));
+
+		// Reproduction EXACTE du scénario mesuré à l'époque : un crédit de 10,
+		// jamais touché par la suite.
+		sService.recordEvent(gameId, "N", player.getId(), 10, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		assertEquals(10, reloadPlayer(gameId, player.getId()).getJetonWeak(), "le crédit initial doit bien créditer 10"); //$NON-NLS-1$
+
+		// Trois événements SANS AUCUN RAPPORT avec ce crédit (simples tours),
+		// posés APRÈS lui pour avoir quelque chose de légitime à "Annuler" à
+		// chaque fois (undoLastEvent retire toujours le DERNIER événement par
+		// horodatage - jamais le crédit lui-même tant qu'il en reste un plus
+		// récent).
+		for (int i = 0; i < 3; i++)
+			sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+
+		// "Annuler" (undoLastEvent, voir Api.undo côté app.js) trois fois de
+		// suite, exactement le scénario documenté - le crédit de 10, LUI,
+		// reste présent dans l'historique à chaque fois (seuls les 3 tours
+		// ajoutés ci-dessus sont progressivement retirés).
+		for (int i = 1; i <= 3; i++)
+		{
+			assertTrue(sService.undoLastEvent(gameId), "undoLastEvent doit réussir (il reste bien un événement à annuler)"); //$NON-NLS-1$
+			assertEquals(10, reloadPlayer(gameId, player.getId()).getJetonWeak(),
+					"\"Annuler\" #" + i + " (un événement SANS RAPPORT avec le crédit) ne doit JAMAIS faire grandir le solde du joueur - BUG CONFIRMÉ avant correctif : +10 à chaque annulation (10 -> 20 -> 30 -> 40)"); //$NON-NLS-1$
+		}
+	}
+
+	/** Petit raccourci commun aux tests de ce fichier qui rechargent un joueur précis après une opération GameService. */
+	private Player reloadPlayer(final int pGameId, final Integer pPlayerId)
+	{
+		return sService.getGame(pGameId).getPlayers().stream().filter(p -> p.getId().equals(pPlayerId)).findFirst()
+				.orElseThrow();
+	}
 }

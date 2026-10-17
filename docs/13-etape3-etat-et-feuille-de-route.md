@@ -645,10 +645,20 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    achat/vente smartphone n'est pas un événement, donc n'est jamais rejoué
    - annuler un événement sans rapport peut remettre les jetons d'un
    joueur à leur valeur d'avant un achat déjà effectué (carte transférée,
-   paiement effacé), et en dette+smartphone chaque rejeu réapplique aussi
-   les crédits (jetons multipliés à chaque "Annuler" successif). Piste
-   envisagée non appliquée : ajuster les jetons ACTUELS par la différence
-   entre rejouer avec/sans l'événement retiré. Bug mineur lié : le
+   paiement effacé). **Partie "dette+smartphone chaque rejeu réapplique
+   aussi les crédits (jetons multipliés à chaque 'Annuler' successif)"
+   CORRIGÉE le 17/10/2026** ("Phase 0" de la feuille de route post-
+   diffusion, voir `CLAUDE.md`, section "Pièges déjà rencontrés", pour le
+   détail technique complet et les tests de non-régression) - cause
+   distincte de la partie carte/paiement ci-dessus (une simple remise à
+   zéro manquante côté dette, pas le même redesign de fond), donc
+   corrigeable séparément sans attendre le reste. **Reste non corrigé** :
+   la partie carte/paiement ci-dessus, qui demande bien le redesign de
+   fond évoqué. Piste envisagée non appliquée : ajuster les jetons ACTUELS
+   par la différence entre rejouer avec/sans l'événement retiré. Bug
+   mineur lié (non corrigé, confirmé le 17/10/2026 comme ayant une cause
+   DIFFÉRENTE du correctif dette ci-dessus - la masse monétaire globale a
+   toujours été correctement remise à zéro avant rejeu) : le
    graphique "masse monétaire" affiche pour "Tour 1" la masse finale de la
    partie au lieu de la masse réelle à ce tour. Bug mineur lié,
    distinct, identifié le 04/10/2026 lors de la campagne de test à
