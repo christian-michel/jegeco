@@ -591,6 +591,17 @@ public class StatsService
 	 * qu'aux évaluations Mort/Fin de partie (`DEATH`/`QUIT`), et cette méthode
 	 * **maintient la dernière valeur connue** entre deux évaluations plutôt que
 	 * d'inventer une évolution qui ne reposerait sur aucune donnée réelle.
+	 * <p>
+	 * <b>Corrigé le 17/10/2026</b> (même bug, même correctif que
+	 * {@link #computeMoneyMassHistory}, voir sa Javadoc pour le détail complet) :
+	 * la richesse RELATIVE de chaque joueur affichée ici (par rapport à la
+	 * moyenne M(t)/N(t)) dépend de {@code Game.getMoneyMass()} au moment de
+	 * chaque TURN rejoué - en monnaie libre suivie par smartphone, le tout
+	 * premier TURN voyait donc lui aussi une masse recalculée depuis les jetons
+	 * de FIN de partie, faussant le dénominateur de ce ratio pour le tout
+	 * premier point de la courbe "module Galilée" (jamais la valeur absolue du
+	 * joueur lui-même, qui provient de WEALTH_CHECKPOINT/DEATH/QUIT - toujours
+	 * correcte, voir plus bas).
 	 */
 	public WealthOverTimeReport computeWealthOverTime(final Game pGame)
 	{
@@ -646,108 +657,127 @@ public class StatsService
 
 		final int[] turnCounter = { 0 };
 		final int[] currentFactor = { 1 };
-		pGame.recomputeAll(event -> {
-			if (event.getEvt() == EventType.TURN)
-			{
-				turnCounter[0]++;
-				final int mass = pGame.getMoneyMass();
-				// Élargi à isQuit() (04/10/2026, voir Player.quit/Game.computeCurrentDU) :
-				// un joueur qui a quitté continue de toucher le DU et doit donc rester
-				// compté dans cette moyenne M(t)/N(t) - isQuit() reste toujours faux en
-				// dehors de ce cas précis (libre+strict TRM+smartphone), élargissement
-				// sans effet ailleurs (idem plus bas dans cette même méthode).
-				final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
-				final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
-				for (final Player p : pGame.getPlayers())
+		// Correctif du 17/10/2026 (voir la Javadoc de cette méthode) : mêmes
+		// jetons de DÉPART restaurés avant le rejeu que pour
+		// computeMoneyMassHistory/computeMoneyMassDetailHistory, remis à leur
+		// valeur réelle (celle de la partie en cours) dans le "finally" plus bas.
+		final Map<Player, int[]> jetonsBeforeReplay = resetJetonsToStartOfGameForReplay(pGame);
+		try
+		{
+			pGame.recomputeAll(event -> {
+				if (event.getEvt() == EventType.TURN)
 				{
-					final int[] known = lastKnownValue.getOrDefault(p.getName(), new int[] { 0, 0 });
-					final double relative = average == 0 ? 0 : known[0] / average;
-					pointsByPlayer.get(p.getName())
-							.add(new PlayerWealthPoint(turnCounter[0], known[0], known[1], known[0] + known[1],
-									round2(relative)));
+					turnCounter[0]++;
+					final int mass = pGame.getMoneyMass();
+					// Élargi à isQuit() (04/10/2026, voir Player.quit/Game.computeCurrentDU) :
+					// un joueur qui a quitté continue de toucher le DU et doit donc rester
+					// compté dans cette moyenne M(t)/N(t) - isQuit() reste toujours faux en
+					// dehors de ce cas précis (libre+strict TRM+smartphone), élargissement
+					// sans effet ailleurs (idem plus bas dans cette même méthode).
+					final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
+					final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
+					for (final Player p : pGame.getPlayers())
+					{
+						final int[] known = lastKnownValue.getOrDefault(p.getName(), new int[] { 0, 0 });
+						final double relative = average == 0 ? 0 : known[0] / average;
+						pointsByPlayer.get(p.getName())
+								.add(new PlayerWealthPoint(turnCounter[0], known[0], known[1], known[0] + known[1],
+										round2(relative)));
+					}
 				}
-			}
-			else if (event.getEvt() == EventType.XTECHNOLOGICAL_BREAKTHROUGH)
+				else if (event.getEvt() == EventType.XTECHNOLOGICAL_BREAKTHROUGH)
+				{
+					currentFactor[0] *= 2;
+				}
+				else if ((event.getEvt() == EventType.DEATH || event.getEvt() == EventType.QUIT) && event.getPlayer() != null
+						&& lastKnownValue.containsKey(event.getPlayer().getName()))
+				{
+					final String name = event.getPlayer().getName();
+					// Bilan réel saisi par l'animateur à cet instant (voir limite documentée
+					// ci-dessus). On l'enregistre comme point immédiatement (le tour courant
+					// n'a pas forcément encore de point TURN à ce stade), puis on renaît à 0
+					// pour la suite - conformément à la règle du jeu.
+					final int assessedMonetary = computeMonetaryGain(pGame, event);
+					final int assessedCards = computeCardsGain(pGame, event, currentFactor[0]);
+					final int mass = pGame.getMoneyMass();
+					final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
+					final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
+					final double relative = average == 0 ? 0 : assessedMonetary / average;
+					// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 13/09/2026, PDF avec
+					// captures d'écran - "ne pas montrer le point où le compte revient à
+					// zéro quand ils quittent la partie à la toute fin, la courbe doit
+					// s'arrêter sur leur score final") : un QUIT de FIN DE PARTIE (voir
+					// renderEndGameInventory dans app.js - "à la fin du dernier tour, il
+					// n'y a jamais de mort" - QUIT y est posté pour TOUS les joueurs
+					// actifs, sans événement TURN derrière puisque la partie s'arrête là)
+					// laissait turnCounter[0] encore égal au tour PRÉCÉDENT (aucun TURN ne
+					// l'avait incrémenté pour ce dernier tour) : ce point se retrouvait au
+					// MÊME tour que celui déjà posé par le TURN d'entrée dans ce dernier
+					// tour - deux points distincts au même x, un artefact visuel qui
+					// pouvait ressembler à une chute/un retour à zéro juste avant la fin
+					// de la courbe. DEATH, lui, ne survient jamais au dernier tour (mort/
+					// renaissance en cours de partie uniquement) et un TURN event suit
+					// toujours peu après pour incrémenter turnCounter normalement -
+					// turnCounter[0] y reste donc correct, inchangé.
+					// CORRECTIF ÉLARGI (04/10/2026, voir endOfGameQuitEvents précalculé
+					// plus haut) : cette correction supposait à tort "QUIT ne survient
+					// JAMAIS qu'au tout dernier tour" - plus vrai depuis qu'un joueur peut
+					// quitter en cours de partie (Player.quit) tout en continuant d'être
+					// rejoué ici. Seuls les QUIT vraiment "de fin de partie" (aucun TURN
+					// ne les suit plus nulle part) gardent ce correctif ; un QUIT mid-
+					// partie utilise désormais le tour RÉEL où il survient, comme DEATH.
+					final int turn = endOfGameQuitEvents.contains(event) ? pGame.getNbTurnsPlanned() : turnCounter[0];
+					// BUG TROUVÉ ET CORRIGÉ (04/10/2026, PDF "Retours_-_20261004.pdf") :
+					// "sur les courbes... il faut afficher les valeurs en fin de tour,
+					// juste avant qu'ils ne quittent la partie". Le correctif du
+					// 13/09/2026 ci-dessus force bien le POINT DEATH/QUIT au bon tour,
+					// mais un point TURN avait souvent déjà été posé pour CE MÊME tour
+					// (à son ouverture, avec la valeur d'AVANT les échanges du tour -
+					// voir le bloc TURN ci-dessus) : deux points distincts au même x,
+					// reliés par une ligne, donnaient l'impression d'une chute/un pic
+					// artificiel juste avant la fin de la courbe - exactement ce que
+					// l'utilisateur décrivait comme "les comptes qui retombent à 0"
+					// (aucun zéro n'était réellement tracé, mais l'effet visuel y
+					// ressemblait). Corrigé en remplaçant ce point d'ouverture de tour,
+					// désormais obsolète, par le bilan RÉEL DEATH/QUIT - un seul point
+					// par joueur et par tour, toujours le plus à jour.
+					final List<PlayerWealthPoint> playerPoints = pointsByPlayer.get(name);
+					if (!playerPoints.isEmpty() && (playerPoints.get(playerPoints.size() - 1).turn() == turn))
+						playerPoints.remove(playerPoints.size() - 1);
+					playerPoints.add(new PlayerWealthPoint(turn, assessedMonetary, assessedCards,
+							assessedMonetary + assessedCards, round2(relative)));
+					lastKnownValue.put(name, new int[] { 0, 0 });
+				}
+				else if ((event.getEvt() == EventType.WEALTH_CHECKPOINT) && (event.getPlayer() != null)
+						&& lastKnownValue.containsKey(event.getPlayer().getName()))
+				{
+					// Étape 3, monnaie libre, mode smartphone (voir Event.java) : un
+					// survivant, contrairement à DEATH/QUIT ci-dessus - on met juste à
+					// jour la dernière valeur connue, SANS ajouter de point immédiatement
+					// (pas de renaissance à 0 : le joueur continue de jouer) et SANS
+					// retirer quoi que ce soit de la masse monétaire (déjà garanti par
+					// Event.applyEvent(), qui traite ce type comme un pur no-op). Posé
+					// juste avant l'événement TURN dans le déroulé de l'assistant de fin
+					// de tour (voir GecoServer/wizard côté web) : le point TURN
+					// juste après lira cette valeur fraîchement mise à jour via
+					// lastKnownValue.getOrDefault(...) ci-dessus, sans code
+					// supplémentaire nécessaire à cet endroit précis.
+					lastKnownValue.put(event.getPlayer().getName(), new int[] { computeMonetaryGain(pGame, event),
+							computeCardsGain(pGame, event, currentFactor[0]) });
+				}
+			});
+		}
+		finally
+		{
+			// Hygiène : rend à l'objet (détaché, jamais persisté ici) les jetons qu'il
+			// avait avant ce rejeu - voir resetJetonsToStartOfGameForReplay.
+			for (final Map.Entry<Player, int[]> e : jetonsBeforeReplay.entrySet())
 			{
-				currentFactor[0] *= 2;
+				e.getKey().setJetonWeak(e.getValue()[0]);
+				e.getKey().setJetonMedium(e.getValue()[1]);
+				e.getKey().setJetonStrong(e.getValue()[2]);
 			}
-			else if ((event.getEvt() == EventType.DEATH || event.getEvt() == EventType.QUIT) && event.getPlayer() != null
-					&& lastKnownValue.containsKey(event.getPlayer().getName()))
-			{
-				final String name = event.getPlayer().getName();
-				// Bilan réel saisi par l'animateur à cet instant (voir limite documentée
-				// ci-dessus). On l'enregistre comme point immédiatement (le tour courant
-				// n'a pas forcément encore de point TURN à ce stade), puis on renaît à 0
-				// pour la suite - conformément à la règle du jeu.
-				final int assessedMonetary = computeMonetaryGain(pGame, event);
-				final int assessedCards = computeCardsGain(pGame, event, currentFactor[0]);
-				final int mass = pGame.getMoneyMass();
-				final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
-				final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
-				final double relative = average == 0 ? 0 : assessedMonetary / average;
-				// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 13/09/2026, PDF avec
-				// captures d'écran - "ne pas montrer le point où le compte revient à
-				// zéro quand ils quittent la partie à la toute fin, la courbe doit
-				// s'arrêter sur leur score final") : un QUIT de FIN DE PARTIE (voir
-				// renderEndGameInventory dans app.js - "à la fin du dernier tour, il
-				// n'y a jamais de mort" - QUIT y est posté pour TOUS les joueurs
-				// actifs, sans événement TURN derrière puisque la partie s'arrête là)
-				// laissait turnCounter[0] encore égal au tour PRÉCÉDENT (aucun TURN ne
-				// l'avait incrémenté pour ce dernier tour) : ce point se retrouvait au
-				// MÊME tour que celui déjà posé par le TURN d'entrée dans ce dernier
-				// tour - deux points distincts au même x, un artefact visuel qui
-				// pouvait ressembler à une chute/un retour à zéro juste avant la fin
-				// de la courbe. DEATH, lui, ne survient jamais au dernier tour (mort/
-				// renaissance en cours de partie uniquement) et un TURN event suit
-				// toujours peu après pour incrémenter turnCounter normalement -
-				// turnCounter[0] y reste donc correct, inchangé.
-				// CORRECTIF ÉLARGI (04/10/2026, voir endOfGameQuitEvents précalculé
-				// plus haut) : cette correction supposait à tort "QUIT ne survient
-				// JAMAIS qu'au tout dernier tour" - plus vrai depuis qu'un joueur peut
-				// quitter en cours de partie (Player.quit) tout en continuant d'être
-				// rejoué ici. Seuls les QUIT vraiment "de fin de partie" (aucun TURN
-				// ne les suit plus nulle part) gardent ce correctif ; un QUIT mid-
-				// partie utilise désormais le tour RÉEL où il survient, comme DEATH.
-				final int turn = endOfGameQuitEvents.contains(event) ? pGame.getNbTurnsPlanned() : turnCounter[0];
-				// BUG TROUVÉ ET CORRIGÉ (04/10/2026, PDF "Retours_-_20261004.pdf") :
-				// "sur les courbes... il faut afficher les valeurs en fin de tour,
-				// juste avant qu'ils ne quittent la partie". Le correctif du
-				// 13/09/2026 ci-dessus force bien le POINT DEATH/QUIT au bon tour,
-				// mais un point TURN avait souvent déjà été posé pour CE MÊME tour
-				// (à son ouverture, avec la valeur d'AVANT les échanges du tour -
-				// voir le bloc TURN ci-dessus) : deux points distincts au même x,
-				// reliés par une ligne, donnaient l'impression d'une chute/un pic
-				// artificiel juste avant la fin de la courbe - exactement ce que
-				// l'utilisateur décrivait comme "les comptes qui retombent à 0"
-				// (aucun zéro n'était réellement tracé, mais l'effet visuel y
-				// ressemblait). Corrigé en remplaçant ce point d'ouverture de tour,
-				// désormais obsolète, par le bilan RÉEL DEATH/QUIT - un seul point
-				// par joueur et par tour, toujours le plus à jour.
-				final List<PlayerWealthPoint> playerPoints = pointsByPlayer.get(name);
-				if (!playerPoints.isEmpty() && (playerPoints.get(playerPoints.size() - 1).turn() == turn))
-					playerPoints.remove(playerPoints.size() - 1);
-				playerPoints.add(new PlayerWealthPoint(turn, assessedMonetary, assessedCards,
-						assessedMonetary + assessedCards, round2(relative)));
-				lastKnownValue.put(name, new int[] { 0, 0 });
-			}
-			else if ((event.getEvt() == EventType.WEALTH_CHECKPOINT) && (event.getPlayer() != null)
-					&& lastKnownValue.containsKey(event.getPlayer().getName()))
-			{
-				// Étape 3, monnaie libre, mode smartphone (voir Event.java) : un
-				// survivant, contrairement à DEATH/QUIT ci-dessus - on met juste à
-				// jour la dernière valeur connue, SANS ajouter de point immédiatement
-				// (pas de renaissance à 0 : le joueur continue de jouer) et SANS
-				// retirer quoi que ce soit de la masse monétaire (déjà garanti par
-				// Event.applyEvent(), qui traite ce type comme un pur no-op). Posé
-				// juste avant l'événement TURN dans le déroulé de l'assistant de fin
-				// de tour (voir GecoServer/wizard côté web) : le point TURN
-				// juste après lira cette valeur fraîchement mise à jour via
-				// lastKnownValue.getOrDefault(...) ci-dessus, sans code
-				// supplémentaire nécessaire à cet endroit précis.
-				lastKnownValue.put(event.getPlayer().getName(), new int[] { computeMonetaryGain(pGame, event),
-						computeCardsGain(pGame, event, currentFactor[0]) });
-			}
-		});
+		}
 
 		final List<PlayerWealthSeries> series = pointsByPlayer.entrySet().stream()
 				.map(e -> new PlayerWealthSeries(e.getKey(), e.getValue(), isPlayerQuit(pGame, e.getKey()))).toList();
@@ -1248,10 +1278,17 @@ public class StatsService
 	 * suivis par smartphone et recalcule la masse à partir de leurs jetons
 	 * ACTUELS (ceux de fin de partie), jamais de ceux du départ.
 	 * <p>
-	 * Correctif volontairement LOCAL à ce rapport (lecture seule, objet détaché
-	 * jamais persisté - aucun effet sur le rejeu utilisé par Annuler/éditer,
-	 * dont la refonte reste une décision utilisateur en attente, voir
-	 * CLAUDE.md) : avant le rejeu, chaque joueur reçoit les jetons qu'il avait
+	 * Correctif volontairement LOCAL à l'appelant (lecture seule, objet détaché
+	 * jamais persisté - aucun effet sur le rejeu utilisé par Annuler/éditer :
+	 * cette moitié-là du bug "Annuler" original reste, elle, un choix de design
+	 * définitif - décision utilisateur du 17/10/2026 : "les transactions
+	 * validées restent validées", jamais un redesign du rejeu, voir CLAUDE.md)
+	 * - réutilisé depuis le 17/10/2026 (même décision utilisateur, "corrige en
+	 * t'assurant bien ensuite que tout est correct à présent") par
+	 * {@link #computeMoneyMassHistory} et {@link #computeWealthOverTime}, qui
+	 * avaient exactement le même défaut au tour 1 pour la même raison, laissé
+	 * tel quel à l'époque dans l'attente de cette décision : avant le rejeu,
+	 * chaque joueur reçoit les jetons qu'il avait
 	 * RÉELLEMENT au début du tour 1 - la dotation de départ
 	 * (Game.computeStartingJetonsPerPlayer, exactement ce que distribue
 	 * dealStartingHandsForLibreIfNeeded) pour un joueur ayant rejoint avant le
@@ -1361,14 +1398,48 @@ public class StatsService
 	 * partie ; il restaure donc exactement le même état final qu'avant l'appel (aucun
 	 * effet de bord côté données), tout en corrigeant au passage d'éventuelles
 	 * incohérences - c'est le comportement documenté de cette méthode.
+	 * <p>
+	 * <b>Corrigé le 17/10/2026</b> (demande utilisateur, "Phase 0" post-diffusion -
+	 * bug documenté depuis le 27/09/2026 dans CLAUDE.md : "le graphique 'masse
+	 * monétaire' affiche pour 'Tour 1' la masse FINALE de la partie") : en monnaie
+	 * LIBRE suivie par smartphone, {@code Game.recomputeAll} ne remet jamais
+	 * {@code Player.jetonWeak} à zéro (il n'a besoin de le faire QUE pour la dette,
+	 * voir son propre commentaire daté du même jour) - le tout premier TURN rejoué
+	 * voit donc des joueurs déjà suivis par smartphone et recalcule la masse
+	 * (mode strict TRM, {@code Game.computeMoneyMassFromActivePlayersJetons}) à
+	 * partir de leurs jetons ACTUELS (ceux de la fin de la partie réelle), jamais
+	 * de ceux qu'ils avaient réellement au tout début. Exactement le même défaut,
+	 * pour la même raison, que celui trouvé et corrigé le 27/09/2026 dans le
+	 * rapport "Masse monétaire détaillée" (voir {@link #resetJetonsToStartOfGameForReplay}
+	 * et {@link #computeMoneyMassDetailHistory}, dont le correctif n'avait
+	 * volontairement PAS été étendu ici à l'époque, en attente d'une décision
+	 * utilisateur - voir docs/03-architecture-technique.md, entrée du 27-29/09/2026).
+	 * Décision utilisateur (17/10/2026) : "corrige en t'assurant bien ensuite que
+	 * tout est correct à présent" - même correctif LOCAL (lecture seule, objet
+	 * détaché jamais persisté) réutilisé ici tel quel.
 	 */
 	private List<MoneyMassPoint> computeMoneyMassHistory(final Game pGame)
 	{
 		final List<MoneyMassPoint> history = new ArrayList<>();
-		pGame.recomputeAll(event -> {
-			if (event.getEvt() == EventType.TURN)
-				history.add(new MoneyMassPoint(pGame.getTurnNumber(), pGame.getMoneyMass()));
-		});
+		final Map<Player, int[]> jetonsBeforeReplay = resetJetonsToStartOfGameForReplay(pGame);
+		try
+		{
+			pGame.recomputeAll(event -> {
+				if (event.getEvt() == EventType.TURN)
+					history.add(new MoneyMassPoint(pGame.getTurnNumber(), pGame.getMoneyMass()));
+			});
+		}
+		finally
+		{
+			// Hygiène : rend à l'objet (détaché, jamais persisté ici) les jetons qu'il
+			// avait avant ce rejeu - voir resetJetonsToStartOfGameForReplay.
+			for (final Map.Entry<Player, int[]> e : jetonsBeforeReplay.entrySet())
+			{
+				e.getKey().setJetonWeak(e.getValue()[0]);
+				e.getKey().setJetonMedium(e.getValue()[1]);
+				e.getKey().setJetonStrong(e.getValue()[2]);
+			}
+		}
 		// Point de départ (tour 0, avant le premier "nouveau tour") pour que la courbe
 		// parte bien de zéro plutôt que de sembler débuter avec de la monnaie déjà en circulation.
 		history.add(0, new MoneyMassPoint(0, 0));

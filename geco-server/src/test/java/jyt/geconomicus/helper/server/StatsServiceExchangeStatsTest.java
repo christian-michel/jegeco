@@ -21,8 +21,10 @@ import jyt.geconomicus.helper.Game;
 import jyt.geconomicus.helper.Transaction;
 import jyt.geconomicus.helper.server.StatsService.ExchangeAndMoneyReport;
 import jyt.geconomicus.helper.server.StatsService.ExchangeStats;
+import jyt.geconomicus.helper.server.StatsService.GameStats;
 import jyt.geconomicus.helper.server.StatsService.MoneyMassDetailPoint;
 import jyt.geconomicus.helper.server.StatsService.MoneyMassDetailReport;
+import jyt.geconomicus.helper.server.StatsService.MoneyMassPoint;
 import jyt.geconomicus.helper.server.StatsService.PlayerExchangeStat;
 
 /**
@@ -279,6 +281,28 @@ class StatsServiceExchangeStatsTest
 		final double expectedAvgDelta = Math.round(deltas.stream().mapToInt(Integer::intValue).average().orElse(0) * 10)
 				/ 10.0;
 		assertEquals(expectedAvgDelta, massDetail.averageMassDelta(), 0.001);
+
+		// --- Graphique "Évolution de la masse monétaire" (StatsService.computeMoneyMassHistory,
+		// GameStats.moneyMassHistory) : régression du 17/10/2026, décision
+		// utilisateur suite au bug "Annuler" - voir CLAUDE.md et la Javadoc de
+		// computeMoneyMassHistory pour le détail complet. Même défaut, même
+		// scénario (soldes gonflés par boostAllBalances) que massDetail
+		// ci-dessus, vérifié ici séparément car c'est un chemin de calcul
+		// distinct (n'a PAS été corrigé en même temps que massDetail le
+		// 27/09/2026, volontairement, en attente de cette décision). ---
+		final GameStats gameStats = sStats.computeStats(freshGame);
+		final List<MoneyMassPoint> moneyMassHistory = gameStats.moneyMassHistory();
+		// Point 0 = (tour 0, masse 0) artificiellement préposé ; point 1 = le
+		// premier TOUR réellement rejoué (tour 1).
+		assertEquals(4, moneyMassHistory.size(), "tour 0 artificiel + 3 tours joués"); //$NON-NLS-1$
+		assertEquals(0, moneyMassHistory.get(0).turn());
+		assertEquals(0, moneyMassHistory.get(0).moneyMass());
+		assertEquals(1, moneyMassHistory.get(1).turn());
+		assertEquals(21, moneyMassHistory.get(1).moneyMass(),
+				"tour 1 : masse réelle du début de partie (3 × 7), jamais la masse finale (gonflée par boostAllBalances) qu'un rejeu naïf lui attribuait - BUG CONFIRMÉ avant correctif (voir CLAUDE.md, \"le graphique 'masse monétaire' affiche pour 'Tour 1' la masse FINALE de la partie\")"); //$NON-NLS-1$
+		// Même valeur que massDetail (même mécanisme, même scénario) : les deux
+		// rapports doivent désormais converger sur le tour 1.
+		assertEquals(massDetail.points().get(0).moneyMass(), moneyMassHistory.get(1).moneyMass());
 	}
 
 	/**

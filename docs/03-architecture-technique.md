@@ -3888,3 +3888,113 @@ graphique "Évolution de la masse monétaire" (`StatsService.computeMoneyMassHis
 cause DIFFÉRENTE de celle corrigée ici (`Game.moneyMass`, lui, a toujours
 été correctement remis à zéro avant rejeu, y compris pour la dette) -
 cause réelle encore à investiguer séparément si souhaité.
+
+### 17/10/2026 (même soir) — Les deux points laissés en suspens ci-dessus tranchés par l'utilisateur
+
+Message utilisateur, en réponse directe au rapport sur le correctif
+"Annuler" ci-dessus :
+
+> Ce qui reste ouvert, non traité ici (comme convenu, décision à prendre
+> séparément) : L'autre moitié du bug "Annuler" original : un achat/vente
+> de carte n'est pas rejoué, donc annuler un événement sans rapport peut
+> toujours remettre les cartes d'un joueur à un état antérieur. Nécessite
+> un vrai redesign du rejeu — en attente de ta décision sur l'approche.
+> => Les transactions validées restent validées. Autrement ça impacterait
+> tout un tas d'opérations en cascades. Ça serait compliqué à coder et ça
+> risquerait de vraiment altérer la qualité du jeu.
+>
+> Bug séparé (cause différente, confirmée indépendante) : le graphique
+> "masse monétaire" affiche la masse finale pour "Tour 1" au lieu de la
+> masse réelle à ce tour. => Corrige en t'assurant bien ensuite que tout
+> est correct à présent.
+
+#### 1. Achat/vente non rejouée par "Annuler" : décision FINALE, pas de redesign
+
+L'utilisateur tranche explicitement en faveur du statu quo plutôt que du
+redesign du rejeu envisagé le 27/09/2026 : les transactions
+(achats/ventes smartphone) restent définitivement hors du mécanisme de
+rejeu (`Game.recomputeAll()`), par choix délibéré plutôt que par limite
+technique non résolue. Documenté comme tel dans `CLAUDE.md` et
+`docs/13-etape3-etat-et-feuille-de-route.md` (item 4bis) - à ne plus
+rouvrir comme un bug, seulement comme une limite assumée si jamais
+reposée.
+
+#### 2. "Tour 1 = masse finale" sur les deux graphiques restants : cause et correctif
+
+**Investigation** : le même bug, déjà trouvé et corrigé le 27/09/2026
+*localement au rapport* "Masse monétaire détaillée"
+(`StatsService.computeMoneyMassDetailHistory`, via
+`resetJetonsToStartOfGameForReplay`), avait été volontairement laissé tel
+quel sur les deux AUTRES graphiques qui partagent le même mécanisme de
+rejeu, en attendant précisément cette décision (voir l'entrée du
+27-29/09/2026 plus haut : "le même appel s'y applique en une ligne") :
+
+- `StatsService.computeMoneyMassHistory` → graphique "Évolution de la
+  masse monétaire" (`chartMoneyMass`/`chartReportMoneyMass` dans
+  `app.js`), affiché à la fois sur le tableau de bord "Partie en cours"
+  et sur l'écran de rapport final.
+- `StatsService.computeWealthOverTime` → courbe "module Galilée"
+  (`renderGalileeChart`), plus précisément son mode "relatif"
+  (`PlayerWealthPoint.relativeToAverage`, le ratio richesse/moyenne M(t)/N(t)
+  qui doit converger vers 1.0 selon la TRM) : dépend lui aussi de
+  `Game.getMoneyMass()` au moment de chaque `TURN` rejoué, donc sujet au
+  même défaut en théorie, même si son observabilité concrète est plus
+  étroite (voir plus bas) que pour le graphique "masse monétaire".
+
+Reproduit avec le scénario déjà existant de
+`StatsServiceExchangeStatsTest.testExchangeStatsMatchHandTrackedGroundTruth`
+(3 joueurs, 21 unités de dotation de départ réelle, soldes gonflés à
+plusieurs ordres de grandeur par `boostAllBalances` au fil des tours) :
+AVANT correctif, `computeMoneyMassHistory` donnait, pour le point "tour
+1", **1 610 612 733** (débordement/valeur résiduelle issue de la masse
+finale gonflée) au lieu de **21** (3 × 7, la dotation de départ réelle) -
+exactement la signature du bug documentée dans `CLAUDE.md` depuis le
+27/09/2026.
+
+**Correctif** : `resetJetonsToStartOfGameForReplay`/sa restauration en
+`finally` (déjà écrite et éprouvée pour `computeMoneyMassDetailHistory`)
+réutilisée TELLE QUELLE, sans aucune modification de sa logique, dans
+`computeMoneyMassHistory` et `computeWealthOverTime` - chacune enveloppe
+désormais son propre appel à `Game.recomputeAll()` dans le même
+try/finally : jetons remis à la dotation de départ réelle avant le rejeu
+(0 pour un joueur arrivé après le premier `TURN`), restaurés à leur
+valeur réelle (celle de la partie en cours, jamais persistée) juste
+après, qu'une exception survienne ou non. Strictement un NO-OP hors
+libre+smartphone (la fonction elle-même renvoie une table vide dans ce
+cas, voir sa Javadoc) - aucun effet possible sur la dette/le troc.
+
+**Note sur `computeWealthOverTime`** : contrairement à
+`computeMoneyMassHistory` (où l'écart est immédiatement visible sur
+N'IMPORTE QUEL scénario strict TRM+smartphone), l'effet concret du bug
+sur le ratio `relativeToAverage` du point "tour 1" lui-même ne se
+manifeste que si un joueur a une valeur monétaire RÉELLEMENT connue
+(`WEALTH_CHECKPOINT`/`DEATH`/`QUIT`) déjà survenue AVANT ou PENDANT ce
+tout premier tour (une mort en cours de tour 1, par exemple) - un joueur
+qui n'a encore traversé aucun bilan reste de toute façon à 0 au
+numérateur (0 ÷ n'importe quoi = 0), rendant le défaut du dénominateur
+invisible pour lui à ce point précis. Corrigé par construction, par
+symétrie avec les deux autres méthodes plutôt que par une preuve
+isolée d'un scénario qui le rend visible - même mécanisme, même
+défaut de fond (`Player.jetonWeak` jamais remis à son état de départ
+avant rejeu), donc même correctif justifié.
+
+**Vérifications** :
+- `StatsServiceExchangeStatsTest.testExchangeStatsMatchHandTrackedGroundTruth`
+  étendu avec des assertions sur `GameStats.moneyMassHistory()` : le
+  point "tour 1" (après le point artificiel "tour 0") doit valoir 21
+  (dotation de départ réelle), jamais la masse finale gonflée - confirmé
+  en échec AVANT correctif (`1610612733` au lieu de `21`, capturé en
+  relançant le test avec le correctif temporairement annulé via
+  `git stash`), confirmé stable à 21 APRÈS.
+- `mvn clean package` complet : 57 tests côté `geco-server`/28 côté
+  `geco-engine`, tous verts, aucune régression - en particulier les deux
+  tests déjà existants de `StatsServiceWealthOverTimeTest`
+  (déduplication du point QUIT, absence de doublon sur les tours
+  normaux), inchangés par ce correctif.
+- `StatsServiceExchangeStatsTest` (les 5 autres cas du fichier,
+  dette/weakCoinValue/non-applicabilité troc/classique) toujours verts
+  sans modification.
+
+Voir `CLAUDE.md` (section "Pièges déjà rencontrés") et
+`docs/13-etape3-etat-et-feuille-de-route.md` (item 4bis) pour le résumé
+condensé de ces deux décisions.

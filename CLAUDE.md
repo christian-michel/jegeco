@@ -330,23 +330,55 @@ ajoutes, pas seulement via ce script.
   (`POST /api/games/{id}/undo`) + la suite complète (244 tests, aucune
   régression, y compris les tests "module Galilée"/masse monétaire en
   libre).
-  **Reste non corrigé** (la seconde moitié du bug du 27/09/2026, distincte
-  et plus profonde — un VRAI redesign du rejeu, pas un simple oubli de
-  remise à zéro, décision utilisateur toujours en attente) : un achat/
-  vente smartphone n'est PAS un événement (c'est une `Transaction`), donc
-  n'est jamais rejoué par `recomputeAll()` — annuler un événement sans
-  rapport peut donc remettre les jetons d'un joueur à leur valeur d'avant
-  un achat déjà effectué, sans annuler le transfert de carte associé
-  (l'acheteur obtient la carte gratuitement). Piste envisagée, non
-  appliquée : ajuster les jetons ACTUELS par la différence entre rejouer
-  avec/sans l'événement retiré, plutôt que de laisser le rejeu écraser
-  leur valeur. Bug mineur distinct, également non corrigé (vérifié le
-  17/10/2026 : PAS la même cause que celle corrigée ci-dessus — la masse
-  monétaire globale `Game.moneyMass` a toujours été correctement remise à
-  zéro avant rejeu, y compris pour la dette) : le graphique "Évolution de
-  la masse monétaire" (`StatsService.computeMoneyMassHistory`) affiche
-  pour "Tour 1" la masse FINALE de la partie au lieu de la masse réelle à
-  ce tour — cause réelle encore à investiguer séparément.
+  **Seconde moitié du bug du 27/09/2026 : DÉCISION UTILISATEUR FINALE,
+  JAMAIS un correctif à prévoir (actée le 17/10/2026)** — un achat/vente
+  smartphone n'est PAS un événement (c'est une `Transaction`), donc n'est
+  jamais rejoué par `recomputeAll()` : annuler un événement sans rapport
+  peut remettre les jetons d'un joueur à leur valeur d'avant un achat déjà
+  effectué, sans annuler le transfert de carte associé (l'acheteur obtient
+  la carte gratuitement). Réponse de l'utilisateur à la question posée
+  dans cette même entrée : "Les transactions validées restent validées.
+  Autrement ça impacterait tout un tas d'opérations en cascades. Ça
+  serait compliqué à coder et ça risquerait de vraiment altérer la
+  qualité du jeu." Ce comportement est donc désormais un choix de design
+  DÉLIBÉRÉ, pas une limite subie — ne pas le "redécouvrir" plus tard
+  comme un bug à corriger ; la piste de redesign un temps envisagée
+  (ajuster les jetons ACTUELS par la différence entre rejouer avec/sans
+  l'événement retiré) est abandonnée, sans suite prévue.
+- **Corrigé le 17/10/2026** (même demande utilisateur que ci-dessus,
+  "corrige en t'assurant bien ensuite que tout est correct à présent" —
+  bug mineur lié mais de cause DIFFÉRENTE du correctif dette ci-dessus,
+  confirmé en l'examinant : la masse monétaire globale `Game.moneyMass`
+  a toujours été correctement remise à zéro avant rejeu, y compris pour
+  la dette) : le graphique "Évolution de la masse monétaire"
+  (`StatsService.computeMoneyMassHistory`) affichait pour "Tour 1" la
+  masse FINALE de la partie au lieu de la masse réelle à ce tour — et la
+  courbe "module Galilée" (`computeWealthOverTime`) avait très
+  probablement le même défaut sur son ratio "richesse relative à la
+  moyenne" du tour 1 (même mécanisme, même ligne de code lue). Cause
+  réelle (en monnaie LIBRE suivie par smartphone exclusivement — jamais
+  en dette, qui ne recalcule jamais la masse depuis les jetons) :
+  `Game.recomputeAll()` ne remet jamais `Player.jetonWeak` à zéro pour la
+  LIBRE (il n'en a besoin que pour la dette, voir le correctif ci-dessus)
+  — le tout premier `TURN` rejoué voit donc des joueurs déjà suivis par
+  smartphone et recalcule la masse (mode strict TRM,
+  `Game.computeMoneyMassFromActivePlayersJetons`) à partir de leurs
+  jetons ACTUELS (ceux de la fin de la partie réelle), jamais de ceux
+  qu'ils avaient réellement au tout début — EXACTEMENT le même mécanisme
+  que le bug déjà trouvé et corrigé le 27/09/2026 dans le rapport "Masse
+  monétaire détaillée" (`StatsService.resetJetonsToStartOfGameForReplay`),
+  resté volontairement NON étendu à ces deux autres graphiques à
+  l'époque, en attente de cette décision utilisateur. Corrigé en
+  réutilisant ce même correctif local (lecture seule, objet détaché
+  jamais persisté, sans aucun effet sur le rejeu réel utilisé par
+  Annuler/éditer) dans `computeMoneyMassHistory` ET `computeWealthOverTime`.
+  Vérifié par un nouveau test de régression
+  (`StatsServiceExchangeStatsTest.testExchangeStatsMatchHandTrackedGroundTruth`,
+  étendu) : reproduit le bug AVANT correctif (tour 1 affichait 1610612733
+  au lieu de 21 sur un scénario à 3 joueurs avec soldes gonflés) puis
+  confirme sa disparition APRÈS ; suite complète verte sans régression
+  (dont les deux tests déjà existants sur `computeWealthOverTime`,
+  inchangés).
 - **Corrigé le 10/10/2026** (campagne de validation troc+smartphone, 3
   parties 4/8/16 joueurs/12 tours, preuve concrète via API+Playwright) :
   `Player.goodsCount` (le "nombre d'objets" affiché au TABLEAU DE BORD

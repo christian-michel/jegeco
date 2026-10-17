@@ -457,8 +457,9 @@ juste avant).
   FINALE (rejeu), d'où une fausse "destruction" au tour 2 - corrigé
   localement dans ce rapport (voir `03-architecture-technique.md`). Le
   graphique pré-existant "Évolution de la masse monétaire" et la courbe
-  Galilée gardent ce défaut au tour 1 (point 4bis ci-dessous) - même
-  correctif local applicable en une ligne, décision utilisateur attendue.
+  Galilée gardaient ce même défaut au tour 1 (point 4bis ci-dessous) -
+  **corrigé le 17/10/2026** par réutilisation du même correctif local,
+  décision utilisateur actée (voir point 4bis).
   **Seconde relecture DE cette relecture (28/09/2026)** : confirme les
   deux correctifs ci-dessus corrects et sûrs (rejoue elle-même 0 → 47/56
   échanges sur 3 parties fraîches, dette et libre, valeurs de pièce non
@@ -652,15 +653,36 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    détail technique complet et les tests de non-régression) - cause
    distincte de la partie carte/paiement ci-dessus (une simple remise à
    zéro manquante côté dette, pas le même redesign de fond), donc
-   corrigeable séparément sans attendre le reste. **Reste non corrigé** :
-   la partie carte/paiement ci-dessus, qui demande bien le redesign de
-   fond évoqué. Piste envisagée non appliquée : ajuster les jetons ACTUELS
-   par la différence entre rejouer avec/sans l'événement retiré. Bug
-   mineur lié (non corrigé, confirmé le 17/10/2026 comme ayant une cause
-   DIFFÉRENTE du correctif dette ci-dessus - la masse monétaire globale a
-   toujours été correctement remise à zéro avant rejeu) : le
-   graphique "masse monétaire" affiche pour "Tour 1" la masse finale de la
-   partie au lieu de la masse réelle à ce tour. Bug mineur lié,
+   corrigeable séparément sans attendre le reste. **Partie
+   carte/paiement : décision utilisateur ACTÉE le 17/10/2026, choix FINAL,
+   jamais un redesign à prévoir** : "Les transactions validées restent
+   validées. Autrement ça impacterait tout un tas d'opérations en
+   cascade. Ça serait compliqué à coder et ça risquerait vraiment
+   d'altérer la qualité du jeu." Annuler/éditer/supprimer un événement
+   continue donc, en toute connaissance de cause, à ne jamais toucher aux
+   cartes/paiements déjà transférés par une transaction smartphone (ceux-ci
+   ne sont jamais rejoués, par choix) - seul l'état purement événementiel
+   (dette, DU, etc., voir le correctif dette ci-dessus) est rejoué. Piste
+   de redesign jadis envisagée (ajuster les jetons ACTUELS par la
+   différence entre rejouer avec/sans l'événement retiré) explicitement
+   écartée par cette décision, retirée de la liste des sujets ouverts.
+   **Bug lié, CORRIGÉ le 17/10/2026** (même décision utilisateur,
+   "corrige en t'assurant bien ensuite que tout est correct à présent" -
+   cause confirmée DIFFÉRENTE du correctif dette ci-dessus : la masse
+   monétaire globale a toujours été correctement remise à zéro avant
+   rejeu, le défaut venait de `Player.jetonWeak`, jamais remis à la
+   dotation de départ pour la LIBRE) : le graphique "masse monétaire"
+   affichait pour "Tour 1" la masse finale de la partie au lieu de la
+   masse réelle à ce tour, et la courbe Galilée ("module Galilée",
+   `computeWealthOverTime`) avait le même défaut sur son ratio tour 1 -
+   réutilisation du correctif déjà en place depuis le 27/09/2026 sur le
+   rapport "Masse monétaire détaillée"
+   (`StatsService.resetJetonsToStartOfGameForReplay`), désormais partagé
+   par les trois méthodes concernées. Voir `03-architecture-technique.md`,
+   entrée du 17/10/2026, pour le détail complet et les tests de
+   non-régression (dont une reproduction du bug avant correctif :
+   "Tour 1" affichait 1610612733 au lieu de 21 sur un scénario à 3
+   joueurs). Bug mineur lié,
    distinct, identifié le 04/10/2026 lors de la campagne de test à
    grande échelle : le graphique "Création/destruction monétaire par
    tour" (celui-là corrigé pour le cas des morts mi-tour, voir plus
