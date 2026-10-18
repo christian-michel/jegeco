@@ -666,7 +666,24 @@ async function renderDashboard() {
 			? t("playerView.history_goods_amount_short", { n: latest.buyerWeakGoods + latest.buyerMediumGoods + latest.buyerStrongGoods })
 			: t(usesMonetaryUnitsOnly() ? "playerView.transactions_amount_monetary" : "game.transactions_amount",
 				{ n: isLibreGame() ? jetonsToMonetaryUnits(latest.totalCoinsValue) : latest.totalCoinsValue });
-		el("activityText").innerHTML = t(verbKey, {
+		// BUG TROUVÉ ET CORRIGÉ (18/10/2026, campagne de test 2/6/16 joueurs,
+		// capture d'écran d'un téléphone troc+smartphone) : un échange DIRECT
+		// carte-contre-carte (Transaction.isCardSwap, troc) s'affichait
+		// "Vous avez acheté Granite à Bruno pour 0 jetons." - un achat et un
+		// montant en jetons, en contradiction avec la règle 6 du troc ("jamais
+		// de jetons ni de valeur monétaire", docs/10-etape-plugins-troc.md), et
+		// sans jamais dire quelle carte avait été donnée en retour. Le vendeur
+		// (offre scannée) donne cardTypeId et reçoit swapCardTypeId ; l'acheteur
+		// (celui qui a scanné) l'inverse.
+		if (latest.isCardSwap) {
+			const givenId = isSale ? latest.cardTypeId : latest.swapCardTypeId;
+			const receivedId = isSale ? latest.swapCardTypeId : latest.cardTypeId;
+			el("activityText").innerHTML = t("playerView.activity_swapped_with", {
+				given: `<strong>${escapeHtmlLocal(await resolveCardName(givenId))}</strong>`,
+				received: `<strong>${escapeHtmlLocal(await resolveCardName(receivedId))}</strong>`,
+				name: `<strong>${escapeHtmlLocal(partner)}</strong>`,
+			});
+		} else el("activityText").innerHTML = t(verbKey, {
 			card: `<strong>${escapeHtmlLocal(cardName)}</strong>`,
 			name: `<strong>${escapeHtmlLocal(partner)}</strong>`,
 			amount: `<strong>${amountLabel}</strong>`,
@@ -1454,6 +1471,29 @@ async function renderHistory() {
 
 function historyTransactionRowHtml(tx) {
 	const isSale = tx.sellerPlayerId === state.player.id;
+	// 18/10/2026 (même bug que la carte "Dernière activité", voir
+	// renderDashboard) : un échange troc carte-contre-carte s'affichait
+	// "Acheté à X  −0" / "Vendu à X  +0" - jamais une vente ni un montant
+	// (règle 6 du troc), et la carte REÇUE n'apparaissait nulle part. Ligne
+	// dédiée : carte reçue en titre, "Échangé avec X : donnée → reçue",
+	// badge neutre ⇄ (un échange de même valeur, ni gain ni perte).
+	if (tx.isCardSwap) {
+		const nameOf = (id) => { const e = state.cardsCatalog.find((c) => c.id === id); return e ? (catalogTextValue(e.nom) || id) : id; };
+		const givenName = nameOf(isSale ? tx.cardTypeId : tx.swapCardTypeId);
+		const receivedName = nameOf(isSale ? tx.swapCardTypeId : tx.cardTypeId);
+		const swapPartner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;
+		return `
+		<li class="leaderboard-item">
+			<div class="player-info">
+				<div class="avatar-badge bg-teal">⇄</div>
+				<div>
+					<div class="player-name">${escapeHtmlLocal(receivedName)}</div>
+					<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t("playerView.history_swapped_with", { name: swapPartner, given: givenName, received: receivedName }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: tx.turnNumber }))}</div>
+				</div>
+			</div>
+			<span class="player-score">⇄</span>
+		</li>`;
+	}
 	const entry = state.cardsCatalog.find((c) => c.id === tx.cardTypeId);
 	const cardName = entry ? (catalogTextValue(entry.nom) || tx.cardTypeId) : tx.cardTypeId;
 	const partner = isSale ? tx.buyerPlayerName : tx.sellerPlayerName;

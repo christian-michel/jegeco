@@ -1938,6 +1938,9 @@ msgstr "Sold to {name}"
 msgid "playerView.history_bought_from"
 msgstr "Bought from {name}"
 
+msgid "playerView.history_swapped_with"
+msgstr "Swapped with {name}: {given} → {received}"
+
 # ============ Hub redesign (30/08/2026): bottom navigation bar ============
 msgid "playerView.nav_home"
 msgstr "Home"
@@ -2029,6 +2032,9 @@ msgstr "You sold {card} to {name} for {amount}."
 
 msgid "playerView.activity_bought_from"
 msgstr "You bought {card} from {name} for {amount}."
+
+msgid "playerView.activity_swapped_with"
+msgstr "You swapped {given} for {received} with {name}."
 
 # ============ Modal carte agrandie + retournement 3D (30/08/2026) ============
 msgid "playerView.card_modal_swipe_hint"
