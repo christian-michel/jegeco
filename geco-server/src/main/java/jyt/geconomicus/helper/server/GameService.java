@@ -514,10 +514,29 @@ public class GameService
 			// ne peuvent jamais obtenir le même joueur. Fait sous le verrou de
 			// partie (voir joinAsPlayer) : deux téléphones simultanés ne peuvent pas
 			// réclamer le même joueur.
-			final Player unclaimedPreRegistered = game.getPlayers().stream()
-					.filter(p -> p.getName().equalsIgnoreCase(pName) && (p.getAvatarConfigJson() == null)
-							&& (p.getDeclaredAge() == null))
-					.findFirst().orElse(null);
+			//
+			// RESTREINT À LA PHASE D'INSCRIPTION (18/10/2026, seconde relecture
+			// indépendante de ce correctif, reproduit en HTTP réel) : "jamais
+			// réclamé" (ni avatar ni âge) ne voulait pas dire "jamais utilisé" - le
+			// lien personnel 🔗 (player-view.html, seul chemin qui fonctionnait
+			// avant ce correctif, toujours proposé par l'animateur) ne pose JAMAIS
+			// d'avatar. Un joueur pré-inscrit qui jouait déjà via son lien 🔗
+			// restait donc "réclamable" EN PLEINE PARTIE : n'importe quel autre
+			// téléphone tapant son prénom sur le QR d'invitation recevait SON
+			// jeton d'accès et pouvait dépenser ses jetons (mesuré : 9 de ses 10
+			// jetons dépensés par l'intrus, HTTP 201 ; avant ce correctif : 409).
+			// Rattachement désormais limité à la partie pas encore démarrée
+			// (turnNumber == 0) : c'est le moment où la reprise a réellement lieu
+			// (l'animateur crée la partie, affiche "Inviter", les joueurs scannent,
+			// puis "Démarrer la partie") et où aucun jeton ni aucune carte n'est
+			// encore en jeu. Après le premier tour, retour au comportement
+			// d'origine (prénom refusé, le joueur en retard passe par son lien 🔗
+			// copié par l'animateur).
+			final Player unclaimedPreRegistered = (game.getTurnNumber() != 0) ? null
+					: game.getPlayers().stream()
+							.filter(p -> p.getName().equalsIgnoreCase(pName) && (p.getAvatarConfigJson() == null)
+									&& (p.getDeclaredAge() == null))
+							.findFirst().orElse(null);
 			if (unclaimedPreRegistered != null)
 			{
 				em.getTransaction().begin();

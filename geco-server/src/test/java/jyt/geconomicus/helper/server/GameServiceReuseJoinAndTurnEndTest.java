@@ -73,6 +73,26 @@ class GameServiceReuseJoinAndTurnEndTest
 				() -> sService.joinAsPlayer(gameId, "Yasmine", 20, "#000000", "{}")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 	}
 
+	/**
+	 * Seconde relecture indépendante (18/10/2026) : un joueur pré-inscrit qui
+	 * joue via son lien personnel 🔗 n'a jamais d'avatar - sans restriction, un
+	 * autre téléphone tapant son prénom EN PLEINE PARTIE recevait son jeton
+	 * d'accès. Le rattachement est limité à la partie pas encore démarrée.
+	 */
+	@Test
+	void preRegisteredPlayerCannotBeClaimedOnceTheGameHasStarted() throws Exception
+	{
+		final int gameId = newGame(Game.MONEY_DEBT, "reprise-apres-demarrage");
+		final Player preRegistered = sService.addPlayer(gameId, "Yasmine"); //$NON-NLS-1$
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		assertThrows(GameService.DuplicatePlayerNameException.class,
+				() -> sService.joinAsPlayer(gameId, "yasmine", 20, "#000000", "{}")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final Player stored = sService.getGame(gameId).getPlayers().iterator().next();
+		assertEquals(preRegistered.getId(), stored.getId());
+		assertEquals(1, sService.getGame(gameId).getPlayers().size(), "aucun doublon créé"); //$NON-NLS-1$
+		assertEquals(null, stored.getAvatarConfigJson(), "place toujours libre pour son lien 🔗"); //$NON-NLS-1$
+	}
+
 	@Test
 	void duplicateNameOfAPlayerAlreadyJoinedByPhoneIsStillRefused() throws Exception
 	{
