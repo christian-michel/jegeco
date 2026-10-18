@@ -4155,3 +4155,258 @@ joueurs, vérification de la fluidité des échanges en libre+smartphone,
 réflexion sur un futur mécanisme d'échange aléatoire de cartes de même
 valeur) reprend juste après ce correctif - voir l'entrée suivante pour
 son déroulement et ses résultats.
+
+### 18/10/2026 — Campagne de test 2/6/16 joueurs : 9 parties réelles, 6 bugs corrigés, 7 points ouverts
+
+**Demande utilisateur**, en lançant sa propre campagne de test manuelle en
+parallèle : 3 effectifs (2, 6, 16 joueurs), chacun joué en libre+smartphone
+intégralement (12 tours, 5 min/tour) PUIS repris pour une partie
+dette+smartphone et une partie troc+smartphone (même joueurs, via
+"reprendre les joueurs d'une partie existante") ; vérifier le code (chemin,
+indentation, variable, syntaxe), la cohérence des échanges/transferts de
+valeur sur tous les écrans, la fluidité des échanges en libre+smartphone
+(circonstances de blocage + solutions proposées), et réfléchir (sans
+implémenter) à un mécanisme d'échange carte-contre-pioche. **Méthode à deux
+agents** (déjà utilisée le 19/09/2026 pour le PDF "Retours - 20260919") :
+un agent de contrôle mène la campagne et corrige ce qu'il trouve, un second
+agent, indépendant, audite son travail sans voir son raisonnement.
+
+#### Déroulement
+
+9 parties jouées intégralement, deux fois (une passe `c1` avec un correctif
+intermédiaire, une passe `c2` de confirmation sur le jar final), pilotées
+en **HTTP réel** : chaque "téléphone" a sa propre IP de boucle locale
+(`127.0.N.x`, pour que la limitation de débit se comporte comme sur un
+vrai réseau), de vrais achats/ventes par QR (`/trade-offers` →
+`/redeem`), de vrais échanges troc (`/redeem-swap`), de vraies demandes de
+crédit en dette. L'animateur rejoue appel par appel le VRAI assistant de
+fin de tour d'`app.js`. Vérité terrain tenue indépendamment (jetons, masse,
+DU, prix, dette, inventaire de cartes, carrés) et comparée après **chaque**
+échange, pas seulement en fin de partie. Captures d'écran Playwright aux
+tours 1/6/12 (tableau de bord, deux téléphones, historique, rapports
+finaux, écran "Comparer"), dans
+`/tmp/.../scratchpad/{c1,c2}_n{2,6,16}/shots/` (chemin de session, non
+permanent — voir le rapport de l'agent pour la liste complète si besoin
+avant qu'il ne soit nettoyé).
+
+Conservation des cartes vérifiée en fin de partie dans la base H2 : les 9
+parties ont tous leurs modèles revenus à 5 exemplaires exacts, avec bien
+N+2 modèles par niveau (4, 8 et 18 — cohérent avec la décision du
+18/10/2026 ci-dessus). Masse monétaire finale = vérité terrain partout
+(dette : 0 une fois tous les joueurs sortis, cohérent avec le moteur).
+
+#### 6 bugs trouvés et corrigés (commits `ea66a73`, `b10d783`, `7a54bec`
+puis `a19d471` qui le resserre après la seconde relecture, `966d9bb`,
+`11c2965` — fusionnés par fast-forward dans la branche de travail, 93
+tests verts, résumé condensé dans `CLAUDE.md` "Pièges déjà rencontrés") :
+
+1. **WebSocket fermé → 500 sur une action déjà persistée** (`ea66a73`,
+   `GecoServer.broadcast`). Un téléphone verrouillé/fermé/sans wifi dont
+   la session n'était pas encore retirée de `mSessionGameIds` (`onClose`
+   asynchrone côté Jetty) faisait remonter `ClosedChannelException`
+   jusqu'à la route HTTP appelante — 500 alors que l'écriture avait déjà
+   réussi. Observé en campagne réelle sur "Fin de tour", l'assistant
+   (interrompu en plein milieu) et l'encaissement automatique des carrés
+   après un achat (jamais exécuté, appelé après le broadcast fautif).
+   Corrigé : chaque envoi isolé, erreur journalisée puis session retirée
+   sans jamais remonter à l'appelant ni aux autres destinataires, +
+   `ws.onError`. Reproduit déterministe : 10/40 réponses 500 avant, 0/40
+   après.
+2. **"Fin de tour" manuel ne fermait pas les échanges côté serveur**
+   (`b10d783`, `GameService.isTradingAllowed`/`markTurnEndAnnounced`,
+   route `announce-end`). Le clic manuel n'arrêtait que le chrono affiché
+   chez l'animateur ; côté serveur, les téléphones gardaient
+   `tradingAllowed=true` jusqu'à l'expiration naturelle (5 min plus
+   tard), pendant que l'assistant de fin de tour posait des soldes
+   ABSOLUS lus à son ouverture. Une vente conclue entre-temps était
+   écrasée : mesuré, vendeur à 26 au lieu de 31, carte transférée
+   gratuitement. Corrigé : `announce-end` (clic manuel ET expiration)
+   enregistre la fin du tour en mémoire, bloque jusqu'au `TURN` suivant.
+3. **"Reprendre les joueurs" inutilisable par QR en mode smartphone**
+   (`7a54bec`) — un joueur repris tapant son prénom recevait "déjà pris"
+   (l'animateur le pré-inscrit par `addPlayer` à la création, sans
+   avatar/âge). Corrigé : rattachement du téléphone qui tape ce prénom
+   si le joueur n'a encore ni avatar ni âge. **Seconde relecture
+   indépendante (`a19d471`)** : cette version ne distinguait pas "jamais
+   réclamé" de "jamais utilisé" — un joueur pré-inscrit jouant déjà via
+   son lien personnel 🔗 (qui ne pose jamais d'avatar) restait réclamable
+   EN PLEINE PARTIE par n'importe qui connaissant le lien d'invitation.
+   Mesuré : prise de la place de "Yasmine" en pleine partie dette (HTTP
+   201, même jeton d'accès), puis dépense de 9 de ses 10 jetons - un
+   vrai risque, pas théorique. Resserré : rattachement seulement si
+   `game.getTurnNumber() == 0` (avant "Démarrer la partie", aucun jeton
+   ni carte encore en jeu). Limite acceptée : avant le démarrage,
+   n'importe quel porteur du lien peut encore réclamer une place libre
+   (sans enjeu à ce stade, visible par l'animateur).
+4. **Quatre défauts d'affichage/statistiques** (`966d9bb`) : `quitEarly`
+   vrai pour TOUS les joueurs d'une partie libre+smartphone terminée
+   normalement (corrigé au même critère que `endOfGameQuitEvents`) ;
+   ratio Galilée en "jetons ÷ 3" au numérateur contre des unités
+   monétaires au dénominateur (0,67 au lieu de 1,0 en moyenne, corrigé
+   pour la libre+smartphone) ; une partie troc étiquetée "Libre"/verte
+   dans la comparaison (corrigé, label "Troc" + nom de partie, couleur
+   ambre) ; carte "Reste à changer" affichant des valeurs négatives
+   dénuées de sens en strict TRM (-278 mesuré, masquée dans ce mode).
+5. **Échange troc affiché comme un achat gratuit** (`11c2965`,
+   `player-view.js`) : "Vous avez acheté Granite... pour 0 jetons"
+   devient "Vous avez échangé Granite contre Maïs avec Bruno6" (badge
+   ⇄), la carte reçue apparaît enfin.
+
+#### Audit indépendant : confirme la campagne, corrige 1 point sous-estimé, 1 point mal posé
+
+Le second agent (audit) a rejoué ses propres scénarios HTTP (jamais
+seulement ceux du premier), désassemblé Javalin pour vérifier `WsContext`,
+remis les sources d'avant correctif pour confirmer que les 5 (puis 6)
+nouveaux tests échouent pour la bonne raison, inspecté des captures
+d'écran. Verdict global : **campagne menée sérieusement, conclusions
+fiables**, à deux réserves près :
+
+- **Le point de sécurité de `7a54bec` était sous-estimé**, pas juste "à
+  confirmer" : voir le correctif `a19d471` ci-dessus, directement issu de
+  cette seconde relecture — exactement le genre de défaut qu'une
+  relecture par le même agent ne trouve généralement pas (même motif que
+  le 18/09/2026 sur le troc).
+- **Les captures de graphiques Chart.js sont parfois trompeuses** (prises
+  en pleine animation — ex. `c2_n6/shots/rapport-6j-libre.png` montre des
+  courbes arrêtées vers "Tour 2,5" et un ratio Galilée apparent ≈2) : les
+  DONNÉES sous-jacentes sont justes (revérifiées séparément), seule la
+  capture au mauvais instant est trompeuse. À garder en tête pour toute
+  capture automatisée future d'un graphique animé : attendre la fin de
+  l'animation avant `page.screenshot()`.
+
+#### 7 points trouvés mais NON corrigés (décision utilisateur nécessaire)
+
+**(a) Dette+smartphone, "Ne peut pas payer" : cartes saisies restent sur
+le téléphone.** Mesuré : 63/65 saisies (passe `c2`) laissent les cartes
+chez le joueur alors que la banque les compte dans ses gains
+(`seizedValues`) — incohérence physique/comptable. Nécessite de décider
+quels modèles la banque prend réellement et s'ils retournent à la pioche
+partagée.
+
+**(b) Dette+smartphone : un "Annuler" sans rapport efface l'effet
+monétaire de TOUS les achats de cartes depuis le début de la partie — et
+la décision du 17/10/2026 qui encadre ce point reposait sur une
+description inexacte.** C'est le point le plus important remonté par
+cette campagne.
+
+Reproduit indépendamment par l'agent d'audit, à partir de zéro, 3 joueurs :
+2 crédits + 2 achats réels par QR → Ada=1, Bob=13, Cyd=6 ; un crédit sans
+rapport accordé à Cyd puis un seul "Annuler" (`POST /undo`) → **Ada=10,
+Bob=10, Cyd=0**. Les cartes achetées restent, elles, acquises (Ada garde
+ses 6 cartes) — seuls les SOLDES sont faux. La masse monétaire globale
+reste juste (20) : l'écart est purement individuel.
+
+Mécanisme : `Game.recomputeAll()` remet `jetonWeak` à 0 en dette
+(correctif du 17/10/2026) puis ne rejoue QUE les `Event` — les achats sont
+des `Transaction` (modifient `jetonWeak` directement,
+`GameService` ≈l.1124), jamais rejouées. `jetonWeak` est l'UNIQUE source du
+solde affiché en dette+smartphone (`computeTradeBalance`).
+
+Deux correctifs à cette analyse par rapport au rapport initial de l'agent
+de contrôle, apportés par l'agent d'audit :
+
+- **La libre est touchée aussi**, pas seulement la dette : un achat fait
+  après les points de contrôle (`W`, `WEALTH_CHECKPOINT`) de fin de tour
+  précédent est effacé de la même façon par un "Annuler" sans rapport
+  (mesuré : Ada 4→7, Bob 10→7). La différence n'est pas "libre jamais
+  touchée" mais l'ÉTENDUE de la perte : en libre, seulement les achats
+  depuis le dernier `W` du joueur (le prochain rejeu les "rattrape") ; en
+  dette, qui n'a AUCUN point de contrôle absolu équivalent en cours de
+  partie, c'est TOUTE la partie depuis le début.
+- **Ce n'est pas une régression pure introduite le 17/10/2026** : avant
+  cette date, "Annuler" en dette cassait déjà les soldes, mais
+  différemment (chaque rejeu ré-ajoutait les crédits, +10 par annulation
+  — le bug "Annuler" original documenté dans `CLAUDE.md`). Le correctif du
+  17/10 a échangé un symptôme (inflation des crédits) contre un autre
+  (effacement des achats) — il n'a pas introduit un problème là où tout
+  fonctionnait.
+- **La décision utilisateur du 17/10/2026 ("les transactions validées
+  restent validées") a été prise sur la base d'une description
+  imprécise** : la question posée à l'époque parlait de remettre les
+  CARTES à un état antérieur. Or les cartes ne bougent jamais lors d'un
+  "Annuler" — ce sont les JETONS (le paiement) qui reviennent en arrière,
+  et en dette, sur TOUTE la partie, pas seulement l'achat concerné. La
+  réponse de l'utilisateur, prise à la lettre, contredit donc le
+  comportement réel du système.
+
+**Recommandation de l'agent d'audit, retenue ici** : ne pas documenter ce
+point tel quel comme "décision déjà actée" — reposer la question à
+l'utilisateur avec la description EXACTE : *"En dette, un Annuler, une
+suppression ou une édition annule l'effet monétaire de TOUS les achats
+depuis le début de la partie, les cartes restant acquises ; en libre,
+seulement ceux du tour en cours (depuis le dernier point de contrôle)."*
+Aucun correctif trivial et sûr n'existe (une refonte du rejeu a déjà été
+explicitement écartée le 17/10/2026) — piste la plus simple si une
+correction est souhaitée : après le rejeu, ré-ajouter le delta net des
+`Transaction` postérieures au dernier `DEATH`/`QUIT` du joueur (dette) ou
+à son dernier `W` (libre) — exact sauf en cas de saisie plafonnée à 0. Le
+correctif complet nécessiterait de rejouer `Event` ET `Transaction` dans
+leur ordre chronologique réel, la refonte déjà écartée.
+
+**(c) Libre, morts : le DU annoncé par l'assistant diffère du DU
+réellement reçu.** L'assistant affiche, lors d'une renaissance, le DU
+calculé AVANT les morts du tour (ex. 662 jetons) ; le nouveau-né et tous
+les survivants reçoivent en réalité le DU recalculé APRÈS (ex. 468
+jetons). Écarts mesurés de -30% à +20%. Question de règle à trancher :
+quel DU annoncer (avant ou après les morts) ?
+
+**(d) Libre, statistiques : "richesse à la mort" utilise le DU du
+nouveau-né au lieu du solde réel du mourant.** Le champ `weakCoins` de
+l'événement `DEATH` (qui sert à afficher la richesse du joueur qui VIENT DE
+MOURIR dans les statistiques) contiendrait en réalité le DU reçu par SA
+renaissance, pas son solde au moment de mourir — biaiserait Gini/médiane et
+la comparaison dette/libre. Piste proposée (par l'audit, non vérifiée plus
+avant) : reconstruire le solde à partir du dernier point de contrôle +
+transactions.
+
+**(e) La courbe "unités monétaires" (valeur absolue) serait en réalité
+"jetons ÷ 3"**, formule héritée telle quelle de l'application Swing
+d'origine — à vérifier si c'est le comportement voulu (conversion
+historique assumée) ou un oubli de conversion.
+
+**(f) Fluidité des échanges — voir le détail chiffré et les pistes dans
+`docs/14-reflexion-echange-pioche.md`** (nouveau document, réflexion sur un
+mécanisme d'échange carte-contre-pioche, PAS implémenté, à valider avant
+toute suite). Résumé des mesures (passe `c2`, instantané en début de
+tour) :
+
+| | 2 joueurs | 6 joueurs | 16 joueurs |
+|---|---|---|---|
+| Libre : aucun échange possible | 0% | 0% | 0% |
+| Libre : aucun échange ne rapproche d'un carré | 58% | 6% | 0% |
+| Dette : ne peut rien acheter | 22% | 7% | 14% |
+| Troc : aucun échange valide | 41% | 77% | 79% |
+
+Circonstances observées : à peu de joueurs, les modèles manquants sont
+dans la pioche (inaccessible hors carré/mort) ; les prix de niveaux
+supérieurs deviennent rapidement hors de portée du DU courant (une carte
+"tresforte" coûte 3,2 DU, un joueur moyen détient ~1,16 DU sur 12 tours —
+une partie de ≤4 tours peut même geler la libre dès le tour 1) ; effet
+"boule de neige" des carrés (un joueur a fini avec 116/160 cartes à 6
+joueurs, dette) menant à des renaissances à main INCOMPLÈTE voire À ZÉRO
+carte (seul écart de conservation relevé dans toute la campagne, dynamique
+de jeu plutôt que bug) ; le troc, bloqué par sa règle de réciprocité
+(chacun doit déjà détenir le modèle qu'il va recevoir), jusqu'à 12 tours
+sans échange valide pour un joueur, zéro carré sur toute la partie à 16
+joueurs.
+
+**(g) Robustesse au lancement : `plugins/` lu depuis le répertoire
+courant.** Un jar lancé depuis ailleurs que la racine du dépôt (contraire à
+ce que fait toujours `run.sh`) laisse le choix du système monétaire VIDE,
+sans aucun message d'erreur expliquant pourquoi.
+
+#### Vérifications globales
+
+`mvn clean package` : 93 tests (65 `geco-server` + 28 `geco-engine`), tous
+verts, aucune régression. Script i18n de `CLAUDE.md` relancé après la
+fusion : aucune clé manquante, `fr.po`/`en.po` identiques. Les 6 commits
+ont été fusionnés par fast-forward (aucun conflit, chaîne linéaire déjà
+construite par l'agent d'audit par-dessus les 5 commits du premier agent)
+dans la branche de travail du dépôt principal.
+
+Note mineure relevée par l'audit, sans action nécessaire : les entrées du
+17/10/2026 dans `CLAUDE.md` et plus haut dans ce document mentionnent "244
+tests" à l'époque — la suite en compte aujourd'hui 93. Écart non
+investigué (hors périmètre de cette campagne) ; les entrées historiques ne
+sont jamais réécrites (convention du projet), seule la source de vérité
+EST le `mvn clean package` réel à chaque instant.

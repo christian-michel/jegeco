@@ -464,3 +464,97 @@ ajoutes, pas seulement via ce script.
   fermait sans jamais afficher la bonne URL (`undefined`) ; APRÈS
   correctif, le panneau est bien masqué après changement de partie et un
   seul clic affiche l'URL correcte et distincte de la nouvelle partie.
+- **Corrigés le 18/10/2026** (campagne de test complète demandée par
+  l'utilisateur : 9 parties réelles, 2/6/16 joueurs × 12 tours, libre+
+  smartphone PUIS reprise des joueurs en dette+smartphone ET en
+  troc+smartphone, pilotées en HTTP réel contre une vérité terrain
+  indépendante — méthode à deux agents, contrôle puis audit indépendant,
+  comme pour le PDF du 19/09/2026 ; voir `docs/03-architecture-
+  technique.md`, entrée du 18/10/2026, pour le détail complet) — 6 bugs
+  réels trouvés et corrigés :
+  - Un WebSocket fermé côté client (téléphone verrouillé/onglet fermé/
+    wifi perdu) mais pas encore retiré de `mSessionGameIds` (`onClose`
+    traité de façon asynchrone par Jetty) faisait lever
+    `ClosedChannelException` dans `GecoServer.broadcast()`, remontant en
+    500 l'action HTTP qui venait de diffuser — ALORS QUE l'écriture
+    était déjà persistée (mesuré : "Fin de tour" en 500, assistant
+    interrompu en plein milieu, encaissement automatique des carrés
+    jamais exécuté après un achat). Corrigé : chaque envoi isolé (session
+    fermée retirée sans tenter l'envoi, erreur journalisée puis session
+    retirée, jamais propagée aux autres destinataires ni à l'appelant
+    HTTP) + `ws.onError` retire la session en erreur. Reproduit
+    déterministe : 10/40 réponses 500 avant, 0/40 après.
+  - "Fin de tour" cliqué MANUELLEMENT n'arrêtait que le minuteur affiché
+    chez l'animateur — `GameService.isTradingAllowed` ne bloquait les
+    échanges qu'à l'expiration NATURELLE du chrono (jusqu'à 5 minutes
+    plus tard), le temps que l'assistant de fin de tour (qui pose des
+    `WEALTH_CHECKPOINT`/saisies ABSOLUS, lus à son ouverture) tourne. Une
+    vente conclue entre-temps était donc écrasée par l'assistant,
+    mesuré : vendeur à 26 au lieu de 31, carte transférée gratuitement.
+    Corrigé : `POST /turn/announce-end` (appelé par le clic manuel ET
+    l'expiration naturelle) enregistre la fin du tour en mémoire
+    (`GameService.markTurnEndAnnounced`), `isTradingAllowed` bloque
+    jusqu'au `TURN` suivant. Limite assumée : contrôle en mémoire
+    (perdu à un redémarrage serveur), fait avant la prise du verrou de
+    partie (comme le contrôle de pause existant).
+  - "Reprendre les joueurs" (fonctionnalité du 29/08/2026) restait
+    inutilisable par QR en mode smartphone malgré le correctif du
+    panneau "Inviter" ci-dessus : un joueur repris tapant son prénom
+    habituel sur le lien d'invitation recevait "Ce prénom est déjà
+    pris" (l'animateur le PRÉ-INSCRIT par son prénom via `addPlayer` à
+    la création de la partie, `joinAsPlayer` refusait ensuite tout
+    prénom déjà présent). Corrigé en deux temps : (1) un joueur
+    pré-inscrit jamais encore réclamé (ni avatar ni âge posés —
+    `addPlayer` n'en pose aucun, alors que `join.html` en envoie toujours
+    un) est rattaché au téléphone qui tape ce prénom ; (2) **seconde
+    relecture indépendante** : cette première version ne distinguait pas
+    "jamais réclamé" de "jamais utilisé" — un joueur pré-inscrit jouant
+    déjà via son lien personnel 🔗 (qui, lui, ne pose jamais d'avatar)
+    restait réclamable EN PLEINE PARTIE par n'importe qui connaissant le
+    lien d'invitation, un vrai risque (mesuré : prise de la place de
+    "Yasmine" en pleine partie dette, HTTP 201, puis dépense de 9 de ses
+    10 jetons). Resserré au rattachement UNIQUEMENT si
+    `game.getTurnNumber() == 0` (inscription, avant "Démarrer la
+    partie" — aucun jeton ni carte encore en jeu à ce moment).
+    Limite restante, acceptée : avant le démarrage, n'importe quel
+    porteur du lien d'invitation peut encore réclamer une place
+    pré-inscrite non réclamée (sans enjeu à ce stade, visible par
+    l'animateur).
+  - Quatre défauts d'affichage/statistiques : (1) `quitEarly` valait vrai
+    pour TOUS les joueurs d'une partie libre+smartphone terminée
+    NORMALEMENT (l'inventaire de fin de partie pose un `QUIT` pour
+    chacun, strict TRM met alors `Player.quit` à vrai) — "(sorti)"
+    partout, courbes en pointillés ; corrigé au même critère que
+    `endOfGameQuitEvents` dans `computeWealthOverTime` (sorti EN COURS
+    de partie seulement si un `TURN` suit son `QUIT`). (2) Module
+    Galilée, `relativeToAverage` : numérateur en "jetons ÷ 3" (unité
+    héritée de Swing) divisé par un dénominateur en unités monétaires —
+    un joueur exactement dans la moyenne valait 0,67 au lieu de 1,0 (avec
+    `weakCoinValue` par défaut 0,5), 0 au tour 1 pour tout le monde ;
+    corrigé pour la libre+smartphone (ratio en unités monétaires réelles
+    des deux côtés). (3) Une partie TROC étiquetée "Libre" (même couleur
+    verte) dans l'écran de comparaison, indiscernable d'une vraie partie
+    libre — libellé "Troc" + nom de partie ajouté, couleur ambre
+    dédiée. (4) Carte "Reste à changer" du tableau de bord (écart à une
+    cible de convergence propre au mode NON strict TRM) affichant des
+    valeurs négatives croissantes dénuées de sens en strict TRM (mesuré :
+    -278) — masquée dans ce mode.
+  - Un échange troc DIRECT carte-contre-carte s'affichait côté joueur
+    comme "Vous avez acheté Granite à Bruno6 pour 0 jetons" (Dernière
+    activité) et "Acheté à X  −0" (Historique) — contraire à la règle 6
+    du troc ("jamais de jetons ni de valeur monétaire",
+    `docs/10-etape-plugins-troc.md`) et la carte REÇUE en retour
+    n'apparaissait nulle part. Corrigé (`player-view.js` uniquement,
+    dette/libre inchangées) : "Vous avez échangé {donnée} contre {reçue}
+    avec {nom}", badge neutre ⇄ dans l'historique.
+  Vérifié à chaque étape par de nouveaux tests (`GameServiceReuseJoin
+  AndTurnEndTest`, `StatsServiceCampaignFixesTest`), des reproductions
+  HTTP déterministes AVANT/APRÈS, et une campagne de confirmation
+  complète rejouée sur le jar corrigé (plus aucune erreur serveur, plus
+  aucun écart de cohérence inattendu) — voir `docs/03-architecture-
+  technique.md` pour le détail complet, y compris les points trouvés
+  MAIS PAS corrigés (nécessitent une décision utilisateur, notamment une
+  mise à jour importante de la décision du 17/10/2026 sur le bug
+  "Annuler" — son énoncé d'origine s'est révélé inexact, voir ce même
+  renvoi) et la réflexion (non implémentée) sur un futur mécanisme
+  d'échange carte-contre-pioche commun aux trois systèmes smartphone.

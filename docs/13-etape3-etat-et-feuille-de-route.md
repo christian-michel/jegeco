@@ -765,6 +765,40 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    revérifier : profils joueurs persistants au-delà de la reprise par nom,
    statistiques avancées spécifiques à l'étape 3 (voir
    `CAHIER_DES_CHARGES_ETAPE3.md` §5.2-5.4 pour le détail).
+9. **Points trouvés par la campagne de test 2/6/16 joueurs du 18/10/2026**
+   (voir `03-architecture-technique.md`, entrée du même jour, pour le
+   détail chiffré et les reproductions complètes), tous en attente d'une
+   décision utilisateur :
+   - **(prioritaire)** Dette+smartphone : un "Annuler"/suppression/édition
+     SANS RAPPORT efface l'effet monétaire de TOUS les achats de cartes
+     depuis le début de la partie (cartes acquises conservées, seuls les
+     soldes sont faux) ; en libre, l'effacement est plus limité (depuis le
+     dernier point de contrôle du joueur) mais existe aussi. La décision
+     du 17/10/2026 sur ce sujet (CLAUDE.md, "les transactions validées
+     restent validées") reposait sur une description inexacte du
+     problème (parlait des CARTES, alors que ce sont les JETONS qui
+     reviennent en arrière) - à retrancher avec la bonne description.
+   - Dette+smartphone, saisie "Ne peut pas payer" : les cartes saisies
+     restent affichées sur le téléphone du joueur alors que la banque les
+     compte déjà dans ses gains.
+   - Libre, renaissance : le DU annoncé par l'assistant (avant les morts
+     du tour) diffère du DU réellement reçu par le nouveau-né et les
+     survivants (recalculé après) - quel DU est le bon ?
+   - Libre, statistiques : la "richesse à la mort" utiliserait le DU du
+     nouveau-né au lieu du solde réel du joueur qui vient de mourir.
+   - La courbe "unités monétaires" (valeur absolue) serait en réalité
+     "jetons ÷ 3" (formule historique héritée de l'app Swing) - à
+     confirmer si voulu.
+   - Fluidité des échanges en libre/troc+smartphone à peu de joueurs
+     (mesurée jusqu'à 79% des joueur-tours sans échange valide en troc à
+     16 joueurs, 58% sans progression possible en libre à 2 joueurs) et
+     effet "boule de neige" des carrés pouvant mener à des renaissances à
+     main incomplète voire vide - voir la réflexion (non implémentée) sur
+     un mécanisme d'échange carte-contre-pioche dans
+     `14-reflexion-echange-pioche.md`.
+   - Robustesse au lancement : le dossier `plugins/` est lu depuis le
+     répertoire courant - un jar lancé ailleurs qu'à la racine du dépôt
+     laisse le choix du système monétaire vide, sans message d'erreur.
 
 ## Comment garder ce document à jour
 
