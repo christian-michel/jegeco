@@ -2514,7 +2514,11 @@ function renderComparisonChart() {
 		// monnaie libre - voir --accent-debt/--accent-libre dans style.css), plutôt
 		// que les couleurs orange/vert de l'app Swing d'origine utilisées ici par
 		// erreur de cohérence.
-		backgroundColor: g.isDebt ? "#2563eb" : "#16a34a",
+		// Troc (18/10/2026, campagne de test) : couleur propre (ambre) - jusqu'ici
+		// vert comme la libre, rendant une comparaison libre/troc illisible
+		// (deux séries de même couleur, de surcroît toutes deux étiquetées
+		// "Libre" côté serveur, voir StatsService.gameLabel).
+		backgroundColor: g.isDebt ? "#2563eb" : (g.moneySystem === 2 ? "#d97706" : "#16a34a"),
 	}));
 
 	if (reportCharts.compare) reportCharts.compare.destroy();
@@ -2752,7 +2756,15 @@ async function renderGameDetail(gameId) {
 	// cible. Vue globale pour l'instant (pas encore par joueur individuellement,
 	// ce que permettra le suivi individuel prévu à l'étape 3). N'a de sens qu'en
 	// monnaie libre (ni en dette, ni en troc qui n'a pas de masse monétaire).
-	el("statChangeCard").classList.toggle("hidden", isDebt || isTroc);
+	// 18/10/2026 (campagne de test 2/6/16 joueurs, capture d'écran : "-278 Reste
+	// à changer" au tour 6 d'une partie libre+smartphone) : cette carte mesure
+	// l'écart à une CIBLE vers laquelle la masse CONVERGE - notion propre au
+	// mode libre NON strict (voir Event.java, cas TURN). En strict TRM, la
+	// masse ne converge vers rien (elle croît du DU à chaque tour) : la valeur
+	// affichée, de plus en plus négative, n'avait aucun sens (et mélangeait des
+	// jetons - weakJetonsPerDU - avec une masse en unités monétaires). Masquée
+	// dans ce mode.
+	el("statChangeCard").classList.toggle("hidden", isDebt || isTroc || game.strictTrm);
 	if (!isDebt && !isTroc) {
 		// Remonté par l'utilisateur (09/09/2026) : même référence
 		// weakCoinValue-dépendante que partout ailleurs (voir

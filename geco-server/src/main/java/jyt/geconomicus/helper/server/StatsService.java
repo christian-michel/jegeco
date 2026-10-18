@@ -277,7 +277,7 @@ public class StatsService
 	 * {@link #computeComparison}). {@code isDebt} évite au front de refaire le test
 	 * {@code moneySystem == Game.MONEY_DEBT} lui-même.
 	 */
-	public record ComparisonGameInfo(Integer gameId, String label, boolean isDebt, int moneyCardsFactor)
+	public record ComparisonGameInfo(Integer gameId, String label, boolean isDebt, int moneyCardsFactor, int moneySystem)
 	{
 	}
 
@@ -513,7 +513,8 @@ public class StatsService
 		{
 			final Game game = games.get(i);
 			final boolean isDebt = game.getMoneySystem() == Game.MONEY_DEBT;
-			gameInfos.add(new ComparisonGameInfo(game.getId(), gameLabel(game), isDebt, game.getMoneyCardsFactor()));
+			gameInfos.add(new ComparisonGameInfo(game.getId(), gameLabel(game), isDebt, game.getMoneyCardsFactor(),
+					game.getMoneySystem()));
 
 			for (final Map.Entry<String, Integer> e : computeWealthByPlayer(game).entrySet())
 			{
@@ -565,11 +566,22 @@ public class StatsService
 
 	private String gameLabel(final Game pGame)
 	{
-		final String system = pGame.getMoneySystem() == Game.MONEY_DEBT ? "Dette" : "Libre"; //$NON-NLS-1$ //$NON-NLS-2$
+		// BUG TROUVÉ ET CORRIGÉ (18/10/2026, campagne de test 2/6/16 joueurs,
+		// comparaison libre / troc "reprise" à l'écran) : une partie TROC était
+		// étiquetée "Libre" (seuls dette/libre existaient quand ce libellé a été
+		// écrit) - les deux séries d'une comparaison libre/troc portaient alors le
+		// même nom (et la même couleur côté app.js, voir renderComparisonChart).
+		// Le nom de la partie (description) est aussi ajouté : des parties jouées le
+		// même jour au même endroit (cas typique : libre puis dette puis troc avec
+		// les mêmes joueurs) restaient sinon indiscernables dans la légende.
+		final String system = pGame.getMoneySystem() == Game.MONEY_DEBT ? "Dette" //$NON-NLS-1$
+				: (pGame.getMoneySystem() == Game.MONEY_TROC ? "Troc" : "Libre"); //$NON-NLS-1$ //$NON-NLS-2$
+		final String description = ((pGame.getDescription() == null) || pGame.getDescription().isBlank()) ? "" //$NON-NLS-1$
+				: pGame.getDescription() + " – "; //$NON-NLS-1$
 		final String date = pGame.getCurdate() == null ? "" : pGame.getCurdate(); //$NON-NLS-1$
 		final String location = (pGame.getLocation() == null) || pGame.getLocation().isBlank() ? ""
 				: " (" + pGame.getLocation() + ")"; //$NON-NLS-1$ //$NON-NLS-2$
-		return system + " – " + date + location; //$NON-NLS-1$
+		return system + " – " + description + date + location; //$NON-NLS-1$
 	}
 
 	/**
@@ -657,11 +669,38 @@ public class StatsService
 
 		final int[] turnCounter = { 0 };
 		final int[] currentFactor = { 1 };
+		// BUG TROUVÉ ET CORRIGÉ (18/10/2026, campagne de test 2/6/16 joueurs) :
+		// relativeToAverage divisait computeMonetaryGain (jetons / 3, l'unité de
+		// "richesse" historique de l'app Swing) par la moyenne M(t)/N(t), elle
+		// exprimée en UNITÉS MONÉTAIRES (jetons × "Valeur d'une pièce faible") -
+		// deux unités différentes : un joueur EXACTEMENT dans la moyenne
+		// apparaissait à 1/(3 × weakCoinValue), soit 0,67 avec la valeur par
+		// défaut 0,5 (0,33 avec 1), jamais 1,0 comme le promet le module Galilée
+		// (voir la Javadoc de PlayerWealthPoint). Mesuré sur une partie 2 joueurs/
+		// 12 tours : moyenne des deux ratios = 0,67 à chaque tour. Corrigé pour une
+		// partie libre suivie par smartphone (seule dont la masse est recalculée
+		// exactement en unités monétaires depuis les jetons réels, voir
+		// Game.computeMoneyMassFromActivePlayersJetons) : le ratio utilise
+		// désormais la valeur monétaire RÉELLE des jetons. monetaryValue (courbe
+		// absolue) reste inchangée (son unité "jetons / 3" est elle aussi
+		// discutable - signalée, décision utilisateur).
+		final boolean ratioInMonetaryUnits = (pGame.getMoneySystem() == Game.MONEY_LIBRE)
+				&& isSmartphoneTrackedGame(pGame);
+		final double weakCoinValue = (pGame.getWeakCoinValue() == 0) ? 1 : pGame.getWeakCoinValue();
+		final Map<String, Double> lastKnownMonetaryUnits = new java.util.HashMap<>();
 		// Correctif du 17/10/2026 (voir la Javadoc de cette méthode) : mêmes
 		// jetons de DÉPART restaurés avant le rejeu que pour
 		// computeMoneyMassHistory/computeMoneyMassDetailHistory, remis à leur
 		// valeur réelle (celle de la partie en cours) dans le "finally" plus bas.
 		final Map<Player, int[]> jetonsBeforeReplay = resetJetonsToStartOfGameForReplay(pGame);
+		// Point de départ du ratio (18/10/2026) : la dotation de départ réelle
+		// (posée hors événement, déjà restaurée juste au-dessus - 0 pour un joueur
+		// arrivé après le premier tour), sans quoi le point "tour 1" valait 0 pour
+		// tous alors que chacun détient exactement la moyenne (ratio 1,0).
+		if (ratioInMonetaryUnits)
+			for (final Player p : pGame.getPlayers())
+				lastKnownMonetaryUnits.put(p.getName(),
+						monetaryUnits(p.getJetonWeak() + (2 * p.getJetonMedium()) + (4 * p.getJetonStrong()), weakCoinValue));
 		try
 		{
 			pGame.recomputeAll(event -> {
@@ -679,7 +718,9 @@ public class StatsService
 					for (final Player p : pGame.getPlayers())
 					{
 						final int[] known = lastKnownValue.getOrDefault(p.getName(), new int[] { 0, 0 });
-						final double relative = average == 0 ? 0 : known[0] / average;
+						final double numerator = ratioInMonetaryUnits ? lastKnownMonetaryUnits.getOrDefault(p.getName(), 0.0)
+								: known[0];
+						final double relative = average == 0 ? 0 : numerator / average;
 						pointsByPlayer.get(p.getName())
 								.add(new PlayerWealthPoint(turnCounter[0], known[0], known[1], known[0] + known[1],
 										round2(relative)));
@@ -702,7 +743,8 @@ public class StatsService
 					final int mass = pGame.getMoneyMass();
 					final long activeCount = pGame.getPlayers().stream().filter(p2 -> p2.isActive() || p2.isQuit()).count();
 					final double average = activeCount == 0 ? 0 : (double) mass / activeCount;
-					final double relative = average == 0 ? 0 : assessedMonetary / average;
+					final double relative = average == 0 ? 0
+							: (ratioInMonetaryUnits ? monetaryUnits(eventCoins(event), weakCoinValue) : assessedMonetary) / average;
 					// BUG TROUVÉ ET CORRIGÉ (remonté par l'utilisateur, 13/09/2026, PDF avec
 					// captures d'écran - "ne pas montrer le point où le compte revient à
 					// zéro quand ils quittent la partie à la toute fin, la courbe doit
@@ -747,6 +789,7 @@ public class StatsService
 					playerPoints.add(new PlayerWealthPoint(turn, assessedMonetary, assessedCards,
 							assessedMonetary + assessedCards, round2(relative)));
 					lastKnownValue.put(name, new int[] { 0, 0 });
+					lastKnownMonetaryUnits.put(name, 0.0);
 				}
 				else if ((event.getEvt() == EventType.WEALTH_CHECKPOINT) && (event.getPlayer() != null)
 						&& lastKnownValue.containsKey(event.getPlayer().getName()))
@@ -764,6 +807,7 @@ public class StatsService
 					// supplémentaire nécessaire à cet endroit précis.
 					lastKnownValue.put(event.getPlayer().getName(), new int[] { computeMonetaryGain(pGame, event),
 							computeCardsGain(pGame, event, currentFactor[0]) });
+					lastKnownMonetaryUnits.put(event.getPlayer().getName(), monetaryUnits(eventCoins(event), weakCoinValue));
 				}
 			});
 		}
@@ -782,6 +826,18 @@ public class StatsService
 		final List<PlayerWealthSeries> series = pointsByPlayer.entrySet().stream()
 				.map(e -> new PlayerWealthSeries(e.getKey(), e.getValue(), isPlayerQuit(pGame, e.getKey()))).toList();
 		return new WealthOverTimeReport(series);
+	}
+
+	// Valeur faciale des jetons portés par un événement (faible=1, moyen=2,
+	// fort=4) - voir computeWealthOverTime (correctif du 18/10/2026).
+	private static int eventCoins(final Event pEvent)
+	{
+		return pEvent.getWeakCoins() + (2 * pEvent.getMediumCoins()) + (4 * pEvent.getStrongCoins());
+	}
+
+	private static double monetaryUnits(final int pCoins, final double pWeakCoinValue)
+	{
+		return pCoins * pWeakCoinValue;
 	}
 
 	/**
@@ -860,12 +916,41 @@ public class StatsService
 	 * Retombe sur faux pour un nom qui ne correspond à aucun joueur (ex. la
 	 * pseudo-entrée "Banque" ajoutée par {@link #computeFinalReport}).
 	 */
+	// BUG TROUVÉ ET CORRIGÉ (18/10/2026, campagne de test 2/6/16 joueurs,
+	// capture d'écran du rapport final à l'appui) : se contentait de
+	// Player.isQuit() - or en libre+strict TRM+smartphone, l'inventaire de FIN
+	// DE PARTIE (renderEndGameInventory, app.js) pose un QUIT pour TOUS les
+	// joueurs, ce qui met Player.quit à vrai pour TOUT LE MONDE (voir
+	// Event.java, cas QUIT). Résultat : dans CHAQUE partie libre+smartphone
+	// terminée normalement, tous les joueurs apparaissaient "(sorti)" -
+	// courbes en pointillés, barres de couleur "sortie" - rendant la
+	// distinction voulue le 04/10/2026 (un joueur qui quitte EN COURS de
+	// partie) totalement inopérante. Désormais : "sorti en cours de partie"
+	// seulement si au moins un événement TURN suit son QUIT dans l'historique
+	// (même critère que endOfGameQuitEvents dans computeWealthOverTime - un
+	// QUIT de fin de partie n'est suivi d'aucun TURN). Limite assumée : un
+	// joueur qui quitte pendant le DERNIER tour, avant l'inventaire de fin de
+	// partie, n'est pas distingué (aucun TURN ne suit) - même limite que
+	// computeWealthOverTime.
 	private boolean isPlayerQuit(final Game pGame, final String pPlayerName)
 	{
+		Player player = null;
 		for (final Player p : pGame.getPlayers())
 			if (p.getName().equals(pPlayerName))
-				return p.isQuit();
-		return false;
+				player = p;
+		if ((player == null) || !player.isQuit())
+			return false;
+		final Comparator<Event> chronological = Comparator
+				.comparing(Event::getTstamp, Comparator.nullsLast(Comparator.naturalOrder()))
+				.thenComparing(Event::getId, Comparator.nullsLast(Comparator.naturalOrder()));
+		final Player quitter = player;
+		final Event quitEvent = pGame.getEvents().stream()
+				.filter(e -> (e.getEvt() == EventType.QUIT) && quitter.equals(e.getPlayer()))
+				.max(chronological).orElse(null);
+		if (quitEvent == null)
+			return false;
+		return pGame.getEvents().stream()
+				.anyMatch(e -> (e.getEvt() == EventType.TURN) && (chronological.compare(e, quitEvent) > 0));
 	}
 
 	/**
