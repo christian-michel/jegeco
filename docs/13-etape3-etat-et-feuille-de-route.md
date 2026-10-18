@@ -30,9 +30,13 @@ ce dépôt).
 - Compte à rebours de tour synchronisé serveur (vraie pause partagée),
   infobulles pause/fin de tour distinctes.
 - Fil d'actualité temps réel par WebSocket (carrés, ventes, nouveau tour).
-- Demandes de crédit (monnaie dette) : ct côté joueur et backend
-  fonctionnels ; **écran animateur pour les traiter non commencé**
-  (dormant, voir section "Reste à faire").
+- Demandes de crédit (monnaie dette) : côté joueur et backend
+  fonctionnels ; **écran animateur pour les traiter construit le
+  10/10/2026** (panneau "Demandes de crédit" sur le tableau de bord,
+  `renderCreditRequestsPanel` dans `app.js` - trouvé comme un bug pendant
+  la campagne de test dette+smartphone : les routes serveur existaient
+  depuis le 30/08/2026 mais rien côté animateur ne les affichait, voir
+  `03-architecture-technique.md`, entrée du 10-11/10/2026).
 - Sécurité Phase 1 : 24 routes protégées par PIN, WebSocket cloisonné par
   partie, rate limiting.
 - Système de journalisation pour éliminer les erreurs silencieuses (voir
@@ -414,15 +418,16 @@ juste avant).
   en direct jamais mis à jour pour un joueur troc+smartphone ; vérification
   "même valeur" contournable via des niveaux déclarés par le client plutôt
   que revérifiés côté serveur) et corrigés le jour même.
-- **Point connu, non corrigé à ce stade** : la validation d'un échange
-  (`GameService.recordCardSwap`, comme `recordTransaction` avant elle pour
-  dette/libre) n'utilise pas de verrou base de données - deux échanges
-  distincts portant sur la même carte rare, redimés quasi simultanément,
-  pourraient théoriquement passer tous les deux (fenêtre de temps très
-  courte). Schéma déjà présent depuis le début pour dette/libre, pas une
-  régression introduite le 18/09/2026 - à corriger si confirmé gênant en
-  usage réel (nécessiterait un verrou explicite ou une transaction DB
-  sérialisée sur la paire de joueurs concernée).
+- ~~**Point connu, non corrigé à ce stade** : la validation d'un échange
+  (`GameService.recordCardSwap`...) n'utilise pas de verrou base de
+  données~~ **Déjà protégé depuis le 18/09/2026** (vérifié dans le code
+  actuel : `recordCardSwap` appelle `withGameLock` avant toute lecture/
+  écriture) - ce risque, identifié le jour même de la construction du
+  troc+smartphone, avait déjà été corrigé ce jour-là pour `recordCardSwap`
+  spécifiquement ; c'est `recordTransaction` (dette/libre) qui, lui, n'a
+  reçu le même verrou que plus tard, le 27/09/2026 (voir
+  `03-architecture-technique.md`, entrée du 27/09/2026 : "jamais concernée
+  par le correctif équivalent du 18/09/2026 sur `recordCardSwap`").
 
 - **Écran de statistiques complété : échanges monétaires + masse détaillée**
   (27/09/2026, demande utilisateur) — réservé à la dette et la libre
@@ -585,19 +590,21 @@ juste avant).
 
 Par ordre approximatif de priorité, à ajuster selon les retours de test :
 
-1. **Tester en conditions réelles la refonte du DU/masse monétaire du
-   09/09/2026** — c'est un changement de fond sur le mécanisme économique
-   central du mode monnaie libre smartphone ; recommandé de repartir sur
-   une partie fraîche plutôt que de continuer une ancienne partie, le
-   format de données ayant changé.
-2. **Écran animateur pour traiter les demandes de crédit** (monnaie dette,
-   smartphone) — la demande côté joueur et le backend
-   (`CreditRequestService`, approbation via `recordEvent`) fonctionnent déjà
-   depuis un moment ; seul l'écran de traitement dédié côté animateur (liste
-   des demandes en attente, bouton approuver/refuser) reste à construire —
-   l'animateur peut toujours accorder un crédit manuellement via l'étape
-   "Nouveaux crédits" de l'assistant en attendant, mais sans visibilité sur
-   les demandes explicitement faites par les joueurs depuis leur téléphone.
+1. ~~**Tester en conditions réelles la refonte du DU/masse monétaire du
+   09/09/2026**~~ **FAIT, plusieurs fois** — c'était un changement de fond
+   sur le mécanisme économique central du mode monnaie libre smartphone ;
+   depuis, validé par de nombreuses campagnes réelles en HTTP (2/4/10
+   joueurs le 27/09/2026, 4/8/20 joueurs le 04/10/2026, 4/8/16 joueurs le
+   10/10/2026 - voir `03-architecture-technique.md` pour le détail de
+   chacune), avec vérité terrain tenue indépendamment et DU/masse monétaire
+   confirmés exacts à chaque fois.
+2. ~~**Écran animateur pour traiter les demandes de crédit**~~ **Fait le
+   10/10/2026** (monnaie dette, smartphone) — voir "Ce qui est construit"
+   ci-dessus et `03-architecture-technique.md`, entrée du 10-11/10/2026 :
+   panneau "Demandes de crédit" sur le tableau de bord animateur
+   (`renderCreditRequestsPanel`), réutilisant les routes serveur
+   (`CreditRequestService`) déjà fonctionnelles depuis le 30/08/2026 mais
+   jusque-là jamais appelées côté animateur.
 3. ~~**Verrou de concurrence sur les échanges smartphone**~~ **Fait le
    27/09/2026** : `GameService.withGameLock`, un verrou en mémoire par
    partie - confirmé en usage réel (jusqu'à +31073 unités monétaires
@@ -734,11 +741,17 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
      existante (export de la base H2) suppose un accès direct à la
      machine - pas encore de procédure documentée pour un serveur hébergé
      à distance (sauvegarde automatisée, monitoring, mise à jour).
-6. **Module Galilée** (convergence vers la moyenne, voir
-   https://yyy-vox.gitlab.io/encyyyclopedie/articles/module_galilee.html) —
-   idée mentionnée par l'utilisateur pour exploiter les données réelles
-   d'une partie jouée en mode smartphone avec le DU désormais calculé
-   correctement ; pas encore commencé, dépend de la validation du point 1.
+6. ~~**Module Galilée**~~ **Fait** (convergence vers la moyenne) — voir
+   `03-architecture-technique.md`, section "Réflexion : module Galilée...
+   — implémenté" : nouvelle route `GET /api/games/{id}/wealth-over-time`
+   (`StatsService.computeWealthOverTime`), graphique multi-courbes par
+   joueur avec bascule absolu/relatif (`renderGalileeChart` dans
+   `app.js`), repris et affiné à plusieurs reprises depuis (éclaté en 3
+   graphiques le 04/10/2026, corrigé le 17/10/2026 pour le même défaut
+   "tour 1 = masse finale" que le graphique "masse monétaire", voir item
+   4bis ci-dessus) - le point 1 ci-dessus (validation réelle du DU) est
+   lui aussi désormais fait, la dépendance d'origine entre les deux est
+   donc également résolue.
 7. **Mode "monnaie numérique"** (alternative sans dénominations physiques,
    un solde global par joueur) — évoqué comme variante future de la
    monnaie libre, voir la note d'architecture du 07/09/2026 dans
