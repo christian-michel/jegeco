@@ -214,6 +214,28 @@ public class GameService
 			return false; // partie terminée par l'animateur
 		if (pGame.getPausedRemainingSeconds() != null)
 			return false; // minuteur explicitement mis en pause par l'animateur
+		// BUG TROUVÉ ET CORRIGÉ (18/10/2026, campagne de test 2/6/16 joueurs,
+		// reproduit en HTTP réel) : un clic MANUEL sur "Fin de tour" (app.js,
+		// btnEndTurn) n'arrêtait que le minuteur affiché chez l'animateur - côté
+		// serveur, le tour restait "en cours" jusqu'à l'expiration NATURELLE du
+		// chrono (jusqu'à 5 minutes plus tard), donc les téléphones gardaient
+		// tradingAllowed=true et pouvaient continuer d'acheter/vendre PENDANT
+		// l'assistant de fin de tour. Or l'assistant (monnaie libre) lit le
+		// solde de chaque joueur à son ouverture puis pose des WEALTH_CHECKPOINT
+		// ABSOLUS (solde lu + DU) : tout échange conclu entre-temps voyait son
+		// effet monétaire effacé, la carte restant transférée. Mesuré : vente à
+		// 5 jetons après "Fin de tour" - vendeur 26 au lieu de 31, acheteur 26
+		// au lieu de 21 (carte obtenue gratuitement). Même logique que la règle
+		// déjà voulue par l'utilisateur le 02/09/2026 ("il faudrait bloquer [les
+		// transactions] lorsque le compte à rebours arrive à 0 et qu'on vient de
+		// terminer le tour") : l'annonce de fin de tour (POST .../turn/announce-
+		// end, appelé par le clic manuel ET par l'expiration du chrono) ferme
+		// désormais les échanges pour CE tour - voir markTurnEndAnnounced. Le
+		// TOUR SUIVANT (nouvel événement TURN, numéro incrémenté) les rouvre
+		// naturellement, sans aucun état supplémentaire à remettre à zéro.
+		final Integer announcedTurn = mTurnEndAnnouncedForTurn.get(pGame.getId());
+		if ((announcedTurn != null) && (announcedTurn.intValue() == pGame.getTurnNumber()))
+			return false; // fin de CE tour annoncée par l'animateur (clic "Fin de tour" ou chrono à 0)
 		// Remonté par l'utilisateur (02/09/2026) : "lorsque le compte à rebours
 		// arrive à 0 (et qu'on vient de terminer le tour) on peut toujours
 		// faire des transactions. Il faudrait bloquer... En revanche il
@@ -228,6 +250,28 @@ public class GameService
 			return true; // minuteur jamais démarré pour ce tour (ne devrait pas arriver si turnNumber >= 1, mais par prudence on n'y ajoute pas de contrainte)
 		final long elapsedSeconds = (System.currentTimeMillis() - pGame.getTurnStartedAt().getTime()) / 1000;
 		return elapsedSeconds < pGame.getTurnDurationSeconds();
+	}
+
+	/**
+	 * Numéro du tour dont l'animateur a annoncé la fin (voir
+	 * {@link #markTurnEndAnnounced} et le commentaire du 18/10/2026 dans
+	 * {@link #isTradingAllowed}), par partie. Volontairement en mémoire, comme
+	 * {@link #mGameLocks} : après un redémarrage du serveur, on retombe
+	 * simplement sur le comportement d'avant ce correctif (échanges ouverts
+	 * jusqu'à l'expiration naturelle du chrono) - jamais un blocage définitif.
+	 */
+	private final java.util.concurrent.ConcurrentHashMap<Integer, Integer> mTurnEndAnnouncedForTurn = new java.util.concurrent.ConcurrentHashMap<>();
+
+	/**
+	 * Ferme les échanges smartphone pour le tour EN COURS de cette partie -
+	 * appelé par POST /api/games/{id}/turn/announce-end (clic "Fin de tour" ou
+	 * chrono arrivé à 0, voir app.js). Voir {@link #isTradingAllowed}.
+	 */
+	public void markTurnEndAnnounced(final int pGameId)
+	{
+		final Game game = getGame(pGameId);
+		if ((game != null) && (game.getTurnNumber() > 0))
+			mTurnEndAnnouncedForTurn.put(pGameId, game.getTurnNumber());
 	}
 
 	/**

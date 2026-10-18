@@ -1133,6 +1133,10 @@ public class GecoServer
 				return;
 			}
 			mGameService.clearExpiredPrisonStatus(id);
+			// 18/10/2026 : ferme aussi les échanges smartphone pour ce tour, côté
+			// serveur - voir GameService.isTradingAllowed (bug du "Fin de tour"
+			// manuel qui laissait les échanges ouverts pendant l'assistant).
+			mGameService.markTurnEndAnnounced(id);
 			broadcast(id, "turn_ending", null); //$NON-NLS-1$
 			ctx.json(java.util.Map.of("ok", true)); //$NON-NLS-1$
 		});
