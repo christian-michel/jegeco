@@ -558,3 +558,21 @@ ajoutes, pas seulement via ce script.
   "Annuler" — son énoncé d'origine s'est révélé inexact, voir ce même
   renvoi) et la réflexion (non implémentée) sur un futur mécanisme
   d'échange carte-contre-pioche commun aux trois systèmes smartphone.
+- **Décision utilisateur RECONFIRMÉE le 18/10/2026, avec la description
+  EXACTE cette fois** (corrige la décision du 17/10/2026 ci-dessus, prise
+  sur un énoncé imprécis — voir le point (b) de la campagne de test
+  2/6/16 joueurs juste au-dessus, et `docs/03-architecture-technique.md`
+  pour le détail complet de l'audit qui a établi cette description) : en
+  dette+smartphone, un "Annuler"/suppression/édition d'un événement SANS
+  AUCUN RAPPORT efface l'effet monétaire de TOUS les achats de cartes
+  depuis le DÉBUT de la partie (les cartes achetées restent acquises,
+  seuls les SOLDES individuels sont faux — la masse monétaire globale,
+  elle, reste exacte) ; en libre, l'effet est plus limité (seulement les
+  achats depuis le dernier point de contrôle `WEALTH_CHECKPOINT` du
+  joueur) mais existe aussi. Présentée avec cette description précise
+  (CARTES conservées, JETONS/soldes faux — pas l'inverse décrit par
+  erreur le 17/10/2026), la décision de l'utilisateur reste la MÊME :
+  **accepter tel quel, documenter, aucun correctif à prévoir** ("Accepter
+  tel quel, documenter"). Ne pas rouvrir ce point sans nouvelle demande
+  explicite — le comportement est désormais un choix assumé en toute
+  connaissance de cause, pas une limite mal comprise.

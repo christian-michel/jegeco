@@ -769,15 +769,12 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    (voir `03-architecture-technique.md`, entrée du même jour, pour le
    détail chiffré et les reproductions complètes), tous en attente d'une
    décision utilisateur :
-   - **(prioritaire)** Dette+smartphone : un "Annuler"/suppression/édition
-     SANS RAPPORT efface l'effet monétaire de TOUS les achats de cartes
-     depuis le début de la partie (cartes acquises conservées, seuls les
-     soldes sont faux) ; en libre, l'effacement est plus limité (depuis le
-     dernier point de contrôle du joueur) mais existe aussi. La décision
-     du 17/10/2026 sur ce sujet (CLAUDE.md, "les transactions validées
-     restent validées") reposait sur une description inexacte du
-     problème (parlait des CARTES, alors que ce sont les JETONS qui
-     reviennent en arrière) - à retrancher avec la bonne description.
+   - ~~**(prioritaire)** Dette+smartphone : un "Annuler"/suppression/
+     édition SANS RAPPORT efface l'effet monétaire de TOUS les achats de
+     cartes depuis le début de la partie~~ **TRANCHÉ le 18/10/2026** (avec
+     la description exacte, voir `CLAUDE.md`, "Pièges déjà rencontrés") :
+     décision reconfirmée - accepté tel quel, documenté, aucun correctif
+     à prévoir.
    - Dette+smartphone, saisie "Ne peut pas payer" : les cartes saisies
      restent affichées sur le téléphone du joueur alors que la banque les
      compte déjà dans ses gains.
