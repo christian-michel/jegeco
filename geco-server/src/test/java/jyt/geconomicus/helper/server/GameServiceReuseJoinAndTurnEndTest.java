@@ -1,6 +1,9 @@
 package jyt.geconomicus.helper.server;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import jakarta.persistence.EntityManagerFactory;
@@ -11,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import jyt.geconomicus.helper.Game;
+import jyt.geconomicus.helper.Player;
 
 /**
  * Campagne de test 2/6/16 joueurs (18/10/2026) - deux bugs trouvés en HTTP
@@ -48,6 +52,35 @@ class GameServiceReuseJoinAndTurnEndTest
 	{
 		return sService.createGame(pMoneySystem, 12, "A", null, pDesc, "2026-10-18", "X", 1, 300, 1.0, false, 4, //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 				pMoneySystem == Game.MONEY_LIBRE, 0.4).getId();
+	}
+
+	@Test
+	void reusedPlayerPreRegisteredByAnimatorCanJoinWithTheSameNameExactlyOnce() throws Exception
+	{
+		final int gameId = newGame(Game.MONEY_DEBT, "reprise-join");
+		// btnNewGame.onclick + "Reprendre les joueurs" : pré-inscription par prénom
+		final Player preRegistered = sService.addPlayer(gameId, "Yasmine"); //$NON-NLS-1$
+		// le téléphone suit le QR "Inviter" et tape son prénom (casse différente)
+		final Player joined = sService.joinAsPlayer(gameId, "yasmine", 31, "#123456", "{\"type\":\"gallery\"}"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		assertEquals(preRegistered.getId(), joined.getId(), "le téléphone récupère SA place, pas un doublon"); //$NON-NLS-1$
+		assertEquals(preRegistered.getAccessToken(), joined.getAccessToken(), "même jeton d'accès"); //$NON-NLS-1$
+		assertEquals(1, sService.getGame(gameId).getPlayers().size(), "aucun joueur supplémentaire créé"); //$NON-NLS-1$
+		final Player stored = sService.getGame(gameId).getPlayers().iterator().next();
+		assertEquals(Integer.valueOf(31), stored.getDeclaredAge());
+		assertNotNull(stored.getAvatarConfigJson());
+		// un SECOND téléphone avec le même prénom est refusé, comme avant
+		assertThrows(GameService.DuplicatePlayerNameException.class,
+				() -> sService.joinAsPlayer(gameId, "Yasmine", 20, "#000000", "{}")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+	}
+
+	@Test
+	void duplicateNameOfAPlayerAlreadyJoinedByPhoneIsStillRefused() throws Exception
+	{
+		final int gameId = newGame(Game.MONEY_LIBRE, "doublon-join");
+		sService.joinAsPlayer(gameId, "Zoé", 25, "#111111", "{\"type\":\"gallery\"}"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		assertThrows(GameService.DuplicatePlayerNameException.class,
+				() -> sService.joinAsPlayer(gameId, "zoé", 25, "#111111", "{}")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		assertEquals(1, sService.getGame(gameId).getPlayers().size());
 	}
 
 	@Test

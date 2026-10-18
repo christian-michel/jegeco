@@ -492,6 +492,45 @@ public class GameService
 			final Game game = em.find(Game.class, pGameId);
 			if (game == null)
 				throw new IllegalArgumentException("Game not found: " + pGameId); //$NON-NLS-1$
+			// BUG TROUVÉ ET CORRIGÉ (18/10/2026, campagne de test 2/6/16 joueurs,
+			// reproduit via la VRAIE interface - formulaire "Nouvelle partie",
+			// "Reprendre les joueurs d'une partie existante", puis un téléphone qui
+			// suit le QR "Inviter" de la nouvelle partie) : la reprise des joueurs
+			// (btnNewGame.onclick, app.js) PRÉ-INSCRIT chaque joueur repris par son
+			// prénom (POST /players, addPlayer) - le joueur qui scanne ensuite le QR
+			// et tape son prénom habituel recevait "Ce prénom est déjà pris dans
+			// cette partie, choisissez-en un autre." : impossible de rejoindre sa
+			// propre place, donc impossible de jouer la partie "reprise" par QR
+			// (seul le lien personnel 🔗 copié par l'animateur, joueur par joueur,
+			// fonctionnait) - et s'inscrire sous un autre prénom créait un doublon
+			// qui cassait la comparaison des statistiques, faite par NOM EXACT
+			// (StatsService.computeComparison). Corrigé : un joueur PRÉ-INSCRIT par
+			// l'animateur et encore jamais réclamé par un téléphone (aucun avatar ni
+			// âge déclaré - addPlayer ne pose ni l'un ni l'autre, alors qu'une
+			// inscription par join.html envoie toujours un avatar) est désormais
+			// RATTACHÉ à ce téléphone (son jeton existant lui est renvoyé) au lieu
+			// d'être refusé. Une fois réclamé (avatar posé), toute nouvelle
+			// inscription sous ce prénom est refusée comme avant - deux téléphones
+			// ne peuvent jamais obtenir le même joueur. Fait sous le verrou de
+			// partie (voir joinAsPlayer) : deux téléphones simultanés ne peuvent pas
+			// réclamer le même joueur.
+			final Player unclaimedPreRegistered = game.getPlayers().stream()
+					.filter(p -> p.getName().equalsIgnoreCase(pName) && (p.getAvatarConfigJson() == null)
+							&& (p.getDeclaredAge() == null))
+					.findFirst().orElse(null);
+			if (unclaimedPreRegistered != null)
+			{
+				em.getTransaction().begin();
+				unclaimedPreRegistered.setDeclaredAge(pDeclaredAge);
+				unclaimedPreRegistered.setFavoriteColor(pFavoriteColor);
+				// Jamais null après réclamation (voir la condition ci-dessus) : un
+				// second téléphone tapant le même prénom doit être refusé.
+				unclaimedPreRegistered.setAvatarConfigJson((pAvatarConfigJson != null) ? pAvatarConfigJson : "{}"); //$NON-NLS-1$
+				if (unclaimedPreRegistered.getAccessToken() == null)
+					unclaimedPreRegistered.setAccessToken(java.util.UUID.randomUUID().toString());
+				em.getTransaction().commit();
+				return unclaimedPreRegistered;
+			}
 			final boolean nameTaken = game.getPlayers().stream()
 					.anyMatch(p -> p.getName().equalsIgnoreCase(pName));
 			if (nameTaken)
