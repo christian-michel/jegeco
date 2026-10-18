@@ -2103,6 +2103,10 @@ public class GecoServer
 				}
 			});
 			ws.onClose(ctx -> mSessionGameIds.remove(ctx));
+			// 18/10/2026 (voir le commentaire détaillé de broadcast()) : une
+			// session en erreur (connexion coupée brutalement) est retirée tout de
+			// suite, sans attendre un éventuel onClose.
+			ws.onError(ctx -> mSessionGameIds.remove(ctx));
 			// Remonté par un utilisateur (02/09/2026) : côté animateur (voir
 			// connectWs dans app.js), la partie suivie peut changer EN COURS
 			// DE SESSION (navigation entre plusieurs parties, connexion WS
@@ -2369,10 +2373,49 @@ public class GecoServer
         // installation locale à une seule partie à la fois (comportement
         // identique), mais nécessaire dès que plusieurs parties tournent en
         // même temps sur le même serveur.
+		//
+		// BUG TROUVÉ ET CORRIGÉ (18/10/2026, campagne de test 2/6/16 joueurs,
+		// reproduit en HTTP réel) : un seul WebSocket déjà fermé côté client
+		// mais pas encore retiré de mSessionGameIds (téléphone qui se verrouille,
+		// onglet fermé, wifi perdu - onClose est traité de façon asynchrone par
+		// Jetty, donc toujours avec un léger retard) faisait lever
+		// ClosedChannelException par send() - exception NON rattrapée ici, donc
+		// remontée jusqu'à la route HTTP appelante, qui répondait 500 ALORS
+		// QUE son écriture était déjà persistée : "Fin de tour" (announce-end)
+		// en échec observé, mais le même mécanisme touche POST /events
+		// (événement enregistré, l'assistant de fin de tour voit une erreur et
+		// s'interrompt au milieu de ses étapes) et /trade-offers/{code}/redeem
+		// (achat enregistré mais le téléphone affiche une erreur, et
+		// l'encaissement automatique des carrés - appelé APRÈS ce broadcast -
+		// n'a jamais lieu). Une diffusion temps réel est un "plus" : elle ne
+		// doit jamais faire échouer l'opération qui la déclenche, ni priver les
+		// autres clients du message. Chaque envoi est donc désormais isolé : une
+		// session fermée est retirée (sans envoi), une erreur d'envoi est
+		// journalisée (jamais avalée en silence, voir CLAUDE.md, système de
+		// journalisation) et la session fautive retirée, puis on continue avec
+		// les suivantes. Voir aussi ws.onError (registerRoutes), ajouté le même
+		// jour pour retirer la session dès qu'une erreur de connexion est
+		// signalée.
 		for (final java.util.Map.Entry<WsContext, Integer> entry : mSessionGameIds.entrySet())
 		{
-			if (entry.getValue() == pGameId)
-				entry.getKey().send(msg);
+			if (entry.getValue() != pGameId)
+				continue;
+			final WsContext wsCtx = entry.getKey();
+			try
+			{
+				if (!wsCtx.session.isOpen())
+				{
+					mSessionGameIds.remove(wsCtx);
+					continue;
+				}
+				wsCtx.send(msg);
+			}
+			catch (final Exception e)
+			{
+				System.out.println("[WS] diffusion \"" + pType + "\" impossible vers une session de la partie " //$NON-NLS-1$ //$NON-NLS-2$
+						+ pGameId + " (session retirée) : " + e); //$NON-NLS-1$
+				mSessionGameIds.remove(wsCtx);
+			}
 		}
 	}
 
