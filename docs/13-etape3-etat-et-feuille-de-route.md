@@ -603,19 +603,28 @@ Par ordre approximatif de priorité, à ajuster selon les retours de test :
    partie - confirmé en usage réel (jusqu'à +31073 unités monétaires
    créées de rien mesuré en HTTP réel avant correctif), voir
    `03-architecture-technique.md`, entrée du 27/09/2026.
-3bis. **Décisions de règle en attente de réponse utilisateur** (campagne
-   de test 27/09/2026, voir `03-architecture-technique.md` pour le détail
-   complet des mesures) :
+3bis. ~~**Décisions de règle en attente de réponse utilisateur**~~
+   **TRANCHÉES le 18/10/2026** (campagne de test 27/09/2026, décisions
+   actées le 18/10/2026 - voir `03-architecture-technique.md` pour le
+   détail complet des mesures et de la mise en œuvre) :
    - Grossir la pioche des parties à peu de joueurs (option "N+2 modèles"
      par niveau au lieu de "N+1") pour réduire la fréquence des carrés qui
      ne peuvent plus rien promouvoir (mesuré : ferait passer le taux de
      44/100 à 13/100 sur une partie 2 joueurs simulée, au prix d'un peu
-     moins de variété par carré) ?
+     moins de variété par carré) ? **Décision : passer à N+2** -
+     `GameService.dealStartingHandsForLibreIfNeeded`, `nbModels =
+     Math.min(nbPlayers + 2, available.size())`. Vérifié par un nouveau
+     test dédié (`GameServicePileConservationTest.testPileSizeSelectsNPlusTwoModelsPerLevel`,
+     confirmé en échec sur l'ancienne règle N+1 avant d'être rétabli) +
+     suite complète verte (57 côté `geco-server`, aucune régression).
    - Un carré "tresforte" qui boucle vers "faible" alors que le joueur
      détient déjà tout le stock d'un niveau (monopole) déclenche quand
      même une VRAIE révolution (rotation des prix) et une carte gratuite à
      chaque fois - à documenter comme un comportement voulu, ou à limiter
-     dans ce cas précis ?
+     dans ce cas précis ? **Décision : comportement voulu, documenté**
+     (aucun changement de code) - voir le commentaire dédié dans
+     `GameService.checkAndCashInSquares`, juste avant le calcul
+     d'`isRevolution`.
 3ter. ~~**La masse monétaire strict TRM peut DIMINUER après la sortie
    volontaire (QUIT, pas DEATH) d'un joueur en cours de partie.**~~
    **RÉSOLU le 04/10/2026** (voir "Ce qui est construit" ci-dessus, entrée

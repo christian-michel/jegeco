@@ -3998,3 +3998,81 @@ avant rejeu), donc même correctif justifié.
 Voir `CLAUDE.md` (section "Pièges déjà rencontrés") et
 `docs/13-etape3-etat-et-feuille-de-route.md` (item 4bis) pour le résumé
 condensé de ces deux décisions.
+
+### 18/10/2026 — Les deux dernières décisions en attente de la campagne du 27/09/2026 tranchées
+
+Demande utilisateur : préciser les deux sous-points de "Phase 0" encore
+en suspens (pile N+1/N+2, monopole "tresforte" en carré) avant de passer
+à la Phase 1 ("installation facile + icône"). Après rappel du contexte et
+des chiffres mesurés le 27/09/2026 (voir l'entrée de ce jour plus haut),
+l'utilisateur tranche les deux :
+
+#### 1. Pile N+1 → N+2
+
+Décision : grossir la pioche. Mesuré le 27/09/2026 : à N+1 (règle en
+vigueur depuis le 06/09/2026), un carré qui ne peut plus rien promouvoir
+(pioche cible épuisée) survenait dans 44 à 52 parties simulées sur 100 à
+2 joueurs (32/40 à 4 joueurs) ; à N+2, ce taux tombe à 13/100 à 2
+joueurs, au prix d'un peu moins de variété par carré. Un tel carré "sans
+effet" n'est de toute façon plus un bug depuis le 10/10/2026 (voir
+"Carrés fantômes" ci-dessus : persisté pour la conservation des cartes,
+mais plus diffusé/animé côté joueur) - ce changement est donc un pur
+ajustement de confort/rythme de jeu.
+
+**Mise en œuvre** : `GameService.dealStartingHandsForLibreIfNeeded`,
+une seule ligne changée - `nbModels = Math.min(nbPlayers + 2,
+available.size())` (était `nbPlayers + 1`). Rappel (voir CLAUDE.md,
+"Pioche/carré/promotion PARTAGÉE") : cette méthode, malgré son nom
+historique, met en place la pioche des TROIS systèmes monétaires
+suivis par smartphone (libre, dette, troc) - ce changement leur
+bénéficie donc tous les trois à la fois, sans rien à dupliquer.
+
+**Vérifications** :
+- Nouveau test dédié
+  (`GameServicePileConservationTest.testPileSizeSelectsNPlusTwoModelsPerLevel`) :
+  catalogue volontairement généreux (10 modèles/niveau, jamais plafonné
+  par `available.size()`) pour isoler la formule elle-même ; vérifie que
+  chaque niveau sélectionne exactement (nbPlayers+2) modèles distincts
+  (3 joueurs → 5 modèles), chacun avec ses 5 exemplaires intacts (sauf
+  "faible", partiellement distribué par la mise en place - exclu de la
+  vérification du COMPTE par modèle, mais pas du NOMBRE de modèles
+  distincts, qui reste exact même partiellement vidé : chaque modèle
+  sélectionné est inséré dans la pioche dès le départ avec un compteur à
+  0, voir le commentaire de `pile.put(modelId, 0)`). Confirmé en échec
+  AVANT ce correctif (4 modèles au lieu de 5, en revenant temporairement
+  à `nbPlayers + 1` par un essai local) puis stable à 5 APRÈS.
+- Revue des catalogues synthétiques (`smallCatalog`/`catalog`) de TOUS
+  les autres fichiers de test existants qui appellent
+  `dealStartingHandsForLibreIfNeeded` : soit assez larges pour ne jamais
+  être affectés (`catalog(6)`, confortable même à N+2 pour 2-3 joueurs),
+  soit déjà plafonnés par `available.size()` aussi bien à N+1 qu'à N+2
+  (`GameServiceSquareEncashmentTest`/`GameServiceTrocReviewTest`,
+  catalogues à 3 modèles/1 modèle pour 2 joueurs - 3 < N+1=3 n'est même
+  pas vrai, c'est égal, donc déjà saturé des deux côtés) - aucun ne
+  nécessitait de changement de valeur, seulement des commentaires
+  rafraîchis pour rester honnêtes sur la règle réelle actuelle.
+- `mvn clean package` complet : 57 tests `geco-server` + 28
+  `geco-engine`, tous verts, aucune régression.
+
+#### 2. Monopole "tresforte" en carré : comportement voulu, documenté
+
+Décision : ne RIEN changer au comportement - un carré "tresforte" qui
+boucle vers "faible" continue de déclencher une vraie révolution
+(rotation des prix) et une carte gratuite à chaque occurrence, même si
+le joueur concerné monopolise tout le stock du niveau "tresforte"
+lui-même. Distinct du mécanisme des "carrés fantômes" (10/10/2026
+ci-dessus) : celui-ci concerne un monopole du niveau CIBLE (le joueur
+reçoit toujours le même modèle, carré non diffusé) - ici, c'est le
+niveau D'ORIGINE ("tresforte") qui est monopolisé, la cible ("faible")
+a toujours des cartes à offrir normalement, donc `nextPileExhausted`
+reste faux et `isRevolution` se déclenche sans aucune restriction, à
+chaque fois que ce joueur reconstitue un carré tresforte.
+
+**Mise en œuvre** : aucun changement de code - uniquement un commentaire
+ajouté dans `GameService.checkAndCashInSquares`, juste avant le calcul
+d'`isRevolution`, documentant explicitement cette décision et sa date,
+pour qu'elle ne soit pas "redécouverte" plus tard comme un bug à
+corriger.
+
+Voir `docs/13-etape3-etat-et-feuille-de-route.md`, point 3bis (désormais
+marqué résolu), pour le résumé condensé des deux décisions.

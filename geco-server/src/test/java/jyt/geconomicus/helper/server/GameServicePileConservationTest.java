@@ -83,11 +83,15 @@ class GameServicePileConservationTest
 	 * de la diluer dans un catalogue confortablement large. pModelsPerLevel
 	 * doit rester au moins égal à (nbPlayers+1) pour que la toute première
 	 * distribution (dealStartingHandsForLibreIfNeeded, qui sélectionne
-	 * min(nbPlayers+1, available.size()) modèles) puisse elle-même réunir
+	 * min(nbPlayers+2, available.size()) modèles depuis le 18/10/2026 -
+	 * N+1 avant cette date, voir son commentaire) puisse elle-même réunir
 	 * assez de cartes "faible" (5 exemplaires × nbModels) pour servir 4
 	 * cartes à chaque joueur sans épuiser le sac dès la mise en place - un
 	 * scénario différent (et déjà documenté comme cas extrême assumé dans
-	 * dealStartingHandsForLibreIfNeeded) de la fuite réparée ici. */
+	 * dealStartingHandsForLibreIfNeeded) de la fuite réparée ici. Rester à
+	 * nbPlayers+1 ici (plutôt que +2) continue de stresser le recyclage au
+	 * moins autant qu'avant ce changement (le catalogue plafonne alors
+	 * toujours la sélection, quelle que soit la cible N+1/N+2 du code). */
 	private Map<String, List<String>> smallCatalog(final int pModelsPerLevel)
 	{
 		final Map<String, List<String>> byLevel = new LinkedHashMap<>();
@@ -187,6 +191,57 @@ class GameServicePileConservationTest
 	}
 
 	/**
+	 * Régression (18/10/2026, décision utilisateur - voir
+	 * docs/13-etape3-etat-et-feuille-de-route.md, point 3bis, et
+	 * docs/03-architecture-technique.md pour le détail complet des mesures
+	 * ayant motivé ce choix) : la mise en place de la pioche doit
+	 * désormais sélectionner (nbPlayers+2) modèles distincts par niveau -
+	 * jamais (nbPlayers+1) comme avant ce changement - tant que le
+	 * catalogue en propose assez, et chacun avec exactement 5 exemplaires
+	 * (règle inchangée). Catalogue volontairement GÉNÉREUX ici (10 modèles
+	 * par niveau) pour ne jamais être plafonné par available.size(), ce qui
+	 * isole strictement le comportement de la formule nbPlayers+2 elle-même
+	 * de l'effet de plafonnement déjà couvert par smallCatalog/testManyDeaths...
+	 * ci-dessus et ci-dessous.
+	 */
+	@Test
+	void testPileSizeSelectsNPlusTwoModelsPerLevel() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 12, "AnimTestNPlus2", null, //$NON-NLS-1$
+				"test taille de pioche N+2", "2026-10-18", "Ceres", 1, 180, 1.0, false, 0, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final int gameId = game.getId();
+
+		final int nbPlayers = 3;
+		for (int i = 0; i < nbPlayers; i++)
+			sService.addPlayer(gameId, "Joueur" + i); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(10));
+
+		final Game fresh = sService.getGame(gameId);
+		final Map<String, Map<String, Integer>> pilesByLevel = new com.fasterxml.jackson.databind.ObjectMapper()
+				.readValue(fresh.getSmartphoneCardPileJson(),
+						new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Integer>>>()
+						{
+						});
+		for (final String level : LEVELS)
+		{
+			final Map<String, Integer> pile = pilesByLevel.get(level);
+			assertEquals(nbPlayers + 2, pile.size(),
+					"niveau " + level + " : (nbPlayers+2) modèles distincts attendus, pas (nbPlayers+1)"); //$NON-NLS-1$ //$NON-NLS-2$
+			for (final Map.Entry<String, Integer> e : pile.entrySet())
+			{
+				// "faible" vient d'être partiellement distribué (4 cartes/joueur) -
+				// seuls les trois autres niveaux ont encore leurs 5 exemplaires
+				// intacts par modèle.
+				if (!"faible".equals(level)) //$NON-NLS-1$
+					assertEquals(5, e.getValue(), "modèle " + e.getKey() + " : 5 exemplaires attendus"); //$NON-NLS-1$ //$NON-NLS-2$
+			}
+		}
+	}
+
+	/**
 	 * Même vérification que testManyDeathsNeverLeakCardsOutOfCirculation, mais
 	 * balayée sur toute la plage de joueurs demandée par l'utilisateur (PDF
 	 * "Retours - 20260919", consignes de test : "4 à 20 joueurs pour tester
@@ -210,10 +265,14 @@ class GameServicePileConservationTest
 
 		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
 		sService.captureDeckPlayerCountIfNeeded(gameId);
-		// Catalogue proportionnel au nombre de joueurs (nbPlayers+1, comme le
-		// fait réellement dealStartingHandsForLibreIfNeeded) - reste donc
-		// aussi restreint que le permet la mise en place elle-même, quel que
-		// soit nbPlayers, pour continuer à stresser le recyclage.
+		// Catalogue proportionnel au nombre de joueurs (nbPlayers+1 - la
+		// cible réelle de dealStartingHandsForLibreIfNeeded est nbPlayers+2
+		// depuis le 18/10/2026, voir son commentaire, mais rester à +1 ICI
+		// garde ce catalogue plus restreint que cette cible, donc toujours
+		// plafonnant - voir smallCatalog ci-dessus) - reste donc aussi
+		// restreint que le permet la mise en place elle-même, quel que soit
+		// nbPlayers, pour continuer à stresser le recyclage au moins autant
+		// qu'avant ce changement.
 		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(nbPlayers + 1));
 
 		final int totalAtStart = totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds);

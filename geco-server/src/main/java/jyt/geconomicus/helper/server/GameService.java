@@ -1897,9 +1897,10 @@ public class GameService
 	 * trois autres attendent sur la table, prêtes à être piochées lors d'un
 	 * futur "carré" (voir {@link #checkAndCashInSquares}).
 	 * <p>
-	 * Sélectionne N+1 modèles PAR NIVEAU (N = {@code Game.deckPlayerCount},
+	 * Sélectionne N+2 modèles PAR NIVEAU (N = {@code Game.deckPlayerCount},
 	 * plafonné au nombre de modèles réellement disponibles au catalogue pour
-	 * ce niveau), mint 5 exemplaires de chacun, distribue 4 cartes de niveau
+	 * ce niveau - N+1 jusqu'au 18/10/2026, voir le commentaire détaillé plus
+	 * bas sur ce changement), mint 5 exemplaires de chacun, distribue 4 cartes de niveau
 	 * faible au hasard à chaque joueur actif, et donne à chacun sa dotation
 	 * de départ en jetons - 1 faible + 1 moyen + 1 fort (valeur 7), une
 	 * CONSTANTE fixée par les règles ("distribuer les trois couleurs à
@@ -1974,7 +1975,23 @@ public class GameService
 				// permanence le nombre de modèles de cartes = nombre de joueurs + 1
 				// - par exemple, si on a 2 joueurs, on met en jeu 3 modèles de
 				// cartes x 5 cartes".
-				final int nbModels = Math.min(nbPlayers + 1, available.size());
+				//
+				// PASSÉ À N+2 le 18/10/2026 (décision utilisateur, "Phase 0" de la
+				// feuille de route post-diffusion, suite à la campagne de test du
+				// 27/09/2026 - voir docs/13-etape3-etat-et-feuille-de-route.md,
+				// point 3bis, et docs/03-architecture-technique.md pour le détail
+				// complet des mesures) : à N+1, un carré qui ne peut plus rien
+				// promouvoir (pioche cible épuisée) survenait dans 44 à 52 parties
+				// simulées sur 100 à 2 joueurs (32/40 à 4 joueurs) - mesuré comme
+				// tombant à 13/100 à 2 joueurs avec un modèle de plus par niveau
+				// (N+2), au prix d'un peu moins de variété par carré. Un tel carré
+				// "sans effet" n'est de toute façon plus un bug depuis le
+				// 10/10/2026 (voir CLAUDE.md, "carrés fantômes" : il reste persisté
+				// pour la conservation des cartes, mais n'est plus diffusé/animé
+				// côté joueur quand la pioche cible est épuisée) - ce changement de
+				// taille de pioche est donc un pur ajustement de confort/rythme de
+				// jeu, jamais un correctif de bug.
+				final int nbModels = Math.min(nbPlayers + 2, available.size());
 				final java.util.List<String> shuffledModels = new java.util.ArrayList<>(available);
 				java.util.Collections.shuffle(shuffledModels);
 				final java.util.List<String> selectedModels = shuffledModels.subList(0, nbModels);
@@ -2488,6 +2505,22 @@ public class GameService
 				// isFirstBreakthrough ci-dessus, se répète à chaque occurrence :
 				// c'est ce qui fait tourner le prix de chaque niveau au fil d'une
 				// partie longue.
+				//
+				// MONOPOLE "TRESFORTE" : COMPORTEMENT VOULU, DÉCISION UTILISATEUR
+				// ACTÉE le 18/10/2026 (question posée depuis le 27/09/2026 - voir
+				// docs/13-etape3-etat-et-feuille-de-route.md, point 3bis, et
+				// docs/03-architecture-technique.md pour le détail complet).
+				// Distinct du repli "carré fantôme" ci-dessus/plus bas
+				// (nextPileExhausted, qui ne concerne QUE le niveau CIBLE, ici
+				// "faible") : un joueur qui monopolise tout le stock du niveau
+				// "tresforte" lui-même (celui qu'il vient de boucler, pas celui
+				// qu'il reçoit) déclenche ici une VRAIE révolution (ni
+				// nextPileExhausted, ni un repli dégénéré - "faible" a toujours
+				// des cartes à donner) à CHAQUE nouveau carré "tresforte" qu'il
+				// reconstitue, aussi souvent qu'il le fait. Volontairement NON
+				// limité : l'utilisateur a choisi de documenter ce comportement
+				// plutôt que de le restreindre - ne pas le "redécouvrir" comme un
+				// bug à corriger.
 				final boolean isRevolution = !nextPileExhausted
 						&& LEVEL_ORDER.get(LEVEL_ORDER.size() - 1).equals(squareLevel);
 
