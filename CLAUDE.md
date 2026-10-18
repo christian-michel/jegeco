@@ -428,3 +428,39 @@ ajoutes, pas seulement via ce script.
   (`dlgOpenSeq`) dans `openDialog()` lui-même — avant d'enchaîner un
   second `openDialog()` depuis un `onSubmit()`, vérifier que ce motif
   n'est pas déjà couvert par ce garde-fou, ou le réutiliser tel quel.
+- **Corrigé le 18/10/2026** (remonté par l'utilisateur sur une vraie
+  campagne de test : "je lance une partie dette+smartphone en reprenant
+  les joueurs d'une partie libre+smartphone... le QR code affiché
+  indique la même url... sur les smartphones des joueurs, l'affichage
+  reste celui de la partie en monnaie libre qu'on vient de terminer,
+  impossible de lancer la partie en monnaie dette pour les joueurs") :
+  `renderGameDetail()` (`app.js`) ne réinitialisait les panneaux
+  "Inviter" (QR/lien d'inscription) et "Historique des échanges" que si
+  le réglage "mode smartphone" passait à désactivé (voir le `.then()`
+  d'`Api.getSettings()`) — jamais simplement parce que la PARTIE
+  CONSULTÉE avait changé. Si le panneau "Inviter" était resté ouvert sur
+  une ancienne partie (toujours en mode smartphone, comme ici), son
+  contenu (le lien/QR de CETTE ancienne partie) restait affiché tel quel
+  après avoir navigué vers une nouvelle partie — et pire,
+  `renderInviteQr()`/`toggleTransactionsPanel()` considèrent un panneau
+  déjà VISIBLE comme "ouvert, donc à FERMER" (jamais "à rafraîchir") : un
+  seul clic sur "Inviter" fermait silencieusement le panneau périmé au
+  lieu de le régénérer pour la partie courante, il aurait fallu cliquer
+  deux fois. Les joueurs scannant ce QR périmé atterrissaient donc
+  toujours sur l'ANCIENNE partie (ou sur rien du tout si le panneau
+  venait d'être fermé), jamais sur la nouvelle — bloquant purement et
+  simplement la fonctionnalité "reprendre les joueurs d'une partie
+  existante" (option très utilisée pour comparer dette/libre/troc avec
+  les mêmes joueurs, l'intérêt même du jeu) dès qu'une partie précédente
+  avait son panneau "Inviter" laissé ouvert. Corrigé en réinitialisant
+  ces deux panneaux (masqués, contenu vidé) inconditionnellement dès que
+  `gameId` consulté change, au même endroit que la remise à zéro déjà
+  existante de `state.turnEnded`. Vérifié par reproduction Playwright
+  AVANT/APRÈS (scénario exact du retour utilisateur : partie libre créée,
+  panneau "Inviter" laissé ouvert, partie dette créée en reprenant le
+  même joueur, navigation automatique vers cette nouvelle partie comme le
+  fait réellement `btnNewGame.onclick`) : AVANT correctif, le panneau
+  restait visible après changement de partie et un clic "Inviter" le
+  fermait sans jamais afficher la bonne URL (`undefined`) ; APRÈS
+  correctif, le panneau est bien masqué après changement de partie et un
+  seul clic affiche l'URL correcte et distincte de la nouvelle partie.

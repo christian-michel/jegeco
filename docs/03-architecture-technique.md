@@ -4076,3 +4076,82 @@ corriger.
 
 Voir `docs/13-etape3-etat-et-feuille-de-route.md`, point 3bis (désormais
 marqué résolu), pour le résumé condensé des deux décisions.
+
+### 18/10/2026 — Campagne de test 2/6/16 joueurs : panneau "Inviter" périmé après changement de partie
+
+**Retour utilisateur, en lançant une nouvelle campagne de test** (3
+parties de 12 tours/5 min à 2, 6 et 16 joueurs, chacune jouée en
+libre+smartphone PUIS rejouée en dette+smartphone ET en troc+smartphone
+en "reprenant" les mêmes joueurs, pour comparer les statistiques
+côte-à-côte) : "je lance une partie dette+smartphone et je demande à
+reprendre les joueurs de la partie en monnaie libre avec smartphone. Le
+QRcode affiché indique la même url en monnaie libre avec smartphone et
+en monnaie dette avec smartphone... sur les smartphones des joueurs,
+l'affichage reste celui de la partie en monnaie libre avec smartphone
+qu'on vient de terminer. Impossible de lancer la partie en monnaie dette
+avec smartphone pour les joueurs." Capture d'écran du tableau de bord
+animateur (gameId=197, partie dette en cours) + deux captures du
+smartphone d'un joueur (toujours sur l'écran marchand de la partie libre
+terminée, "Vous avez acheté/vendu Granite...") à l'appui.
+
+**Cause trouvée** (lecture de `app.js`, `renderGameDetail()` et des
+panneaux "Inviter"/"Historique des échanges") : ces deux panneaux ne se
+réinitialisaient QUE si le réglage global "mode smartphone" passait à
+désactivé (dans le `.then()` d'`Api.getSettings()`, appelé de façon
+asynchrone à chaque affichage d'une partie) - jamais simplement parce
+que la PARTIE CONSULTÉE elle-même avait changé. Scénario exact du
+retour utilisateur : le panneau "Inviter" était resté OUVERT (affichant
+l'URL/QR de la partie libre) ; après avoir créé la partie dette en
+reprenant les mêmes joueurs (voir "Remonté par un utilisateur :
+reprendre les joueurs d'une partie existante", `app.js` ~ligne 6415) et
+navigué automatiquement vers son tableau de bord
+(`renderGameDetail(game.id)`, appelé par `btnNewGame.onclick` juste
+après la création), le panneau "Inviter" n'étant JAMAIS masqué par ce
+changement de partie, son contenu (l'ancien lien) restait affiché tel
+quel. Pire : `renderInviteQr()` considère un panneau déjà VISIBLE comme
+"ouvert, donc à fermer au prochain clic" (jamais "à rafraîchir") - un
+seul clic sur "Inviter" fermait donc silencieusement ce panneau périmé
+sans jamais afficher le bon lien (il aurait fallu cliquer deux fois,
+une pour fermer, une pour rouvrir). Même défaut, même mécanisme, sur
+`toggleTransactionsPanel()`/le panneau "Historique des échanges".
+Résultat : les joueurs scannant ce QR obsolète atterrissaient toujours
+sur l'ANCIENNE partie (libre, déjà terminée), jamais sur la nouvelle
+(dette) - bloquant complètement la fonctionnalité "reprendre les
+joueurs" dès qu'un panneau "Inviter" avait été laissé ouvert sur une
+partie précédente, ce qui est précisément le cas d'usage central de
+cette campagne de test (comparer les systèmes monétaires avec les mêmes
+joueurs).
+
+**Correctif** (`app.js`, `renderGameDetail()`) : les panneaux "Inviter"
+et "Historique des échanges" sont désormais masqués et vidés
+inconditionnellement dès que `gameId` (la partie consultée) change,
+au même endroit que la remise à zéro déjà existante de
+`state.turnEnded` - plus seulement quand le mode smartphone est
+désactivé. Le prochain clic régénère alors forcément un contenu à jour
+pour la partie réellement consultée.
+
+**Vérifié** : reproduction Playwright du scénario exact (bootstrap
+animateur, mode smartphone, partie libre créée + joueur "Jospeh" ajouté,
+panneau "Inviter" ouvert et laissé ouvert comme le ferait un animateur
+en conditions réelles, partie dette créée en reprenant "Jospeh",
+navigation automatique vers cette nouvelle partie exactement comme le
+fait `btnNewGame.onclick` en production) :
+- AVANT correctif (`git stash` temporaire sur `app.js`, rebuild,
+  nouveau serveur isolé) : panneau toujours visible après changement de
+  partie (`false` attendu `true`), un clic sur "Inviter" l'a fermé sans
+  jamais afficher d'URL (`undefined`).
+- APRÈS correctif : panneau bien masqué après changement de partie, un
+  seul clic affiche l'URL correcte de la NOUVELLE partie, distincte de
+  celle de l'ancienne (`gameId=1` pour la libre, `gameId=2` pour la
+  dette, deux liens différents).
+- `mvn clean package` complet : 58 tests `geco-server` + 28
+  `geco-engine`, tous verts (correctif purement côté client, aucun test
+  Java concerné).
+
+Voir CLAUDE.md, "Pièges déjà rencontrés", pour le résumé condensé. La
+campagne de test 2/6/16 joueurs demandée par l'utilisateur (libre →
+dette avec reprise des joueurs, puis libre → troc avec reprise des
+joueurs, vérification de la fluidité des échanges en libre+smartphone,
+réflexion sur un futur mécanisme d'échange aléatoire de cartes de même
+valeur) reprend juste après ce correctif - voir l'entrée suivante pour
+son déroulement et ses résultats.

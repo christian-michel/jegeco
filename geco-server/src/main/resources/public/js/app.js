@@ -2539,7 +2539,38 @@ async function renderGameDetail(gameId) {
 	// ("en plein tour", options restreintes) plutôt que "entre-deux-tours"
 	// (toutes options), pour ne jamais proposer par erreur des actions qui
 	// n'auraient pas de sens à ce moment précis.
-	if (state.currentGameId !== gameId) state.turnEnded = false;
+	if (state.currentGameId !== gameId)
+	{
+		state.turnEnded = false;
+		// BUG TROUVÉ ET CORRIGÉ (18/10/2026, remonté par l'utilisateur sur une
+		// vraie campagne de test : "je lance une partie dette+smartphone en
+		// reprenant les joueurs d'une partie libre+smartphone... le QR code
+		// affiché indique la même url" - sur les smartphones des joueurs,
+		// l'affichage restait bloqué sur l'ancienne partie, impossible de
+		// rejoindre la nouvelle) : les panneaux "Inviter" (QR/lien d'inscription)
+		// et "Historique des échanges" ne se réinitialisaient QUE si le nouveau
+		// réglage "mode smartphone" était désactivé (voir Api.getSettings()
+		// ci-dessous) - jamais simplement parce que la partie CONSULTÉE avait
+		// changé. Si l'animateur avait laissé le panneau "Inviter" ouvert sur
+		// l'ancienne partie (toujours en mode smartphone, comme ici), son
+		// contenu (l'URL/QR de CETTE ancienne partie) restait affiché tel quel
+		// après avoir navigué vers la nouvelle partie - et pire, un simple clic
+		// sur "Inviter" pour "rafraîchir" le fermait au lieu de le régénérer
+		// (renderInviteQr() considère le panneau déjà visible comme "ouvert",
+		// donc à FERMER, jamais comme "à rafraîchir" - il aurait fallu cliquer
+		// DEUX fois, une pour fermer puis une pour rouvrir, pour obtenir le bon
+		// lien). Les joueurs scannant ce QR périmé atterrissaient donc
+		// toujours sur l'ANCIENNE partie, jamais la nouvelle. Corrigé en
+		// réinitialisant ces deux panneaux dès que la partie consultée change,
+		// inconditionnellement (plus seulement quand le mode smartphone est
+		// désactivé) - le prochain clic sur "Inviter"/"Historique des échanges"
+		// régénère alors forcément un contenu à jour pour la partie CONSULTÉE.
+		el("inviteQrPanel").classList.add("hidden");
+		el("inviteQrPanel").innerHTML = "";
+		el("transactionsPanelBody").classList.add("hidden");
+		el("transactionsPanelBody").innerHTML = "";
+		el("btnToggleTransactions").textContent = window.GecoI18n.t("game.transactions_toggle_btn");
+	}
 	state.currentGameId = gameId;
 	// Remonté par un utilisateur (02/09/2026, anticipation d'un hébergement
 	// internet) : la connexion WebSocket reste ouverte en continu (voir
