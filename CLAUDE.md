@@ -576,3 +576,95 @@ ajoutes, pas seulement via ce script.
   tel quel, documenter"). Ne pas rouvrir ce point sans nouvelle demande
   explicite — le comportement est désormais un choix assumé en toute
   connaissance de cause, pas une limite mal comprise.
+- **Implémenté le 18-19/10/2026** : "échange avec la pioche" (commit
+  `be12a77`, voir `docs/14-reflexion-echange-pioche.md` pour le document de
+  cadrage complet, validé par l'utilisateur AVANT implémentation suite à la
+  campagne du 18/10/2026 ci-dessus) — un joueur rend une carte à la pioche
+  partagée de son niveau et en pioche une AUTRE (modèle différent, même
+  niveau), gratuit, 1 fois par joueur et par tour (niveau "tresforte"
+  inclus, décision utilisateur explicite), COMMUN aux trois systèmes
+  monétaires smartphone (dette/libre/troc), au même titre que le mécanisme
+  de pioche/carré déjà partagé (décision du 17/09/2026). Nouveau journal
+  append-only `PileExchangeEvent`, aux côtés de `Transaction`/
+  `CardSquareEvent` dans `GameService.computePlayerCardInventory` (jamais
+  compté comme un échange entre joueurs dans les statistiques,
+  `StatsService` ne lit que `Transaction`). Verrouillage par partie
+  (`withGameLock`) couvrant toute la section critique (vérification de
+  possession, limite 1×/tour dérivée du journal lui-même — jamais un
+  drapeau en mémoire séparé —, tirage AVANT toute mutation, écriture) :
+  un refus ne modifie JAMAIS ni la pioche ni l'inventaire du joueur.
+  **Validé par une campagne de test à deux agents** (méthode déjà éprouvée
+  dans ce projet, voir plus bas) : 9 parties HTTP réelles complètes (2/6/16
+  joueurs × libre/dette/troc + smartphone, 12 tours chacune, joueurs
+  repris d'un système à l'autre) menées par un premier agent de contrôle —
+  355 échanges réussis, 180 refusés, 4 carrés, 129 ventes, 28 échanges
+  troc, 24 crédits, 9 morts/renaissances, **0 écart** entre une vérité
+  terrain tenue indépendamment et l'état réel de l'application, à chaque
+  opération — puis revérifiée par un second agent d'audit indépendant, qui
+  a en particulier mené un **test de concurrence HTTP réelle dédié** (30
+  paires de requêtes `POST /pile-exchange` VRAIMENT simultanées pour le
+  même joueur/tour, jamais une simulation séquentielle) : 0 cas de double
+  succès sur toutes les paires concluantes, confirmant que le verrou par
+  partie sérialise correctement toute la section critique sous charge
+  réelle — exactement le type de preuve qu'une campagne séquentielle ne
+  peut pas produire (c'est cette méthode qui avait révélé le bug de
+  duplication du 27/09/2026 en troc).
+  - **Un vrai bug trouvé par l'agent d'audit, corrigé le jour même**
+    (commit distinct, cherry-pické sur le même commit `be12a77`) : le
+    bouton "Échanger avec la pioche" (`.btn-secondary`) n'avait **aucun
+    style `:disabled`**, contrairement à `.btn-primary` qui en a un —
+    fonctionnellement bloqué (le clic ne faisait déjà rien, côté serveur
+    ET côté JS), mais visuellement IDENTIQUE à son état actif, sans aucune
+    indication pour le joueur. Trouvé en relisant le CSS pendant la revue
+    de code, PUIS confirmé en ouvrant RÉELLEMENT les captures d'écran du
+    premier agent (pas en se fiant à leurs noms de fichiers) : ses trois
+    captures nommées "actif"/"déjà utilisé"/"grisé" étaient, à
+    l'inspection directe, visuellement indiscernables (checksums MD5
+    différents, donc pas des doublons de fichier — juste le même rendu non
+    distinctif), y compris celle explicitement nommée "grisée" — exactement
+    le genre d'écart qu'une relecture par le même agent n'aurait
+    probablement pas détecté (même leçon que le bug de sécurité troc du
+    18/09/2026). Corrigé par `.btn-secondary:disabled { opacity: 0.6;
+    cursor: default; }`, repris à l'identique de `.btn-primary:disabled` -
+    safe par construction (aucun autre bouton `.btn-secondary` n'est jamais
+    désactivé dynamiquement ailleurs dans `player-view.js`, vérifié par
+    grep). Vérifié par capture Playwright avant/après (serveur réel,
+    partie réelle). 95/95 tests toujours verts après.
+  - **Défaut de couverture trouvé par l'agent d'audit dans les captures du
+    premier agent** (pas un bug applicatif) : deux de ses captures
+    censées montrer l'historique et les statistiques du joueur
+    (`06-joueur-historique.png`/`07-joueur-stats.png`) étaient en réalité
+    identiques bit pour bit l'une à l'autre ET à la modale de carte restée
+    bloquée (même défaut de méthode que celui déjà identifié par le
+    premier agent lui-même côté animateur — un assistant/une modale restée
+    ouverte dans le DOM que le script de capture n'a jamais réussi à
+    fermer avant de "capturer" l'écran suivant) — ni l'historique ni les
+    stats joueur n'avaient donc réellement été capturés. Documenté, non
+    corrigé (affecte seulement la preuve visuelle produite par la
+    campagne, jamais l'application elle-même ni la vérité terrain HTTP qui
+    couvre bien les 9 parties sans exception).
+  - **Point ouvert signalé par l'audit, PAS corrigé (nécessite une
+    décision utilisateur, pas une correction unilatérale)** : aucune route
+    de trade de ce dépôt — vente/achat, échange troc, et maintenant échange
+    pioche — ne contrôle `Player.prisonUntilTurn` côté serveur ; la prison
+    (dette+smartphone, voir l'entrée du 11/10/2026 ci-dessus) n'est qu'une
+    UI bloquante côté client (`player-view.js`, l'overlay plein écran
+    `prisonAnimOverlay`), jamais un garde-fou serveur. Un appel HTTP direct
+    contournant l'interface pourrait donc échanger/vendre/acheter pour un
+    joueur "en prison" — **pas une régression de cette fonctionnalité**
+    (déjà vrai avant, pour les deux routes de trade déjà existantes), une
+    lacune préexistante jamais documentée comme un choix délibéré. À
+    trancher avec l'utilisateur comme les autres points de ce type dans ce
+    projet, pas une décision à prendre seul.
+  - Limites assumées de la campagne, documentées dans
+    `docs/14-reflexion-echange-pioche.md` §7 et les rapports complets des
+    deux agents (conservés hors dépôt, dans le scratchpad de la session qui
+    a mené cette campagne) : le scénario "carré déclenché par un achat"
+    n'a été mesuré en HTTP réel que par l'agent d'audit (le raccourci de
+    script du premier agent, `POST /transactions`, n'appelle jamais
+    `checkAndCashInSquares` — confirmé par les deux agents indépendamment
+    comme une limite du script de test, jamais atteinte par un vrai joueur,
+    qui passe toujours par `/trade-offers/.../redeem` ou `redeem-swap`) ;
+    couverture visuelle du panneau animateur incomplète pour dette/troc à
+    6/16 joueurs (vérité terrain HTTP complète sur les 9 parties, preuve
+    visuelle manquante pour ce sous-ensemble faute de temps).

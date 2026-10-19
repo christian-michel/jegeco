@@ -4410,3 +4410,158 @@ tests" à l'époque — la suite en compte aujourd'hui 93. Écart non
 investigué (hors périmètre de cette campagne) ; les entrées historiques ne
 sont jamais réécrites (convention du projet), seule la source de vérité
 EST le `mvn clean package` réel à chaque instant.
+
+### "Échange avec la pioche" implémenté et validé (18-19/10/2026)
+
+Suite directe de la réflexion ouverte le 18/10/2026 ci-dessus
+(`docs/14-reflexion-echange-pioche.md`) : l'utilisateur valide
+l'implémentation ("OK pour moi. Tu peux ajouter le bouton... Ok pour les
+cartes 'tresfortes' à raison de 1 par tour") et demande une campagne de
+validation complète à deux agents (contrôle + audit), sur le même modèle
+que celle du 18/10/2026.
+
+**Backend** (commit `be12a77`) : nouvelle entité JPA `PileExchangeEvent`
+(troisième journal append-only, aux côtés de `Transaction`/
+`CardSquareEvent`), enregistrée dans les 3 `persistence.xml` du dépôt.
+`GameService.computePlayerCardInventory` rejoue désormais ce journal en
+plus des deux autres. `exchangeWithPile`/`exchangeWithPileUnlocked` :
+verrouillage par partie (`withGameLock`) couvrant toute la séquence
+contrôle+décision+écriture, résolution du niveau exclusivement côté
+serveur (`findLevelOfCard`, jamais une valeur transportée par le client -
+`Dtos.PileExchangeRequest` ne porte d'ailleurs aucun champ `level`), tirage
+`pickRandomAvailableExcluding` appelé AVANT toute mutation (un refus ne
+modifie jamais rien), limite "1 fois par tour" dérivée d'un `COUNT` sur le
+journal lui-même pour le tour en cours (jamais un drapeau en mémoire
+séparé - cohérent avec la mise en garde déjà documentée le 11/10/2026 sur
+les TOCTOU d'état en mémoire non couvert par `withGameLock`). Jeton de
+joueur vérifié dans la route HTTP (`POST /api/games/{id}/pile-exchange`),
+jamais dans `GameService` - même convention que `recordTransaction`/
+`recordCardSwap`. Frontend : bouton "🔄 Échanger avec la pioche" ajouté
+SOUS le flux vente/échange existant de la modale carte (`player-view.js`/
+`.html`, jamais à sa place - un appel serveur direct, pas une offre
+scannée), section dédiée du panneau animateur "Historique des échanges"
+(`app.js`), ~7 nouvelles clés i18n fr/en.
+
+**Vérification manuelle immédiate** (serveur réellement démarré, vraie
+partie libre+smartphone, Playwright headless réel) : deux bugs front
+trouvés et corrigés avant même la campagne à deux agents - un message de
+refus qui s'effaçait immédiatement (`refreshPileExchangeButton()`
+réinitialisait inconditionnellement la zone d'erreur, y compris juste
+après que le bloc `catch` l'ait posée) et une mauvaise clé lue dans le
+corps JSON d'erreur du serveur (`error`, jamais `message` - les
+gestionnaires d'exception globaux de `GecoServer.java` utilisent
+systématiquement `error`).
+
+**Campagne à deux agents** (worktrees isolés, run_in_background) :
+
+- *Agent de contrôle* : build réel (`mvn clean package`, 95 tests, 0
+  échec), `node --check`, script i18n (650 clés, aucune manquante),
+  relecture critique du diff `be12a77` (rien à signaler), PUIS 9 parties
+  HTTP réelles complètes (2/6/16 joueurs × libre/dette/troc, 12 tours
+  chacune, joueurs repris d'un système à l'autre comme la campagne du
+  18/10/2026), pilotées par un script Node tenant une vérité terrain
+  indépendante (inventaire par delta depuis les réponses serveur, carrés
+  réconciliés via le vrai journal `GET /squares`, jamais une adoption
+  aveugle de l'état serveur - un défaut de sa première version, corrigé
+  avant la mesure définitive). Résultat : **355 échanges-pioche réussis,
+  180 refusés proprement (aucun effet de bord), 4 carrés, 129 ventes, 28
+  échanges troc, 24 crédits, 9 morts/renaissances, 0 écart** entre la
+  vérité terrain et l'état réel de l'application, à chaque opération
+  individuelle, sur les 9 parties. Aucun bug applicatif, aucun correctif
+  nécessaire. Quatre défauts identifiés, tous dans le harnais de test de
+  l'agent lui-même (jamais dans l'application) : faux positifs de
+  détection de carré (corrigés avant mesure), un frein anti-force-brute
+  429 pré-existant déclenché par son script mono-IP (corrigé par throttle
+  côté script), une route de raccourci `POST /transactions` utilisée pour
+  simuler des ventes qui n'appelle jamais `checkAndCashInSquares`
+  (contrairement au vrai flux `/trade-offers/.../redeem` que
+  `player-view.js` utilise réellement - confirmé par lecture directe de
+  `GecoServer.java`, sans impact sur un vrai joueur), et un assistant natif
+  "Sortie de tous les joueurs" (`<dialog>.showModal()`) resté affiché avec
+  les données périmées de la première partie chargée par chaque script de
+  capture, polluant 15 captures animateur (supprimées, remplacées par 3
+  captures obtenues via une partie dédiée courte n'atteignant jamais son
+  dernier tour).
+
+  Mission interrompue deux fois par des contraintes système (forçage d'un
+  handback puis un 429 de limite de session applicative) pendant cette
+  campagne - reprise à chaque fois via `SendMessage` sur le même agent
+  (jamais un nouvel agent, qui aurait perdu tout le contexte déjà
+  accumulé) : la campagne s'est en réalité terminée d'elle-même en tâche
+  de fond entre deux reprises, avec son résultat complet déjà disponible
+  au moment de la seconde reprise - leçon pour une prochaine fois : vérifier
+  l'état réel du travail en tâche de fond (fichiers produits, logs) avant
+  de redémarrer un travail qu'on croit inachevé, pour éviter un second
+  agent redondant sur le même worktree (voir plus bas - exactement ce qui
+  a été évité de justesse ici).
+
+- *Agent d'audit indépendant*, worktree séparé, **jamais une confirmation
+  de façade** : refait le build/tests/i18n depuis zéro (mêmes chiffres),
+  relecture de code critique indépendante (verrouillage `withGameLock`
+  bout en bout confirmé par lecture ET par un test dédié, niveau jamais
+  déclaré par le client confirmé, `StatsService` confirmé n'incluant
+  jamais `PileExchangeEvent`). Point le plus probant de l'audit : **un
+  test de concurrence HTTP réelle dédié**, jamais fait par le premier agent
+  (méthodologie séquentielle) - 30 paires de requêtes `POST
+  /pile-exchange` VRAIMENT simultanées (même `Promise.all`, même
+  joueur/tour) contre un serveur réellement démarré : sur 18 paires
+  concluantes (12 non concluantes à cause du même frein 429 partagé), **0
+  cas de double succès** - le perdant reçoit soit le refus "déjà échangé",
+  soit "vous ne possédez pas cette carte" (le gagnant a déjà rendu la
+  carte avant que le perdant ne relise l'inventaire), preuve que le verrou
+  sérialise correctement TOUTE la section critique, jamais un état à
+  moitié appliqué - exactement le type de preuve qu'une campagne
+  séquentielle ne peut pas produire par construction (cite explicitement
+  le bug de duplication troc du 27/09/2026 comme précédent trouvé par
+  cette même méthode). Rejoue 4 scénarios HTTP indépendants (catalogue réel
+  à pioche réduite, carré déclenché par un VRAI achat `/trade-offers`+
+  `/redeem` suivi d'un échange pioche immédiat, reprise dette→troc).
+
+  **Un vrai bug trouvé et corrigé** (commit `8b63edd`, cherry-pické dans
+  le dépôt principal sous `699b7ac`) : `.btn-secondary` (classe du bouton
+  pioche) n'avait aucune règle CSS `:disabled`, contrairement à
+  `.btn-primary` - le bouton restait visuellement identique à son état
+  actif une fois désactivé (clic déjà bloqué côté serveur ET JS, mais
+  aucune indication visuelle). Trouvé en relisant le CSS, confirmé en
+  ouvrant RÉELLEMENT les 3 captures du premier agent censées montrer des
+  états "actif"/"déjà utilisé"/"grisé" - visuellement indiscernables
+  (checksums MD5 différents, donc pas des doublons de fichier - juste le
+  même rendu), y compris celle nommée "grisée". Corrigé par
+  `.btn-secondary:disabled { opacity: 0.6; cursor: default; }`, identique
+  à `.btn-primary:disabled`, sans effet de bord possible (aucun autre
+  bouton `.btn-secondary` n'est jamais désactivé dynamiquement ailleurs).
+  95/95 tests toujours verts. Second défaut trouvé (pas un bug
+  applicatif) : deux captures du premier agent censées montrer
+  l'historique/les stats du joueur étaient en réalité des doublons bit
+  pour bit de la même modale restée bloquée - documenté, non corrigé.
+
+  Point ouvert signalé, non corrigé (décision utilisateur nécessaire,
+  jamais tranchée unilatéralement) : aucune route de trade de ce dépôt
+  (vente/achat, troc, pioche) ne contrôle `Player.prisonUntilTurn` côté
+  serveur - la prison n'est qu'une UI bloquante côté client, déjà vrai
+  avant cette fonctionnalité pour les deux routes existantes. Pas une
+  régression, une lacune préexistante jamais documentée comme un choix
+  délibéré.
+
+**Leçon de coordination multi-agents** (à retenir pour une prochaine
+campagne de cette ampleur) : un agent de continuation a été lancé par
+erreur en double sur le MÊME worktree qu'un agent déjà en cours (croyant
+le premier durablement bloqué après son interruption), créant un risque
+réel de collision d'écriture sur les mêmes fichiers (`campaign-report/
+RAPPORT.md`, le dossier `screenshots/` - une baisse du nombre de fichiers
+observée en temps réel par le second agent, d'abord prise pour une
+anomalie, s'est révélée être l'autre agent en train de réorganiser le même
+dossier au même moment). Détecté à temps et corrigé en arrêtant
+immédiatement le second agent sans qu'il ne modifie plus rien, laissant le
+premier finaliser seul - mais le bon réflexe aurait été de vérifier l'état
+du worktree (processus actifs, dernière modification des fichiers) avant
+de relancer quoi que ce soit dessus, plutôt que de supposer l'agent
+précédent inactif simplement parce qu'il avait été interrompu une fois.
+
+**Fusion** : correctif CSS de l'agent d'audit cherry-pické proprement
+(aucun conflit) dans la branche de travail du dépôt principal ; le
+commit backend de l'agent de contrôle n'a jamais existé (aucun bug
+applicatif trouvé, aucun commit produit par cet agent). `mvn clean
+package` réel après fusion : toujours vert, 95 tests. Rapports complets
+des deux agents (RAPPORT.md, AUDIT.md, scripts HTTP rejouables, captures
+d'écran) conservés hors dépôt (livrables de session, pas versionnés).

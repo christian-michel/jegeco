@@ -1,10 +1,13 @@
 # Réflexion : « échanger une carte contre une carte aléatoire de même valeur dans la pioche »
 
 *Document de travail, rédigé pendant la campagne de test 2/6/16 joueurs du
-18/10/2026 (voir `docs/03-architecture-technique.md`, entrée du même jour) —
-**rien n'est implémenté**, à discuter avec l'utilisateur avant toute suite.
-Ne pas démarrer l'implémentation sans validation explicite, en particulier
-sur le garde-fou anti-abus (§3) et le tirage par carte vs par modèle (§6).*
+18/10/2026 (voir `docs/03-architecture-technique.md`, entrée du même jour).*
+
+**IMPLÉMENTÉ ET VALIDÉ le 19/10/2026** (commit `be12a77` + correctif CSS
+`699b7ac`) — voir §7 ci-dessous pour le bilan complet (campagne de test
+9 parties + audit indépendant) et `CLAUDE.md` pour le résumé définitif. Ce
+document reste la référence de conception (le POURQUOI des choix faits),
+conservé tel quel au-dessus ; seul le statut change.
 
 ## 1. Le besoin, chiffré par la campagne
 
@@ -175,3 +178,45 @@ chance sur 2 de compléter son carré ; avec un tirage pondéré par le nombre
 d'exemplaires, elle en aurait 2 sur 5. Le tirage par carte est plus
 « physique » (une vraie pioche mélangée), et ce choix vaut aussi pour les
 carrés.
+
+## 7. Bilan de l'implémentation et de la validation (18-19/10/2026)
+
+Implémenté exactement selon la recommandation du §6 (1 échange gratuit par
+joueur et par tour, même niveau, jamais le même modèle, « tresforte »
+inclus par décision utilisateur explicite) : entité `PileExchangeEvent`
+(troisième journal append-only aux côtés de `Transaction`/
+`CardSquareEvent`), `GameService.exchangeWithPile`/
+`exchangeWithPileUnlocked` (verrouillage `withGameLock`, tirage AVANT toute
+mutation, limite dérivée du journal lui-même), route `POST
+/api/games/{id}/pile-exchange`, bouton dans la modale carte
+(`player-view.js`/`.html`), section dédiée du panneau animateur « Historique
+des échanges » (`app.js`), i18n fr/en complet. Tirage par carte vs par
+modèle (§6) : **tranché en faveur du statu quo** (tirage par modèle,
+`pickRandomAvailableExcluding`, cohérent avec l'existant des carrés) - non
+rediscuté à l'implémentation, cohérence avec le mécanisme de carré déjà en
+place jugée prioritaire sur le réalisme physique du tirage pondéré ;
+rouvrir ce point nécessiterait une demande explicite future.
+
+**Validation** : campagne HTTP réelle de 9 parties complètes (2/6/16
+joueurs × libre/dette/troc + smartphone, 12 tours chacune, joueurs repris
+d'un système à l'autre), menée par un agent de contrôle puis revérifiée
+indépendamment par un second agent d'audit (méthode à deux agents, voir
+`CLAUDE.md`) : **355 échanges réussis, 180 refusés, conservation stricte
+des cartes vérifiée à chaque opération, aucun bug applicatif dans la
+logique métier**. Un test de concurrence HTTP réelle dédié (30 paires de
+requêtes vraiment simultanées pour le même joueur/tour) confirme qu'aucune
+carte n'est jamais créée depuis rien sous charge concurrente - le verrou
+par partie (`withGameLock`) sérialise correctement toute la section
+critique. Un seul vrai défaut trouvé, mineur et corrigé le jour même :
+le bouton pioche désactivé n'avait pas de style visuel `:disabled`
+(fonctionnellement bloqué, mais visuellement identique à l'état actif) -
+voir `CLAUDE.md` pour le détail complet du correctif et de son instruction.
+
+**Point ouvert signalé par l'audit, non corrigé, à soumettre à
+l'utilisateur** : aucune route de trade de ce dépôt (vente/achat,
+échange troc, et maintenant échange pioche) ne contrôle
+`Player.prisonUntilTurn` côté serveur - la prison (dette+smartphone) n'est
+qu'une UI bloquante côté client. Ce n'est PAS une régression introduite par
+cette fonctionnalité (déjà vrai avant pour les deux routes existantes), mais
+une lacune préexistante jamais documentée comme un choix délibéré - voir
+`CLAUDE.md`, section correspondante, pour la décision à prendre.

@@ -586,6 +586,22 @@ juste avant).
   mineure signalée (détection `isSmartphoneLibre` non élargie à `isQuit()`,
   cas extrême cosmétique, décision utilisateur en attente).
 
+### "Échange avec la pioche" (construit le 18-19/10/2026)
+
+Nouveau mécanisme, commun aux trois systèmes monétaires smartphone
+(dette/libre/troc) : un joueur rend une carte à la pioche partagée de son
+niveau et en pioche une autre (modèle différent, même niveau) - gratuit,
+1 fois par joueur et par tour, niveau "tresforte" inclus. Voir
+`docs/14-reflexion-echange-pioche.md` (document de cadrage complet) et
+`CLAUDE.md` (résumé définitif de l'implémentation, de la campagne de
+validation à deux agents - 9 parties HTTP réelles 2/6/16 joueurs × 12
+tours, 0 bug applicatif, un test de concurrence HTTP dédié confirmant
+l'absence de course gagnante sur la limite 1×/tour - et du bug CSS mineur
+trouvé et corrigé par l'audit). Point ouvert, non corrigé, signalé par
+l'audit : aucune route de trade de ce dépôt (vente/achat, troc, pioche) ne
+contrôle `Player.prisonUntilTurn` côté serveur - décision utilisateur à
+venir, voir `CLAUDE.md`.
+
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
 Par ordre approximatif de priorité, à ajuster selon les retours de test :
