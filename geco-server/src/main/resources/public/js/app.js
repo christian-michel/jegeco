@@ -496,6 +496,11 @@ const Api = {
 	// l'utilisateur (31/08/2026) : "seront transmises à l'application de
 	// l'animateur lors de l'entre-deux tour".
 	getSquares: (gameId) => api(`/api/games/${gameId}/squares`),
+	// "Échange avec la pioche" (18/10/2026, voir
+	// docs/14-reflexion-echange-pioche.md + PileExchangeEvent) : troisième
+	// journal, même principe que getSquares ci-dessus - une interaction
+	// avec la pioche partagée, jamais un échange entre deux joueurs.
+	getPileExchanges: (gameId) => api(`/api/games/${gameId}/pile-exchanges`),
 	// Étape 3, monnaie libre smartphone : inventaire de cartes {cardTypeId:
 	// quantité} d'UN joueur - même route que celle utilisée par son propre
 	// smartphone (voir player-view.js), réutilisée ici côté animateur pour
@@ -3406,17 +3411,20 @@ async function renderTransactionsPanel(gameId) {
 
 	let transactions;
 	let squares;
+	let pileExchanges;
 	let cardsCatalog;
 	try {
-		[transactions, squares, cardsCatalog] = await Promise.all([
-			Api.getTransactions(gameId), Api.getSquares(gameId), Api.getCatalog("cartes"),
+		// "Échange avec la pioche" (18/10/2026) : troisième journal, voir
+		// Api.getPileExchanges + docs/14-reflexion-echange-pioche.md.
+		[transactions, squares, pileExchanges, cardsCatalog] = await Promise.all([
+			Api.getTransactions(gameId), Api.getSquares(gameId), Api.getPileExchanges(gameId), Api.getCatalog("cartes"),
 		]);
 	} catch (err) {
 		body.innerHTML = `<p style="color:var(--danger)">${t("game.transactions_load_error")}</p>`;
 		return;
 	}
 
-	if ((transactions.length === 0) && (squares.length === 0)) {
+	if ((transactions.length === 0) && (squares.length === 0) && (pileExchanges.length === 0)) {
 		body.innerHTML = `<p style="color:var(--text-dim);font-size:0.85rem;">${t("game.transactions_empty")}</p>`;
 		return;
 	}
@@ -3544,7 +3552,26 @@ async function renderTransactionsPanel(gameId) {
 			</li>`).join("")}
 		</ul>`;
 
-	body.innerHTML = summaryHtml + activityHtml + historyHtml + squaresHtml;
+	// Historique des échanges avec la pioche (18/10/2026, voir
+	// PileExchangeEvent.java) - section distincte des carrés ci-dessus : ici
+	// UNE SEULE carte rendue contre UNE SEULE carte piochée (jamais 4 contre
+	// 5, jamais de changement de niveau), neutre en richesse comme un carré.
+	const pileExchangesHtml = (pileExchanges.length === 0) ? "" : `
+		<h4 style="margin:1.2rem 0 0.5rem;font-size:0.85rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.02em;">
+			${t("game.pile_exchanges_section_title", { count: pileExchanges.length })}
+		</h4>
+		<ul class="events-list">
+			${pileExchanges.map((px) => `
+			<li>
+				<strong>${escapeHtml(px.playerName)}</strong>
+				<span class="event-meta">
+					${t("game.pile_exchanges_detail", { given: escapeHtml(cardName(px.givenCardTypeId)), received: escapeHtml(cardName(px.receivedCardTypeId)) })}
+					· ${t("game.transactions_turn_label", { n: px.turnNumber })}
+				</span>
+			</li>`).join("")}
+		</ul>`;
+
+	body.innerHTML = summaryHtml + activityHtml + historyHtml + squaresHtml + pileExchangesHtml;
 }
 
 

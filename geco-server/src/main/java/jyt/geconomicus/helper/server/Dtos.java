@@ -75,12 +75,13 @@ public class Dtos
 			int goodsCount, String accessToken, int tradeBalance, int weakGoods, int mediumGoods, int strongGoods,
 			int moneySystem, boolean tradingAllowed, double weakCoinValue, boolean isPaused, int jetonWeak,
 			int jetonMedium, int jetonStrong, int currentDuValue, double weakCardValueInDU,
-			boolean hasStartingAllocation, int revolutionCount, boolean quit, boolean inPrisonThisTurn)
+			boolean hasStartingAllocation, int revolutionCount, boolean quit, boolean inPrisonThisTurn,
+			boolean pileExchangeUsedThisTurn)
 	{
 		static PlayerSelfViewDto from(final Player p, final int pTradeBalance, final int pMoneySystem,
 				final boolean pTradingAllowed, final double pWeakCoinValue, final boolean pIsPaused,
 				final int pCurrentDuValue, final double pWeakCardValueInDU, final int pRevolutionCount,
-				final int pGameTurnNumber)
+				final int pGameTurnNumber, final boolean pPileExchangeUsedThisTurn)
 		{
 			return new PlayerSelfViewDto(p.getId(), p.getName(), p.isActive(), p.getCurDebt(), p.getCurInterest(),
 					p.isVisitedBank(), p.getDeclaredAge(), p.getFavoriteColor(), p.getAvatarConfigJson(),
@@ -150,7 +151,13 @@ public class Dtos
 					// GameService.clearExpiredPrisonStatus (toujours une égalité stricte
 					// LÀ-BAS, à dessein : c'est elle qui détermine QUAND lever le
 					// blocage, pas quand l'afficher).
-					(p.getPrisonUntilTurn() != null) && (p.getPrisonUntilTurn().intValue() >= pGameTurnNumber));
+					(p.getPrisonUntilTurn() != null) && (p.getPrisonUntilTurn().intValue() >= pGameTurnNumber),
+					// pileExchangeUsedThisTurn : ajouté le 18/10/2026 ("échange avec la
+					// pioche", voir GameService.exchangeWithPile/hasUsedPileExchangeThisTurn)
+					// - permet à player-view.js de désactiver le bouton correspondant sans
+					// attendre un refus serveur, dès que ce joueur a déjà utilisé son
+					// échange gratuit du tour.
+					pPileExchangeUsedThisTurn);
 		}
 	}
 
@@ -246,6 +253,32 @@ public class Dtos
 					s.getPromotedCardTypeId(), s.getPromotedLevel(), replenished, s.isTriggeredBreakthrough(),
 					s.isTriggeredRevolution(), s.getRevolutionCountAfter());
 		}
+	}
+
+	/**
+	 * Échange avec la pioche (voir PileExchangeEvent) - demandé par
+	 * l'utilisateur (18/10/2026) sur le même principe que CardSquareEventDto
+	 * ci-dessus : "toutes ces opérations sont enregistrées dans l'historique
+	 * du tour... et seront transmises à l'application de l'animateur".
+	 */
+	public record PileExchangeEventDto(Integer id, Integer playerId, String playerName, int turnNumber,
+			long timestamp, String givenCardTypeId, String level, String receivedCardTypeId)
+	{
+		static PileExchangeEventDto from(final jyt.geconomicus.helper.PileExchangeEvent p)
+		{
+			return new PileExchangeEventDto(p.getId(), p.getPlayer().getId(), p.getPlayer().getName(),
+					p.getTurnNumber(), p.getTstamp() == null ? 0 : p.getTstamp().getTime(), p.getGivenCardTypeId(),
+					p.getLevel(), p.getReceivedCardTypeId());
+		}
+	}
+
+	// Requête de POST /api/games/{id}/pile-exchange - authentifiée par le
+	// jeton individuel du joueur (même principe que RedeemSwapOfferRequest),
+	// jamais une session animateur : cardTypeId est la carte que CE joueur
+	// choisit de rendre à la pioche, son niveau est résolu côté serveur
+	// (jamais déclaré par le client, voir GameService.exchangeWithPile).
+	public record PileExchangeRequest(Integer playerId, String accessToken, String cardTypeId)
+	{
 	}
 
 	/**

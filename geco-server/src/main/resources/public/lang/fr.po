@@ -2427,3 +2427,31 @@ msgstr "Choisissez comment VOUS préférez organiser vos parties par défaut : a
 
 msgid "settings.language_intro_personal"
 msgstr "Choisissez VOTRE langue préférée pour l'interface animateur. Ce choix est personnel, propre à votre compte - il vous suit si vous vous connectez depuis un autre appareil, et n'affecte pas les autres animateurs."
+
+# ============ "Échange avec la pioche" (18/10/2026) - mécanisme COMMUN aux
+# trois systèmes monétaires smartphone (dette/libre/troc), voir
+# docs/14-reflexion-echange-pioche.md et PileExchangeEvent.java. Les
+# messages de refus (ex. "Vous avez déjà échangé...", "Aucune autre
+# carte...") viennent directement du serveur (GameService.exchangeWithPile),
+# jamais traduits ici - même convention que les autres messages d'erreur
+# métier de ce fichier (ex. "Solde insuffisant", "Vente refusée"). ============
+msgid "playerView.pile_exchange_btn"
+msgstr "🔄 Échanger avec la pioche"
+
+msgid "playerView.pile_exchange_used"
+msgstr "Pioche déjà échangée ce tour"
+
+msgid "playerView.pile_exchange_error_generic"
+msgstr "Échange impossible, réessayez."
+
+msgid "playerView.pile_exchange_success"
+msgstr "Échange avec la pioche réussi !"
+
+msgid "playerView.history_pile_exchange_detail"
+msgstr "Pioche : {given} → {received}"
+
+msgid "game.pile_exchanges_section_title"
+msgstr "Échanges avec la pioche ({count})"
+
+msgid "game.pile_exchanges_detail"
+msgstr "Pioche : {given} → {received}"

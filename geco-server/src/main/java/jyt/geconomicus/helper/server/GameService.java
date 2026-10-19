@@ -6,6 +6,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 
 import jyt.geconomicus.helper.CardSquareEvent;
+import jyt.geconomicus.helper.PileExchangeEvent;
 import jyt.geconomicus.helper.Event;
 import jyt.geconomicus.helper.Event.EventType;
 import jyt.geconomicus.helper.EventTypeConverter;
@@ -1767,6 +1768,23 @@ public class GameService
 				// carré précis plutôt que de faire échouer tout l'inventaire.
 			}
 		}
+		// Historique des échanges avec la pioche (18/10/2026, voir
+		// PileExchangeEvent et GameService.exchangeWithPile) : un troisième
+		// journal, au même titre que Transaction et CardSquareEvent ci-dessus -
+		// la carte donnée quitte l'inventaire, celle reçue y entre, toutes deux
+		// au même niveau. Même filtre par cardInventoryResetAt que les deux
+		// autres.
+		final List<PileExchangeEvent> pileExchanges = em.createQuery(
+				"SELECT p FROM PileExchangeEvent p WHERE p.game.id = :gameId AND p.player.id = :pid " //$NON-NLS-1$
+						+ "AND (:resetAt IS NULL OR p.tstamp > :resetAt)", //$NON-NLS-1$
+				PileExchangeEvent.class)
+				.setParameter("gameId", pGameId).setParameter("pid", pPlayerId).setParameter("resetAt", resetAt) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				.getResultList();
+		for (final PileExchangeEvent px : pileExchanges)
+		{
+			inventory.merge(px.getGivenCardTypeId(), -1, Integer::sum);
+			inventory.merge(px.getReceivedCardTypeId(), 1, Integer::sum);
+		}
 		// Ne devrait normalement jamais arriver (on ne peut pas vendre une carte
 		// qu'on n'a pas), mais on nettoie par sécurité plutôt que d'afficher un
 		// nombre négatif absurde - ex. cartes détenues avant l'usage du
@@ -2996,6 +3014,216 @@ public class GameService
 		if (available.isEmpty())
 			return null;
 		return available.get(new java.util.Random().nextInt(available.size()));
+	}
+
+	// Même principe que pickRandomAvailable ci-dessus, mais exclut EXPLICITEMENT
+	// un modèle (18/10/2026, "échange avec la pioche" - voir exchangeWithPile) :
+	// le joueur ne doit jamais pouvoir retomber sur sa propre carte. Tirage
+	// uniforme PAR MODÈLE (pas pondéré par le nombre d'exemplaires restants),
+	// cohérent avec pickRandomAvailable ci-dessus, déjà utilisé tel quel pour
+	// les carrés - voir docs/14-reflexion-echange-pioche.md §6, qui documente
+	// ce choix comme un point ouvert, jamais tranché unilatéralement ici.
+	private String pickRandomAvailableExcluding(final java.util.Map<String, Integer> pPile,
+			final String pExcludedCardTypeId)
+	{
+		final java.util.List<String> available = pPile.entrySet().stream()
+				.filter(e -> (e.getValue() > 0) && !e.getKey().equals(pExcludedCardTypeId))
+				.map(java.util.Map.Entry::getKey).toList();
+		if (available.isEmpty())
+			return null;
+		return available.get(new java.util.Random().nextInt(available.size()));
+	}
+
+	/**
+	 * Étape 3, les trois systèmes monétaires + smartphone, "échange avec la
+	 * pioche" (18/10/2026, demandé par l'utilisateur suite à la campagne de
+	 * test 2/6/16 joueurs - voir docs/14-reflexion-echange-pioche.md, document
+	 * de cadrage validé avant implémentation, et docs/03-architecture-
+	 * technique.md pour les chiffres qui ont motivé cette fonctionnalité :
+	 * jusqu'à 79% des joueur-tours sans échange valide possible en troc à 16
+	 * joueurs, 58% sans progression possible en libre à 2 joueurs). Un joueur
+	 * rend une carte qu'il détient à la pioche PARTAGÉE de son niveau et en
+	 * reçoit une autre, tirée au hasard parmi les AUTRES modèles de ce même
+	 * niveau encore en stock - jamais son propre modèle, jamais de
+	 * jetons/valeur monétaire (carte contre carte, neutre en valeur comme le
+	 * troc lui-même). Limité à UNE fois par joueur et par tour, TOUS niveaux
+	 * confondus, "tresforte" inclus (décision utilisateur du 18/10/2026).
+	 * <p>
+	 * Conservation stricte des cartes (jamais créée ni perdue) : la carte
+	 * rendue ET celle reçue sont persistées dans le MÊME {@link PileExchangeEvent}
+	 * que la mutation de {@code Game.smartphoneCardPileJson}, dans la MÊME
+	 * transaction JPA - exactement le même principe que {@link CardSquareEvent}
+	 * ci-dessus (voir son commentaire de tête de classe). Rejouée par
+	 * {@link #computePlayerCardInventory} au même titre que Transaction/
+	 * CardSquareEvent.
+	 *
+	 * @throws IllegalArgumentException partie/joueur introuvable, échanges en
+	 *             pause, joueur inactif, carte non détenue, déjà utilisé ce
+	 *             tour, ou aucune autre carte de ce niveau disponible dans la
+	 *             pioche (dans ce dernier cas, RIEN n'est modifié - ni la
+	 *             pioche ni l'inventaire). L'authentification par jeton
+	 *             individuel reste à la charge de l'appelant HTTP (voir plus
+	 *             bas).
+	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
+	public PileExchangeEvent exchangeWithPile(final int pGameId, final int pPlayerId, final String pCardTypeId)
+	{
+		return withGameLock(pGameId, () -> exchangeWithPileUnlocked(pGameId, pPlayerId, pCardTypeId));
+	}
+
+	private PileExchangeEvent exchangeWithPileUnlocked(final int pGameId, final int pPlayerId,
+			final String pCardTypeId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				throw new IllegalArgumentException("Partie introuvable."); //$NON-NLS-1$
+			final Player player = em.find(Player.class, pPlayerId);
+			if ((player == null) || !player.getGame().equals(game))
+				throw new IllegalArgumentException("Joueur introuvable."); //$NON-NLS-1$
+			// Authentification par jeton individuel : volontairement PAS vérifiée
+			// ici, comme recordTransaction/recordCardSwap/les demandes de crédit -
+			// c'est la route HTTP appelante (GecoServer, gated par
+			// AppSettings.isProtectionEnabled) qui en a la charge, jamais
+			// GameService (cohérence avec le reste de la classe, et testable
+			// directement sans fabriquer de jeton).
+			if (!player.isActive())
+				throw new IllegalArgumentException("Ce joueur n'est plus actif dans la partie."); //$NON-NLS-1$
+			if (!isTradingAllowed(game))
+				throw new IllegalArgumentException("Les échanges sont actuellement en pause."); //$NON-NLS-1$
+			if (game.getSmartphoneCardPileJson() == null)
+				throw new IllegalArgumentException("La pioche n'est pas encore en place."); //$NON-NLS-1$
+
+			final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			final java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel;
+			try
+			{
+				pilesByLevel = mapper.readValue(game.getSmartphoneCardPileJson(),
+						new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.Map<String, Integer>>>()
+						{
+						});
+			}
+			catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+			{
+				throw new IllegalArgumentException("Pioche illisible."); //$NON-NLS-1$
+			}
+			// Niveau résolu côté SERVEUR depuis la pioche de la partie, jamais
+			// déclaré par le client - même principe que recordTransaction/
+			// recordCardSwap depuis le correctif du 27/09/2026 (voir son
+			// commentaire détaillé).
+			final String level = findLevelOfCard(pilesByLevel, pCardTypeId);
+			if (level == null)
+				throw new IllegalArgumentException("Cette carte ne fait pas partie du catalogue de la partie."); //$NON-NLS-1$
+			final java.util.Map<String, Integer> inventory = computePlayerCardInventory(em, pGameId, pPlayerId);
+			if (inventory.getOrDefault(pCardTypeId, 0) <= 0)
+				throw new IllegalArgumentException("Vous ne possédez pas cette carte."); //$NON-NLS-1$
+			// Limite "1 fois par joueur et par tour" (décision utilisateur du
+			// 18/10/2026) : dérivée du journal lui-même (compte des
+			// PileExchangeEvent déjà enregistrés CE tour pour CE joueur), jamais
+			// un état en mémoire séparé - contrairement au motif déjà rencontré
+			// et corrigé le 11/10/2026 (CreditRequestService) et au repli en
+			// mémoire déjà assumé pour "Fin de tour" (voir CLAUDE.md, "Pièges
+			// déjà rencontrés") : rester cohérent même après un redémarrage
+			// serveur, sans nouvel état à synchroniser.
+			final long usedThisTurn = em.createQuery(
+					"SELECT COUNT(p) FROM PileExchangeEvent p WHERE p.game.id = :gameId AND p.player.id = :pid " //$NON-NLS-1$
+							+ "AND p.turnNumber = :turn", //$NON-NLS-1$
+					Long.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.setParameter("turn", game.getTurnNumber()).getSingleResult(); //$NON-NLS-1$
+			if (usedThisTurn > 0)
+				throw new IllegalArgumentException("Vous avez déjà échangé une carte avec la pioche ce tour-ci."); //$NON-NLS-1$
+
+			final java.util.Map<String, Integer> pile = pilesByLevel.get(level);
+			// Tiré AVANT toute mutation de la pioche (voir docs/14, §2, "ordre
+			// recommandé") : si aucun autre modèle n'est disponible, RIEN n'est
+			// modifié - ni la pioche ni l'inventaire - un refus propre plutôt
+			// qu'un état à moitié appliqué.
+			final String receivedCardTypeId = pickRandomAvailableExcluding(pile, pCardTypeId);
+			if (receivedCardTypeId == null)
+				throw new IllegalArgumentException("Aucune autre carte de cette valeur n'est disponible dans la pioche pour l'instant."); //$NON-NLS-1$
+
+			em.getTransaction().begin();
+			pile.merge(pCardTypeId, 1, Integer::sum); // la carte donnée retourne dans la pioche
+			pile.merge(receivedCardTypeId, -1, Integer::sum); // la carte reçue en est retirée
+			writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
+			final PileExchangeEvent event = new PileExchangeEvent(game, player, pCardTypeId, level,
+					receivedCardTypeId);
+			em.persist(event);
+			em.getTransaction().commit();
+			return event;
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/** Historique COMPLET des échanges avec la pioche d'une partie - écran animateur. */
+	public List<PileExchangeEvent> listGamePileExchanges(final int pGameId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			return em.createQuery(
+					"SELECT p FROM PileExchangeEvent p WHERE p.game.id = :gameId ORDER BY p.tstamp DESC", //$NON-NLS-1$
+					PileExchangeEvent.class)
+					.setParameter("gameId", pGameId) //$NON-NLS-1$
+					.getResultList();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/** Historique des échanges avec la pioche d'UN joueur - voir "Historique" côté espace joueur. */
+	public List<PileExchangeEvent> listPlayerPileExchanges(final int pGameId, final int pPlayerId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			return em.createQuery(
+					"SELECT p FROM PileExchangeEvent p WHERE p.game.id = :gameId AND p.player.id = :pid " //$NON-NLS-1$
+							+ "ORDER BY p.tstamp DESC", //$NON-NLS-1$
+					PileExchangeEvent.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.getResultList();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	/**
+	 * Vrai si CE joueur a déjà utilisé son échange avec la pioche au tour EN
+	 * COURS de la partie (voir exchangeWithPile, limite "1 fois par joueur et
+	 * par tour") - exposé via PlayerSelfViewDto pour que player-view.js puisse
+	 * désactiver le bouton sans attendre un refus serveur.
+	 */
+	public boolean hasUsedPileExchangeThisTurn(final int pGameId, final int pPlayerId)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			if (game == null)
+				return false;
+			final long count = em.createQuery(
+					"SELECT COUNT(p) FROM PileExchangeEvent p WHERE p.game.id = :gameId AND p.player.id = :pid " //$NON-NLS-1$
+							+ "AND p.turnNumber = :turn", //$NON-NLS-1$
+					Long.class)
+					.setParameter("gameId", pGameId).setParameter("pid", pPlayerId) //$NON-NLS-1$ //$NON-NLS-2$
+					.setParameter("turn", game.getTurnNumber()).getSingleResult(); //$NON-NLS-1$
+			return count > 0;
+		}
+		finally
+		{
+			em.close();
+		}
 	}
 
 	// Comme writeJsonQuietly, mais renvoie la chaîne au lieu de l'appliquer à

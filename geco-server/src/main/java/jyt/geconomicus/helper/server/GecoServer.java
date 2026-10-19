@@ -17,6 +17,7 @@ import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.Persistence;
 
 import jyt.geconomicus.helper.CardSquareEvent;
+import jyt.geconomicus.helper.PileExchangeEvent;
 import jyt.geconomicus.helper.Event;
 import jyt.geconomicus.helper.Game;
 import jyt.geconomicus.helper.Player;
@@ -1282,7 +1283,8 @@ public class GecoServer
 			ctx.json(Dtos.PlayerSelfViewDto.from(player, mGameService.computeTradeBalance(id, player.getId()),
 					game.getMoneySystem(), mGameService.isTradingAllowed(game), game.getWeakCoinValue(),
 					game.getPausedRemainingSeconds() != null, game.computeCurrentDU(),
-					game.getWeakCardValueInDU(), game.getRevolutionCount(), game.getTurnNumber()));
+					game.getWeakCardValueInDU(), game.getRevolutionCount(), game.getTurnNumber(),
+					mGameService.hasUsedPileExchangeThisTurn(id, player.getId())));
 		});
 
 		// Inventaire de cartes d'un joueur, par SON PROPRE jeton (voir "Mes
@@ -1358,6 +1360,30 @@ public class GecoServer
 			}
 			ctx.json(mGameService.listPlayerSquares(id, player.getId()).stream()
 					.map(Dtos.CardSquareEventDto::from).toList());
+		});
+
+		// Historique des échanges avec la pioche d'UN joueur - voir
+		// "Historique" côté espace joueur (18/10/2026). Même principe
+		// d'exemption que les routes transactions/squares ci-dessus.
+		pApp.get("/api/games/{id}/players/by-token/{token}/pile-exchanges", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			final String token = ctx.pathParam("token"); //$NON-NLS-1$
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final Player player = game.getPlayers().stream()
+					.filter(p -> (p.getAccessToken() != null) && p.getAccessToken().equals(token)).findFirst()
+					.orElse(null);
+			if (player == null)
+			{
+				ctx.status(404).json(java.util.Map.of("error", "Jeton inconnu.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			ctx.json(mGameService.listPlayerPileExchanges(id, player.getId()).stream()
+					.map(Dtos.PileExchangeEventDto::from).toList());
 		});
 
 		// Classement des joueurs actifs d'une partie (voir "Classement de la
@@ -1754,6 +1780,15 @@ public class GecoServer
 			ctx.json(mGameService.listGameSquares(id).stream().map(Dtos.CardSquareEventDto::from).toList());
 		});
 
+		// Historique COMPLET des échanges avec la pioche d'une partie - écran
+		// animateur (18/10/2026, "échange avec la pioche"), même principe que
+		// /squares ci-dessus.
+		pApp.get("/api/games/{id}/pile-exchanges", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			requireGamePin(ctx, id);
+			ctx.json(mGameService.listGamePileExchanges(id).stream().map(Dtos.PileExchangeEventDto::from).toList());
+		});
+
 		// --- Offres de vente à courte durée de vie (scan caméra ET saisie
 		// manuelle, voir TradeOfferService) : le vendeur en crée une, le QR
 		// n'encode que son code, l'acheteur la résout (par scan ou en tapant
@@ -2025,6 +2060,62 @@ public class GecoServer
 			}
 		});
 
+		// Échange avec la pioche (18/10/2026, demandé par l'utilisateur suite à
+		// la campagne de test 2/6/16 joueurs - voir docs/14-reflexion-echange-
+		// pioche.md, document de cadrage validé, et GameService.exchangeWithPile
+		// pour le raisonnement complet) : un joueur rend une carte à la pioche
+		// partagée de son niveau et en reçoit une autre, tirée au hasard parmi
+		// les AUTRES modèles de ce niveau - jamais son propre modèle, jamais de
+		// jetons. Commun aux trois systèmes monétaires + smartphone, 1 fois par
+		// joueur et par tour. Authentifiée par le jeton individuel du joueur
+		// (voir Dtos.PileExchangeRequest), jamais une session animateur -
+		// exemptée de PIN (voir isPlayerFacingGameRoute ci-dessous).
+		pApp.post("/api/games/{id}/pile-exchange", ctx -> { //$NON-NLS-1$
+			final int id = Integer.parseInt(ctx.pathParam("id")); //$NON-NLS-1$
+			// Même garde-fou anti-force-brute que /redeem et /redeem-swap.
+			if (!allowRequest(ctx, "redeem", 30, 60)) //$NON-NLS-1$
+			{
+				ctx.status(429).json(java.util.Map.of("error", "Trop de tentatives, réessayez dans un instant.")); //$NON-NLS-1$ //$NON-NLS-2$
+				return;
+			}
+			final Dtos.PileExchangeRequest req = ctx.bodyAsClass(Dtos.PileExchangeRequest.class);
+			final Game game = mGameService.getGame(id);
+			if (game == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			final Player player = game.getPlayers().stream().filter(p -> p.getId().equals(req.playerId())).findFirst()
+					.orElse(null);
+			if (player == null)
+			{
+				ctx.status(404);
+				return;
+			}
+			// Même principe d'authentification que la création d'une demande de
+			// crédit (voir POST /credit-requests) : le jeton individuel du joueur,
+			// jamais vérifié dans GameService lui-même (voir
+			// GameService.exchangeWithPile, "cohérence avec le reste de la
+			// classe").
+			if (mAppSettings.isProtectionEnabled()
+					&& ((player.getAccessToken() == null) || !player.getAccessToken().equals(req.accessToken())))
+				throw new ForbiddenResponse("Jeton de joueur requis ou incorrect."); //$NON-NLS-1$
+			try
+			{
+				final PileExchangeEvent event = mGameService.exchangeWithPile(id, req.playerId(), req.cardTypeId());
+				broadcast(id, "pile_exchange", Dtos.PileExchangeEventDto.from(event)); //$NON-NLS-1$
+				// La carte reçue peut compléter un carré, même principe que
+				// /redeem et /redeem-swap ci-dessus.
+				for (final CardSquareEvent square : mGameService.checkAndCashInSquares(id, req.playerId()))
+					broadcast(id, "square", Dtos.CardSquareEventDto.from(square)); //$NON-NLS-1$
+				ctx.status(201).json(Dtos.PileExchangeEventDto.from(event));
+			}
+			catch (final IllegalArgumentException e)
+			{
+				throw new BadRequestResponse(e.getMessage());
+			}
+		});
+
 		// Suppression d'un événement, avec recalcul intégral de l'état de la partie
 		// (voir GameService.deleteEvent). Diffusé via WebSocket avec le détail complet
 		// de la partie (pas juste l'événement supprimé) puisque dettes/masse monétaire
@@ -2195,7 +2286,15 @@ public class GecoServer
 				// Demande de crédit smartphone : la CRÉATION est initiée par
 				// un joueur (POST, exemptée) ; liste/approbation/refus
 				// restent réservés à l'animateur.
-				|| (pCtx.path().endsWith("/credit-requests") && (pCtx.method() == io.javalin.http.HandlerType.POST)); //$NON-NLS-1$
+				|| (pCtx.path().endsWith("/credit-requests") && (pCtx.method() == io.javalin.http.HandlerType.POST)) //$NON-NLS-1$
+				// Échange avec la pioche (18/10/2026) : la CRÉATION (POST, un
+				// joueur rendant une carte à la pioche depuis son téléphone) est
+				// exemptée, même principe que credit-requests ci-dessus ;
+				// l'historique par joueur (.../players/by-token/{token}/pile-
+				// exchanges) correspond déjà au motif "/players/by-token/"
+				// ci-dessus, jamais besoin d'un cas séparé pour lui. GET
+				// /pile-exchanges (écran animateur) reste protégé normalement.
+				|| (pCtx.path().endsWith("/pile-exchange") && (pCtx.method() == io.javalin.http.HandlerType.POST)); //$NON-NLS-1$
 	}
 
 	/**

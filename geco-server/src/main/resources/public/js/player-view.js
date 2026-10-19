@@ -1204,6 +1204,17 @@ function openCardModal(item) {
 
 	el("cardModalOverlay").classList.add("active");
 
+	// "Échange avec la pioche" (18/10/2026) : mécanisme COMMUN aux trois
+	// systèmes, indépendant du flux vente/échange ci-dessous - configuré
+	// AVANT le "return" anticipé de la pause (juste en dessous) pour que la
+	// même règle serveur (isTradingAllowed) s'y applique aussi, exactement
+	// comme pour une vente. Nouvelle carte ouverte : on repart toujours d'un
+	// message d'erreur vide (refreshPileExchangeButton(), lui, ne le touche
+	// plus jamais - voir son commentaire).
+	el("cardModalPileExchangeError").style.display = "none";
+	el("cardModalPileExchangeError").textContent = "";
+	refreshPileExchangeButton();
+
 	// Remonté par l'utilisateur (31/08/2026) : les échanges doivent être
 	// bloqués pendant que le compte à rebours de tour est en pause (voir
 	// PlayerSelfViewDto.tradingAllowed, calculé côté serveur - même règle
@@ -1385,6 +1396,77 @@ function initCardModalGestures() {
 	el("cardModalOverlay").addEventListener("click", (e) => {
 		if (e.target === el("cardModalOverlay")) closeCardModal();
 	});
+	el("cardModalPileExchangeBtn").addEventListener("click", (e) => {
+		e.stopPropagation();
+		if (state.cardModalItem) exchangeCardWithPile(state.cardModalItem);
+	});
+}
+
+// ============================================================
+// "Échange avec la pioche" (18/10/2026, demandé par l'utilisateur suite à la
+// campagne de test 2/6/16 joueurs - voir docs/14-reflexion-echange-pioche.md
+// pour le document de cadrage validé, et GameService.exchangeWithPile pour
+// le mécanisme serveur) : rend une carte à la pioche de son niveau, en
+// pioche une autre (modèle DIFFÉRENT) du MÊME niveau - gratuit, 1 fois par
+// joueur et par tour, niveau "tresforte" inclus. COMMUN aux trois systèmes
+// monétaires (dette/libre/troc), contrairement au reste de cette modale
+// (vente dette/libre, échange carte-contre-carte troc) : jamais de prix,
+// jamais de QR, jamais d'offre à faire scanner par un autre joueur - un
+// simple appel serveur direct.
+// ============================================================
+// N'efface JAMAIS cardModalPileExchangeError lui-même : cette fonction est
+// aussi appelée depuis le bloc catch de exchangeCardWithPile (pour
+// recalculer disabled/le libellé après un refus serveur) - un effacement ICI
+// écraserait immédiatement le message d'erreur que ce même bloc catch vient
+// de poser juste avant, le rendant invisible (bug trouvé par un test
+// Playwright dédié, 18/10/2026 : le badge "Pioche déjà échangée ce tour"
+// s'affichait bien, mais le message de refus texte restait vide). Les
+// appelants qui veulent repartir d'un état propre (ex. openCardModal, à
+// l'ouverture) effacent errEl eux-mêmes AVANT d'appeler cette fonction.
+function refreshPileExchangeButton() {
+	const btn = el("cardModalPileExchangeBtn");
+	const pausedOrEnded = state.player && (state.player.tradingAllowed === false);
+	const alreadyUsed = state.player && (state.player.pileExchangeUsedThisTurn === true);
+	btn.disabled = Boolean(pausedOrEnded || alreadyUsed);
+	btn.textContent = alreadyUsed && !pausedOrEnded
+		? t("playerView.pile_exchange_used")
+		: t("playerView.pile_exchange_btn");
+}
+
+async function exchangeCardWithPile(item) {
+	const btn = el("cardModalPileExchangeBtn");
+	const errEl = el("cardModalPileExchangeError");
+	if (btn.disabled) return;
+	btn.disabled = true;
+	errEl.style.display = "none";
+	errEl.textContent = "";
+	try {
+		const res = await fetch(`/api/games/${state.gameId}/pile-exchange`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ playerId: state.player.id, accessToken: state.token, cardTypeId: item.entry.id }),
+		});
+		const body = await res.json().catch(() => null);
+		if (!res.ok) throw new Error((body && body.error) || t("playerView.pile_exchange_error_generic"));
+		// Succès : la carte donnée a quitté la main du joueur, une autre (d'un
+		// modèle différent, même niveau) y est entrée - on ferme la modale
+		// (son contenu, ancré sur "item", ne correspond plus à rien de précis)
+		// et on rafraîchit l'état complet du joueur : refreshPlayer() relit
+		// pileExchangeUsedThisTurn ET redessine l'onglet "Mes cartes" s'il est
+		// déjà affiché (voir son code, qui appelle renderMyCards() dans ce cas).
+		showToast(t("playerView.pile_exchange_success"));
+		closeCardModal();
+		await refreshPlayer();
+	} catch (err) {
+		errEl.textContent = err.message;
+		errEl.style.display = "block";
+		// Un refus "déjà échangé ce tour" peut survenir alors que l'état local
+		// (state.player, chargé à l'ouverture de la modale) est encore
+		// périmé (ex. deux onglets du même joueur) - on relit l'état réel
+		// avant de décider si le bouton doit rester désactivé ou pas.
+		await refreshPlayer();
+		refreshPileExchangeButton();
+	}
 }
 
 // ============================================================
@@ -1449,21 +1531,28 @@ async function renderHistory() {
 		// pour un historique unique du point de vue du joueur. Remonté par
 		// l'utilisateur (31/08/2026) : "toutes ces opérations sont enregistrées
 		// dans l'historique du tour, dans le smartphone du joueur".
-		const [txs, squares] = await Promise.all([
+		// Troisième journal (18/10/2026) : "échange avec la pioche" - même
+		// principe que squares ci-dessus, une interaction avec la pioche
+		// partagée plutôt qu'avec un autre joueur (voir PileExchangeEvent.java).
+		const [txs, squares, pileExchanges] = await Promise.all([
 			fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/transactions`).then((r) => r.json()),
 			fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/squares`).then((r) => r.json()),
+			fetch(`/api/games/${state.gameId}/players/by-token/${state.token}/pile-exchanges`).then((r) => r.json()),
 		]);
-		if ((txs.length === 0) && (squares.length === 0)) {
+		if ((txs.length === 0) && (squares.length === 0) && (pileExchanges.length === 0)) {
 			body.innerHTML = `<li style="color:var(--text-muted);font-size:0.85rem;">${t("playerView.history_empty")}</li>`;
 			return;
 		}
 		const items = [
 			...txs.map((tx) => ({ kind: "transaction", timestamp: tx.timestamp, data: tx })),
 			...squares.map((sq) => ({ kind: "square", timestamp: sq.timestamp, data: sq })),
+			...pileExchanges.map((px) => ({ kind: "pileExchange", timestamp: px.timestamp, data: px })),
 		].sort((a, b) => b.timestamp - a.timestamp);
-		body.innerHTML = items.map((item) => (item.kind === "transaction"
-			? historyTransactionRowHtml(item.data)
-			: historySquareRowHtml(item.data))).join("");
+		body.innerHTML = items.map((item) => {
+			if (item.kind === "transaction") return historyTransactionRowHtml(item.data);
+			if (item.kind === "square") return historySquareRowHtml(item.data);
+			return historyPileExchangeRowHtml(item.data);
+		}).join("");
 	} catch (err) {
 		body.innerHTML = `<li style="color:var(--danger)">${t("game.transactions_load_error")}</li>`;
 	}
@@ -1544,6 +1633,27 @@ function historySquareRowHtml(sq) {
 			<div>
 				<div class="player-name">${escapeHtmlLocal(t("playerView.history_square_title"))}</div>
 				<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t("playerView.history_square_detail", { cashed: cashedName, promoted: promotedName }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: sq.turnNumber }))}${breakthroughBadge}${revolutionBadge}</div>
+			</div>
+		</div>
+	</li>`;
+}
+
+// Ligne d'historique pour un "échange avec la pioche" (18/10/2026, voir
+// PileExchangeEventDto) - badge neutre 🔄 distinct du carré (⬡, violet) et
+// de la transaction (+/−, vert/rouge) : ni un gain ni une perte de
+// richesse, exactement comme un échange troc carte-contre-carte.
+function historyPileExchangeRowHtml(px) {
+	const givenEntry = state.cardsCatalog.find((c) => c.id === px.givenCardTypeId);
+	const receivedEntry = state.cardsCatalog.find((c) => c.id === px.receivedCardTypeId);
+	const givenName = givenEntry ? (catalogTextValue(givenEntry.nom) || px.givenCardTypeId) : px.givenCardTypeId;
+	const receivedName = receivedEntry ? (catalogTextValue(receivedEntry.nom) || px.receivedCardTypeId) : px.receivedCardTypeId;
+	return `
+	<li class="leaderboard-item">
+		<div class="player-info">
+			<div class="avatar-badge bg-teal">🔄</div>
+			<div>
+				<div class="player-name">${escapeHtmlLocal(receivedName)}</div>
+				<div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtmlLocal(t("playerView.history_pile_exchange_detail", { given: givenName, received: receivedName }))} · ${escapeHtmlLocal(t("game.transactions_turn_label", { n: px.turnNumber }))}</div>
 			</div>
 		</div>
 	</li>`;

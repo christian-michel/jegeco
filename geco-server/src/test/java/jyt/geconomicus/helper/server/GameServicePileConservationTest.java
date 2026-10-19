@@ -638,6 +638,184 @@ class GameServicePileConservationTest
 		}
 	}
 
+	/**
+	 * Échange avec la pioche (18/10/2026, demandé par l'utilisateur suite à la
+	 * campagne de test 2/6/16 joueurs - voir docs/14-reflexion-echange-pioche.md
+	 * pour le document de cadrage validé, et GameService.exchangeWithPile pour
+	 * le mécanisme complet). Vérifie, sur un catalogue volontairement GÉNÉREUX
+	 * (jamais plafonné par la taille de la pioche N+2, pour isoler le
+	 * mécanisme lui-même) :
+	 * <ul>
+	 * <li>la conservation stricte (main + pioche = 5 par modèle, exactement
+	 * comme {@link #testManyDeathsNeverLeakCardsOutOfCirculation} ci-dessus,
+	 * avant/pendant/après plusieurs échanges) ;</li>
+	 * <li>le joueur ne récupère jamais sa propre carte ;</li>
+	 * <li>la limite "1 fois par joueur et par tour", mais qui se renouvelle
+	 * bien à CHAQUE tour (jamais bloquée définitivement après le premier
+	 * usage).</li>
+	 * </ul>
+	 */
+	@Test
+	void testPileExchangeConservesCardsAndRespectsOncePerTurnLimit() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 12, "AnimTestPileExchange", null, //$NON-NLS-1$
+				"test échange avec la pioche", "2026-10-18", "Ceres", 1, 180, 1.0, false, 0, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final int gameId = game.getId();
+
+		final int nbPlayers = 3;
+		final List<Integer> playerIds = new ArrayList<>();
+		for (int i = 0; i < nbPlayers; i++)
+			playerIds.add(sService.addPlayer(gameId, "Joueur" + i).getId()); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(10));
+
+		final int totalAtStart = totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds);
+		assertTrue(totalAtStart > 0, "la mise en place doit avoir distribué des cartes"); //$NON-NLS-1$
+
+		final int alice = playerIds.get(0);
+		final Map<String, Integer> aliceHandBefore = sService.computePlayerCardInventory(gameId, alice);
+		final String givenCardTypeId = aliceHandBefore.keySet().iterator().next();
+
+		// --- Premier échange du tour : doit réussir. ---
+		final var event1 = sService.exchangeWithPile(gameId, alice, givenCardTypeId);
+		assertEquals(givenCardTypeId, event1.getGivenCardTypeId());
+		assertEquals("faible", event1.getLevel(), "la dotation de départ est toujours de niveau faible"); //$NON-NLS-1$ //$NON-NLS-2$
+		assertEquals(1, event1.getTurnNumber());
+		assertFalse(event1.getReceivedCardTypeId().equals(givenCardTypeId),
+				"le joueur ne doit JAMAIS récupérer sa propre carte"); //$NON-NLS-1$
+
+		final Map<String, Integer> aliceHandAfter1 = sService.computePlayerCardInventory(gameId, alice);
+		assertEquals((int) aliceHandBefore.getOrDefault(givenCardTypeId, 0) - 1,
+				(int) aliceHandAfter1.getOrDefault(givenCardTypeId, 0),
+				"la carte donnée doit avoir quitté l'inventaire (ou disparaître si elle n'en restait qu'un exemplaire)"); //$NON-NLS-1$
+		assertEquals((int) aliceHandBefore.getOrDefault(event1.getReceivedCardTypeId(), 0) + 1,
+				(int) aliceHandAfter1.getOrDefault(event1.getReceivedCardTypeId(), 0),
+				"la carte reçue doit être entrée dans l'inventaire"); //$NON-NLS-1$
+
+		assertEquals(totalAtStart, totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds),
+				"le total de cartes en circulation doit rester EXACTEMENT le même après un échange avec la pioche"); //$NON-NLS-1$
+
+		// --- Second échange, MÊME tour : doit être refusé (limite 1/tour). ---
+		final String secondGivenCardTypeId = aliceHandAfter1.keySet().iterator().next();
+		final IllegalArgumentException refused = org.junit.jupiter.api.Assertions.assertThrows(
+				IllegalArgumentException.class,
+				() -> sService.exchangeWithPile(gameId, alice, secondGivenCardTypeId),
+				"un second échange avec la pioche le même tour doit être refusé"); //$NON-NLS-1$
+		assertTrue(refused.getMessage().contains("déjà échangé"), //$NON-NLS-1$
+				"le message de refus doit expliquer la limite 1/tour, obtenu : " + refused.getMessage()); //$NON-NLS-1$
+		assertEquals(aliceHandAfter1, sService.computePlayerCardInventory(gameId, alice),
+				"un échange REFUSÉ ne doit RIEN modifier à l'inventaire du joueur"); //$NON-NLS-1$
+		assertEquals(totalAtStart, totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds),
+				"un échange refusé ne doit RIEN modifier au total de cartes en circulation non plus"); //$NON-NLS-1$
+		assertTrue(sService.hasUsedPileExchangeThisTurn(gameId, alice),
+				"hasUsedPileExchangeThisTurn doit refléter l'échange déjà fait ce tour"); //$NON-NLS-1$
+
+		// --- Nouveau tour : la limite se renouvelle, un échange redevient possible. ---
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		assertFalse(sService.hasUsedPileExchangeThisTurn(gameId, alice),
+				"la limite doit s'être renouvelée au nouveau tour"); //$NON-NLS-1$
+		final var event2 = sService.exchangeWithPile(gameId, alice, secondGivenCardTypeId);
+		assertEquals(2, event2.getTurnNumber());
+		assertEquals(totalAtStart, totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds),
+				"le total de cartes en circulation doit toujours rester le même au tour suivant"); //$NON-NLS-1$
+
+		// --- Carte niveau "tresforte", décision utilisateur du 18/10/2026 :
+		// autorisée, 1 fois par tour comme les autres niveaux - on vérifie que
+		// la méthode ne lève AUCUNE restriction spécifique à ce niveau en
+		// donnant directement une carte tresforte à Bob. Une Transaction (un
+		// vendeur réel) ne convient pas ici : en monnaie libre, la dotation de
+		// départ est toujours de niveau "faible" (voir dealStartingHandsFor
+		// LibreIfNeeded), donc AUCUN joueur ne détient de carte "tresforte" à
+		// ce stade pour la vendre - on simule plutôt directement le
+		// prélèvement d'une carte dans la pioche partagée (exactement ce que
+		// fait un vrai carré), par accès direct à l'EntityManager puisque
+		// GameService n'expose aucune méthode "distribue une carte depuis la
+		// pioche" indépendante d'un carré complet à 4 cartes identiques. ---
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		final Integer bobId = playerIds.get(1);
+		final com.fasterxml.jackson.databind.ObjectMapper tresforteMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+		final Map<String, java.util.Map<String, Integer>> pilesByLevel = tresforteMapper.readValue(
+				sService.getGame(gameId).getSmartphoneCardPileJson(),
+				new com.fasterxml.jackson.core.type.TypeReference<Map<String, java.util.Map<String, Integer>>>()
+				{
+				});
+		final String tresforteModel = pilesByLevel.get("tresforte").keySet().iterator().next(); //$NON-NLS-1$
+		final jakarta.persistence.EntityManager grantEm = sEmf.createEntityManager();
+		try
+		{
+			grantEm.getTransaction().begin();
+			final Game grantGame = grantEm.find(Game.class, gameId);
+			final Player bob = grantEm.find(Player.class, bobId);
+			final Map<String, java.util.Map<String, Integer>> grantPiles = tresforteMapper.readValue(
+					grantGame.getSmartphoneCardPileJson(),
+					new com.fasterxml.jackson.core.type.TypeReference<Map<String, java.util.Map<String, Integer>>>()
+					{
+					});
+			grantPiles.get("tresforte").merge(tresforteModel, -1, Integer::sum); //$NON-NLS-1$
+			grantGame.setSmartphoneCardPileJson(tresforteMapper.writeValueAsString(grantPiles));
+			final Map<String, Integer> bobHand = tresforteMapper.readValue(bob.getStartingCardsJson(),
+					new com.fasterxml.jackson.core.type.TypeReference<Map<String, Integer>>()
+					{
+					});
+			bobHand.merge(tresforteModel, 1, Integer::sum);
+			bob.setStartingCardsJson(tresforteMapper.writeValueAsString(bobHand));
+			grantEm.getTransaction().commit();
+		}
+		finally
+		{
+			grantEm.close();
+		}
+		final var event3 = sService.exchangeWithPile(gameId, bobId, tresforteModel);
+		assertEquals("tresforte", event3.getLevel()); //$NON-NLS-1$
+		assertFalse(event3.getReceivedCardTypeId().equals(tresforteModel));
+		assertEquals(totalAtStart, totalCardsInPiles(gameId) + totalCardsHeldByPlayers(gameId, playerIds),
+				"le niveau tresforte doit rester conservé exactement comme les autres"); //$NON-NLS-1$
+	}
+
+	/**
+	 * Cas limite : plus aucun AUTRE modèle disponible dans la pioche de ce
+	 * niveau (catalogue réduit à un seul modèle "faible", comme peut
+	 * légitimement arriver en toute fin de pioche à très peu de joueurs) -
+	 * doit être refusé proprement, SANS RIEN modifier (ni la pioche, ni
+	 * l'inventaire), exactement comme documenté dans
+	 * docs/14-reflexion-echange-pioche.md §4 ("Rien n'est consommé").
+	 */
+	@Test
+	void testPileExchangeRefusesWithoutSideEffectsWhenNoOtherModelAvailable() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_LIBRE, 12, "AnimTestPileExchangeNoModel", null, //$NON-NLS-1$
+				"test échange pioche sans autre modèle", "2026-10-18", "Ceres", 1, 180, 1.0, false, 0, true, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final int gameId = game.getId();
+		final int alice = sService.addPlayer(gameId, "Alice").getId(); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		// Un seul modèle "faible" en jeu (voir dealStartingHandsForLibreIfNeeded,
+		// Math.min(nbPlayers+2, available.size()) - plafonné à 1 ici puisque le
+		// catalogue n'en propose qu'un seul) : la pioche "faible" ne contient
+		// donc, par construction, QUE le modèle qu'Alice détient déjà - aucun
+		// AUTRE modèle ne pourra jamais être tiré.
+		final Map<String, List<String>> catalog = new LinkedHashMap<>();
+		for (final String level : LEVELS)
+			catalog.put(level, level.equals("faible") ? List.of("faible_unique") : List.of("x1", "x2")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+		sService.dealStartingHandsForLibreIfNeeded(gameId, catalog);
+
+		final Map<String, Integer> handBefore = sService.computePlayerCardInventory(gameId, alice);
+		final String pileJsonBefore = sService.getGame(gameId).getSmartphoneCardPileJson();
+		assertTrue(handBefore.containsKey("faible_unique"), "Alice doit détenir le seul modèle faible en jeu"); //$NON-NLS-1$
+
+		final IllegalArgumentException refused = org.junit.jupiter.api.Assertions.assertThrows(
+				IllegalArgumentException.class, () -> sService.exchangeWithPile(gameId, alice, "faible_unique"), //$NON-NLS-1$
+				"doit être refusé : aucun AUTRE modèle faible n'existe dans cette partie"); //$NON-NLS-1$
+		assertTrue(refused.getMessage().contains("Aucune autre carte"), refused.getMessage()); //$NON-NLS-1$
+		assertEquals(handBefore, sService.computePlayerCardInventory(gameId, alice),
+				"l'inventaire ne doit RIEN avoir changé après un refus"); //$NON-NLS-1$
+		assertEquals(pileJsonBefore, sService.getGame(gameId).getSmartphoneCardPileJson(),
+				"la pioche elle-même ne doit RIEN avoir changé après un refus"); //$NON-NLS-1$
+	}
+
 	/** Petit raccourci commun aux tests de ce fichier qui rechargent un joueur précis après une opération GameService. */
 	private Player reloadPlayer(final int pGameId, final Integer pPlayerId)
 	{

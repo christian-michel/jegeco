@@ -236,6 +236,18 @@
 						     renderCardModalPriceStep(). Remplacée par le vrai QR une
 						     fois généré (voir generateCardModalQr()). -->
 						<div id="cardModalBackBody"></div>
+						<!-- "Échange avec la pioche" (18/10/2026, voir
+						     docs/14-reflexion-echange-pioche.md) : mécanisme COMMUN aux
+						     trois systèmes monétaires (dette/libre/troc), toujours
+						     affiché ici, en complément du flux vente/échange ci-dessus
+						     (cardModalBackBody) plutôt qu'à sa place - un appel serveur
+						     direct (exchangeWithPile), jamais une offre scannée par un
+						     autre joueur. Libellé/état (actif, grisé "déjà utilisé") géré
+						     par JS (voir openCardModal/exchangeCardWithPile dans
+						     player-view.js), jamais data-i18n statique ici : le texte
+						     change selon l'état. -->
+						<button type="button" class="btn-secondary" id="cardModalPileExchangeBtn" style="margin-top:0.5rem;width:100%;"></button>
+						<p class="qr-instruction" id="cardModalPileExchangeError" style="color:#fff;display:none;"></p>
 					</div>
 				</div>
 			</div>

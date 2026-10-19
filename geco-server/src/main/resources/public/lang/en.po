@@ -2418,3 +2418,31 @@ msgstr "Choose how YOU prefer to run your games by default: with the usual physi
 
 msgid "settings.language_intro_personal"
 msgstr "Choose YOUR preferred language for the animator interface. This choice is personal to your account - it follows you if you log in from another device, and does not affect other animators."
+
+# ============ "Exchange with the pile" (18/10/2026) - mechanism SHARED by
+# all three smartphone monetary systems (debt/free/barter), see
+# docs/14-reflexion-echange-pioche.md and PileExchangeEvent.java. Refusal
+# messages (e.g. "Vous avez déjà échangé...", "Aucune autre carte...") come
+# straight from the server (GameService.exchangeWithPile) and stay in
+# French, never translated here - same convention as the other business
+# error messages in this file (e.g. "Solde insuffisant", "Vente refusée"). ============
+msgid "playerView.pile_exchange_btn"
+msgstr "🔄 Exchange with the pile"
+
+msgid "playerView.pile_exchange_used"
+msgstr "Pile already exchanged this turn"
+
+msgid "playerView.pile_exchange_error_generic"
+msgstr "Exchange failed, please try again."
+
+msgid "playerView.pile_exchange_success"
+msgstr "Pile exchange successful!"
+
+msgid "playerView.history_pile_exchange_detail"
+msgstr "Pile: {given} → {received}"
+
+msgid "game.pile_exchanges_section_title"
+msgstr "Pile exchanges ({count})"
+
+msgid "game.pile_exchanges_detail"
+msgstr "Pile: {given} → {received}"

@@ -10,9 +10,10 @@
 	d'un utilisateur.
 
 	Contrairement à l'unité de test de geco-engine (qui ne connaît que
-	Game/Player/Event), celle-ci liste aussi Transaction et CardSquareEvent -
-	les deux entités supplémentaires que GameService manipule (échanges et
-	carrés du mode smartphone, étape 3).
+	Game/Player/Event), celle-ci liste aussi Transaction, CardSquareEvent et
+	PileExchangeEvent (18/10/2026, "échange avec la pioche") - les entités
+	supplémentaires que GameService manipule (échanges, carrés et échanges
+	avec la pioche du mode smartphone, étape 3).
 -->
 <persistence xmlns="https://jakarta.ee/xml/ns/persistence"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -25,6 +26,7 @@
 		<class>jyt.geconomicus.helper.EventTypeConverter</class>
 		<class>jyt.geconomicus.helper.Transaction</class>
 		<class>jyt.geconomicus.helper.CardSquareEvent</class>
+		<class>jyt.geconomicus.helper.PileExchangeEvent</class>
 		<!-- Comptes animateurs (multi-session serveur, 21/09/2026) - Game
 		     porte désormais une relation @ManyToOne vers Animator. -->
 		<class>jyt.geconomicus.helper.Animator</class>

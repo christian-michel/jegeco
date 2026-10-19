@@ -9,6 +9,7 @@
 		<class>jyt.geconomicus.helper.Event</class>
 		<class>jyt.geconomicus.helper.Transaction</class>
 		<class>jyt.geconomicus.helper.CardSquareEvent</class>
+		<class>jyt.geconomicus.helper.PileExchangeEvent</class>
 		<!-- Comptes animateurs (multi-session serveur, 21/09/2026) - voir
 		     Animator et Game.owner. Doit être listée ici : Game porte
 		     désormais une relation @ManyToOne vers Animator, EclipseLink a
