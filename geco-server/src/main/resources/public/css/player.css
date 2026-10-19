@@ -134,6 +134,24 @@ body {
 	transition: border-color 0.15s ease, background 0.1s ease;
 }
 .btn-secondary:active { background: var(--mist); }
+/* BUG TROUVÉ ET CORRIGÉ (19/10/2026, audit indépendant du mécanisme "échange
+   avec la pioche", be12a77) : contrairement à .btn-primary ci-dessus,
+   .btn-secondary n'avait JAMAIS eu de style :disabled explicite - jusqu'ici
+   sans conséquence, aucun bouton .btn-secondary n'étant désactivé
+   dynamiquement en cours de partie. Le bouton "Échanger avec la pioche"
+   (#cardModalPileExchangeBtn, voir refreshPileExchangeButton() dans
+   player-view.js) est le premier à l'être (pause/fin de tour ou déjà
+   utilisé ce tour) : sans cette règle, il restait visuellement IDENTIQUE à
+   l'état actif (même fond blanc, même texte noir, aucun grisé/opacité) -
+   seul le clic ne faisait plus rien, sans aucune indication visuelle pour
+   le joueur. Confirmé par inspection directe des captures d'écran de la
+   campagne de validation du 18-19/10/2026 (campaign-report/screenshots/
+   03, 04 et 05 - prétendument "actif", "déjà utilisé" et "grisé, déjà
+   utilisé" - visuellement indiscernables les unes des autres malgré des
+   checksums différents, donc pas un artefact de capture dupliquée mais un
+   vrai manque de style). Repris à l'identique de .btn-primary:disabled
+   ci-dessus pour rester cohérent. */
+.btn-secondary:disabled { opacity: 0.6; cursor: default; }
 
 /* ============ Avatar ============ */
 .avatar-preview-wrap { position: relative; width: 168px; margin: 0 auto 1.4rem; }
