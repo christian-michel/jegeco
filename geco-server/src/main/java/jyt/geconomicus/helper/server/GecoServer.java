@@ -1438,8 +1438,23 @@ public class GecoServer
 			if (player.getCurDebt() > 0)
 				throw new BadRequestResponse( //$NON-NLS-1$
 						"Vous avez déjà une dette en cours : demandez un crédit supplémentaire directement à l'animateur."); //$NON-NLS-1$
-			final int requestId = mCreditRequestService.create(id, player.getId(), player.getName(),
+			// BUG TROUVÉ ET CORRIGÉ (audit indépendant du 20/10/2026, reproduit en
+			// HTTP réel - deux POST simultanés pour un même joueur sans dette en
+			// cours) : le contrôle ci-dessus (curDebt > 0) ne bloque qu'une
+			// redemande APRÈS qu'un crédit a été APPROUVÉ - rien n'empêchait
+			// jusqu'ici un même joueur de déposer PLUSIEURS demandes "pending"
+			// simultanées (double-tap sur "Demander un crédit", qui n'a aucun
+			// verrou "déjà en cours" côté client - voir submitCreditRequest()
+			// dans player-view.js), chacune visible et approuvable séparément au
+			// tableau de bord animateur - un animateur approuvant les deux sans
+			// s'en rendre compte accordait un crédit DOUBLE. Voir
+			// CreditRequestService.createIfNoPending pour le détail complet du
+			// correctif (réservation atomique par joueur, jamais par demande).
+			final Integer requestId = mCreditRequestService.createIfNoPending(id, player.getId(), player.getName(),
 					req.requestedPrincipal());
+			if (requestId == null)
+				throw new BadRequestResponse( //$NON-NLS-1$
+						"Vous avez déjà une demande de crédit en attente : patientez le temps que l'animateur la traite."); //$NON-NLS-1$
 			// Notifie le tableau de bord animateur en direct (même canal que les
 			// événements/transactions) - inutile d'attendre un rafraîchissement
 			// périodique pour voir apparaître une demande.

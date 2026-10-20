@@ -1751,6 +1751,21 @@ async function submitCreditRequest() {
 		return;
 	}
 	errEl.classList.add("hidden");
+	// Garde-fou "déjà en cours" (audit indépendant du 20/10/2026, voir le
+	// correctif serveur détaillé dans CreditRequestService.createIfNoPending :
+	// un double-tap sur ce bouton envoyait jusqu'ici DEUX POST
+	// /credit-requests, créant deux demandes "pending" distinctes toutes les
+	// deux approuvables séparément par l'animateur - un crédit double en cas
+	// d'approbation des deux sans s'en rendre compte) - même principe déjà
+	// appliqué ailleurs dans ce fichier pour des appels concurrents vers le
+	// même point (voir CLAUDE.md, "Plusieurs appels concurrents... un
+	// garde-fou 'déjà en cours' simple protège contre ça"). Défense en
+	// profondeur seulement : la vraie garantie reste côté serveur
+	// (createIfNoPending, atomique), ce bouton désactivé n'est qu'un confort
+	// qui évite la plupart des doubles-envois avant même qu'ils n'atteignent
+	// le réseau.
+	const btn = el("btnSubmitCreditRequest");
+	if (btn) btn.disabled = true;
 	try {
 		const res = await fetch(`/api/games/${state.gameId}/credit-requests`, {
 			method: "POST",
@@ -1762,6 +1777,7 @@ async function submitCreditRequest() {
 	} catch (err) {
 		errEl.textContent = err.message;
 		errEl.classList.remove("hidden");
+		if (btn) btn.disabled = false;
 	}
 }
 
@@ -2760,13 +2776,36 @@ function connectPlayerWs() {
 		// smartphone du joueur [...] affiche une infobulle de 3 secondes qui dit
 		// 'Crédit accordé' et qui le redirige vers l'écran des cartes. Et si
 		// jamais l'animateur refuse le crédit, alors l'infobulle [...] écrit
-		// 'Crédit refusé' [...]." Diffusé par GecoServer (POST .../approve et
-		// .../decline, voir broadcast(id, "creditRequest", ...)) - jamais filtré
-		// sur "pending" (ce statut n'arrive jamais par ce canal, une demande
-		// n'est diffusée qu'à sa CRÉATION - approve/decline - jamais en
-		// "pending"), donc pas besoin de le re-tester ici, contrairement à ce
-		// que son nom pourrait laisser penser.
-		if ((msg.type === "creditRequest") && state.player && (msg.payload.playerId === state.player.id)) {
+		// 'Crédit refusé' [...]." Diffusé par GecoServer sur TROIS routes, pas
+		// seulement .../approve et .../decline comme le commentaire d'origine
+		// (20/10/2026) le croyait à tort : POST /api/games/{id}/credit-requests
+		// (CRÉATION de la demande par le joueur LUI-MÊME) broadcast aussi
+		// "creditRequest" - voir son commentaire "Notifie le tableau de bord
+		// animateur en direct" - avec status="pending", pour que le tableau de
+		// bord animateur se mette à jour sans attendre un polling. Ce message
+		// arrive donc bien SUR LE TÉLÉPHONE DU DEMANDEUR LUI-MÊME dès l'envoi de
+		// sa propre demande (son propre WebSocket suit la partie comme
+		// n'importe quel autre, broadcast() ne l'exclut jamais - voir
+		// GecoServer.broadcast()).
+		// BUG TROUVÉ ET CORRIGÉ (audit indépendant du 20/10/2026, reproduit en
+		// HTTP+WebSocket réel - script dédié, serveur réellement démarré,
+		// requête POST /credit-requests réelle observée sur la connexion
+		// WebSocket du joueur) : le code d'origine ne distinguait PAS "pending"
+		// de "declined" (seul "approved" était testé, tout le reste tombait
+		// dans la branche "refusé") - CONTRAIREMENT à ce qu'affirmait le
+		// commentaire ci-dessus ("ce statut n'arrive jamais par ce canal"),
+		// chaque demande envoyée par un joueur depuis son propre téléphone
+		// déclenchait IMMÉDIATEMENT, sur ce même téléphone, un toast "Crédit
+		// refusé" et une bascule vers l'écran Cartes - écrasant l'écran "En
+		// attente" tout juste affiché par renderCreditRequestStatus() juste
+		// après l'envoi (voir submitCreditRequest ci-dessus) - alors qu'aucune
+		// décision n'avait encore été prise par l'animateur. Reproduit
+		// systématiquement (statuts reçus: ["pending"] à chaque demande créée).
+		// Corrigé en ne réagissant plus qu'aux VRAIES décisions de l'animateur
+		// (status "approved" OU "declined" explicitement), en ignorant
+		// "pending" comme n'importe quel autre statut inconnu futur.
+		if ((msg.type === "creditRequest") && state.player && (msg.payload.playerId === state.player.id)
+				&& ((msg.payload.status === "approved") || (msg.payload.status === "declined"))) {
 			showToast(msg.payload.status === "approved"
 				? t("playerView.credit_request_approved_toast") : t("playerView.credit_request_declined_toast"));
 			// Même garde que "Commencez !"/"Stop !" ci-dessous : ne jamais

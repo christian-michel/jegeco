@@ -58,6 +58,94 @@ final class CreditRequestService
 		return id;
 	}
 
+	// Clé composite (gameId, playerId) -> id de SA demande "pending"/"processing"
+	// en cours, s'il y en a une. Voir createIfNoPending() ci-dessous - même
+	// raisonnement de fond que tryClaim() plus bas (une seule transition
+	// "gagnante" par clé, via une opération atomique de ConcurrentHashMap),
+	// mais sur une clé PAR JOUEUR plutôt que par demande : ici, c'est la
+	// CRÉATION elle-même qui doit être exclusive, pas seulement sa résolution.
+	private final Map<Long, Integer> mPendingRequestIdByPlayer = new ConcurrentHashMap<>();
+
+	private static Long playerKey(final int pGameId, final int pPlayerId)
+	{
+		return (((long) pGameId) << 32) | (pPlayerId & 0xffffffffL);
+	}
+
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (audit indépendant du 20/10/2026, reproduit en
+	 * HTTP réel - deux POST /api/games/{id}/credit-requests VRAIMENT
+	 * simultanés, Promise.all, pour un même joueur sans dette en cours) :
+	 * {@link #create} n'a JAMAIS vérifié qu'une demande "pending" existait
+	 * déjà pour ce joueur - seul GecoServer vérifie {@code curDebt > 0}
+	 * ("un joueur déjà ENDETTÉ ne peut pas redemander"), ce qui ne protège en
+	 * rien contre DEUX demandes encore "pending" (non résolues, donc
+	 * curDebt toujours à 0) pour le MÊME joueur : un double-tap sur le
+	 * bouton "Demander un crédit" côté joueur (aucun verrou "déjà en cours"
+	 * sur ce bouton, voir submitCreditRequest() dans player-view.js) ou une
+	 * simple relance réseau créait donc DEUX entrées "pending" distinctes,
+	 * TOUTES LES DEUX visibles au tableau de bord animateur (rien ne les
+	 * distingue - même joueur, même montant, horodatées à quelques
+	 * millisecondes d'écart) : si l'animateur approuvait les deux sans s'en
+	 * rendre compte, le joueur recevait un CRÉDIT DOUBLE. Mesuré en HTTP réel
+	 * (Promise.all, deux requêtes réellement concurrentes) : les deux POST
+	 * répondaient 201, les deux demandes apparaissaient dans
+	 * GET .../credit-requests, et après approbation des deux,
+	 * curDebt=6/curInterest=2 au lieu de 3/1 pour un joueur qui n'avait
+	 * jamais eu qu'un seul principal demandé (3) - exactement le scénario
+	 * que la règle "pas de redemande si déjà endetté" est censée empêcher,
+	 * contourné par la fenêtre "pending" que cette règle ne couvrait pas.
+	 * <p>
+	 * Corrigé en réservant atomiquement, via
+	 * {@link ConcurrentHashMap#compute}, une place par JOUEUR (jamais par
+	 * demande - voir {@link #playerKey}) : deux appels concurrents sur la
+	 * MÊME clé (gameId, playerId) s'exécutent toujours en série, jamais en
+	 * parallèle - un seul peut lire "aucune demande en cours" et créer la
+	 * sienne, l'autre lit déjà la réservation fraîchement posée et échoue
+	 * (retourne {@code null}, jamais de demande créée). GecoServer doit
+	 * donc appeler CETTE méthode, jamais {@link #create} directement, pour
+	 * une demande initiée par un JOUEUR (voir POST
+	 * /api/games/{id}/credit-requests) - {@link #create} reste utilisée en
+	 * interne ici, et peut aussi continuer de l'être pour un futur appelant
+	 * qui n'aurait pas besoin de cette exclusivité.
+	 * <p>
+	 * La réservation est libérée dans {@link #markResolved} (la demande
+	 * passe à "approved"/"declined", le joueur peut de nouveau en déposer
+	 * une) - jamais ailleurs : {@link #evictOldResolved} ne purge que
+	 * {@code mRequests}, jamais cette carte séparée, qui doit rester
+	 * cohérente avec le VRAI statut de la demande qu'elle réserve (relu
+	 * depuis {@code mRequests} à chaque tentative, en filet de sécurité, au
+	 * cas où elle se retrouverait désynchronisée pour une raison
+	 * quelconque - ne jamais bloquer indéfiniment un joueur dans ce cas).
+	 *
+	 * @return l'id de la demande créée, ou {@code null} si ce joueur a déjà
+	 *         une demande "pending"/"processing" en cours.
+	 */
+	Integer createIfNoPending(final int pGameId, final int pPlayerId, final String pPlayerName,
+			final int pRequestedPrincipal)
+	{
+		evictOldResolved();
+		final Long key = playerKey(pGameId, pPlayerId);
+		final Integer[] createdId = { null };
+		mPendingRequestIdByPlayer.compute(key, (k, existingId) -> {
+			if (existingId != null)
+			{
+				final Request existing = mRequests.get(existingId);
+				if ((existing != null)
+						&& (STATUS_PENDING.equals(existing.status()) || STATUS_PROCESSING.equals(existing.status())))
+					return existingId; // déjà une demande en cours pour ce joueur - refusé, rien créé
+				// Désynchronisation (ne devrait normalement jamais arriver, voir le
+				// nettoyage dans markResolved) : on ne bloque jamais un joueur sur une
+				// réservation périmée, on la remplace simplement par une nouvelle.
+			}
+			final int id = mNextId.getAndIncrement();
+			mRequests.put(id, new Request(id, pGameId, pPlayerId, pPlayerName, pRequestedPrincipal,
+					System.currentTimeMillis(), STATUS_PENDING));
+			createdId[0] = id;
+			return id;
+		});
+		return createdId[0];
+	}
+
 	/** Demandes "pending" d'une partie, plus récentes en premier - pour l'écran animateur. */
 	java.util.List<Request> listPending(final int pGameId)
 	{
@@ -160,8 +248,18 @@ final class CreditRequestService
 	 */
 	void markResolved(final int pRequestId, final boolean pApproved)
 	{
-		mRequests.computeIfPresent(pRequestId, (id, r) -> new Request(r.id(), r.gameId(), r.playerId(), r.playerName(),
-				r.requestedPrincipal(), r.createdAtEpochMs(), pApproved ? STATUS_APPROVED : STATUS_DECLINED));
+		mRequests.computeIfPresent(pRequestId, (id, r) -> {
+			// Libère la réservation "une demande pending par joueur" posée par
+			// createIfNoPending() - le joueur peut désormais en redéposer une
+			// (approuvée : bloqué de toute façon par curDebt>0 côté GecoServer ;
+			// refusée : doit pouvoir réessayer librement). remove(key, value) ne
+			// retire l'entrée que si elle pointe encore vers CETTE demande -
+			// jamais la réservation d'une demande plus récente si l'ordre des
+			// appels était inhabituel.
+			mPendingRequestIdByPlayer.remove(playerKey(r.gameId(), r.playerId()), pRequestId);
+			return new Request(r.id(), r.gameId(), r.playerId(), r.playerName(),
+					r.requestedPrincipal(), r.createdAtEpochMs(), pApproved ? STATUS_APPROVED : STATUS_DECLINED);
+		});
 	}
 
 	/** Nettoyage paresseux (pas de tâche de fond) : à chaque création, on purge les demandes déjà traitées depuis trop longtemps. */
