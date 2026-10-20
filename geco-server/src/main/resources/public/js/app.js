@@ -2550,6 +2550,54 @@ function renderComparisonChart() {
 	});
 }
 
+// Statut d'un joueur, remonté par un utilisateur (prison, banqueroute, saisie,
+// crédit, mort/renaissance...). Dérivé des événements survenus DEPUIS le dernier
+// tour (pas d'un champ persistant : DEATH/PRISON/BANKRUPT ne modifient pas
+// "active" dans le moteur - vérifié dans le code - seul QUIT le fait). Un
+// joueur mort/en prison/en banqueroute ce tour-ci "passe son tour" jusqu'au
+// prochain événement TURN, qui efface ce statut.
+//
+// BUG TROUVÉ ET CORRIGÉ (20/10/2026, campagne de validation du correctif
+// "remboursement de crédit" - console du navigateur surveillée en continu
+// via Playwright comme demandé par l'utilisateur) : cette fonction vivait
+// JUSQU'ICI comme une closure imbriquée DANS renderGameDetail() - jamais
+// accessible depuis openEndOfTurnWizard()/renderStepCredits() (une fonction
+// de plus haut niveau complètement SÉPARÉE, voir plus bas), qui l'appelle
+// pourtant explicitement depuis le 11/10/2026 ("Porthos en prison") pour
+// exclure du choix "Nouveaux crédits" un joueur venant de passer en
+// prison/banqueroute/décès CE TOUR-CI. Chaque ouverture de l'étape
+// "Nouveaux crédits" de l'assistant de fin de tour levait donc
+// systématiquement `ReferenceError: getPlayerStatusBadge is not defined`
+// (reproduit en HTTP+Playwright réel, console du navigateur capturée) -
+// avalée par le `try/catch` déjà présent (repli voulu pour un échec
+// "inattendu"), MAIS ce repli ignore justement le filtrage par statut : un
+// joueur fraîchement envoyé en prison restait proposé pour un nouveau
+// crédit, exactement le cas que ce filtre devait empêcher. Jamais détecté
+// par les tests automatisés (logique purement côté navigateur, aucune
+// vérification de endOfTurnWizard en JS pur dans la suite Java). Corrigé en
+// remontant cette fonction au niveau module (plus une closure propre à
+// renderGameDetail) : accessible aux deux appelants, jamais de divergence
+// possible entre "le badge affiché sur une ligne" et "le filtre de l'étape
+// crédits" qui doit réutiliser EXACTEMENT la même détection (c'est le sens
+// même du commentaire d'origine à l'appel, "reutilise directement
+// getPlayerStatusBadge... plutôt que de dupliquer la logique une troisième
+// fois").
+function getPlayerStatusBadge(player, game) {
+	const t = window.GecoI18n.t;
+	const sorted = [...game.events].sort((a, b) => a.timestamp - b.timestamp);
+	let lastTurnIndex = -1;
+	sorted.forEach((e, i) => { if (e.type === "TURN") lastTurnIndex = i; });
+	const sinceLastTurn = sorted.slice(lastTurnIndex + 1).filter((e) => e.playerId === player.id);
+	const hasType = (type) => sinceLastTurn.some((e) => e.type === type);
+
+	if (hasType("DEATH")) return { text: "💀 " + t("game.status_dead"), cls: "status-dead" };
+	if (hasType("PRISON")) return { text: "🔒 " + t("game.status_prison"), cls: "status-prison" };
+	if (hasType("BANKRUPT")) return { text: "📉 " + t("game.status_bankrupt"), cls: "status-bankrupt" };
+	if (player.curDebt > 0 && !player.visitedBank) return { text: "🔴 " + t("game.status_must_visit_bank"), cls: "status-bank" };
+	if (player.curDebt > 0) return { text: "💳 " + t("game.status_has_credit"), cls: "status-credit" };
+	return null;
+}
+
 // ---------- Vue détail d'une partie ----------
 async function renderGameDetail(gameId) {
 	// state.turnEnded n'est pas propre à une partie précise (simple indicateur
@@ -2818,26 +2866,9 @@ async function renderGameDetail(gameId) {
 		document.querySelector('#navGame [data-tab="overview"]').classList.add("active");
 	}
 
-	// Statut d'un joueur, remonté par un utilisateur (prison, banqueroute, saisie,
-	// crédit, mort/renaissance...). Dérivé des événements survenus DEPUIS le dernier
-	// tour (pas d'un champ persistant : DEATH/PRISON/BANKRUPT ne modifient pas
-	// "active" dans le moteur - vérifié dans le code - seul QUIT le fait). Un
-	// joueur mort/en prison/en banqueroute ce tour-ci "passe son tour" jusqu'au
-	// prochain événement TURN, qui efface ce statut.
-	function getPlayerStatusBadge(player, game) {
-		const sorted = [...game.events].sort((a, b) => a.timestamp - b.timestamp);
-		let lastTurnIndex = -1;
-		sorted.forEach((e, i) => { if (e.type === "TURN") lastTurnIndex = i; });
-		const sinceLastTurn = sorted.slice(lastTurnIndex + 1).filter((e) => e.playerId === player.id);
-		const hasType = (t) => sinceLastTurn.some((e) => e.type === t);
-
-		if (hasType("DEATH")) return { text: "💀 " + t("game.status_dead"), cls: "status-dead" };
-		if (hasType("PRISON")) return { text: "🔒 " + t("game.status_prison"), cls: "status-prison" };
-		if (hasType("BANKRUPT")) return { text: "📉 " + t("game.status_bankrupt"), cls: "status-bankrupt" };
-		if (player.curDebt > 0 && !player.visitedBank) return { text: "🔴 " + t("game.status_must_visit_bank"), cls: "status-bank" };
-		if (player.curDebt > 0) return { text: "💳 " + t("game.status_has_credit"), cls: "status-credit" };
-		return null;
-	}
+	// getPlayerStatusBadge : remontée au niveau module le 20/10/2026 (voir son
+	// commentaire juste avant renderGameDetail pour le détail complet du bug
+	// que ce déplacement corrige) - utilisée ci-dessous comme avant.
 
 	const playersList = el("playersList");
 	playersList.innerHTML = "";
