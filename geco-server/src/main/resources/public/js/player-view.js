@@ -1708,6 +1708,22 @@ async function renderCreditRequest() {
 const CREDIT_REQUEST_FIXED_AMOUNT = 3;
 
 function renderCreditRequestForm() {
+	// Règle remontée par l'utilisateur (20/10/2026, PDF "Retours - 20261020",
+	// point 2) : "lorsqu'un joueur a une dette... il ne peut pas contracter de
+	// nouveau crédit depuis son smartphone. S'il veut faire un crédit
+	// supplémentaire, il doit obligatoirement aller le demander à
+	// l'animateur." Vérifié ici en PREMIER lieu (avant d'afficher le
+	// formulaire, qu'il s'agisse du tout premier passage - renderCreditRequest
+	// - ou d'une "Nouvelle demande" depuis renderCreditRequestStatus, les deux
+	// chemins passant par CETTE même fonction) - raccourci UX seulement, le
+	// serveur revérifie de toute façon la même règle (voir
+	// POST /api/games/{id}/credit-requests, jamais une confiance aveugle au
+	// client).
+	if (state.player && (state.player.curDebt > 0)) {
+		el("creditRequestBody").innerHTML =
+			`<p style="text-align:center;font-size:0.9rem;color:var(--text-muted);">${escapeHtmlLocal(t("playerView.credit_request_already_indebted"))}</p>`;
+		return;
+	}
 	el("creditRequestBody").innerHTML = `
 		<label class="field-label" for="creditRequestAmount" data-i18n="playerView.credit_request_amount_label">Montant souhaité</label>
 		<input id="creditRequestAmount" class="field-input" type="number" value="${CREDIT_REQUEST_FIXED_AMOUNT}" readonly aria-readonly="true">
@@ -2739,6 +2755,31 @@ function connectPlayerWs() {
 		// elle-même contre un double déclenchement (voir mPrisonAnimShown).
 		if ((msg.type === "prison") && state.player && (msg.payload.playerId === state.player.id))
 			playPrisonAnimation();
+		// Notification "Crédit accordé"/"Crédit refusé" (20/10/2026, remonté par
+		// l'utilisateur, PDF "Retours - 20261020", point 3) : "l'écran de
+		// smartphone du joueur [...] affiche une infobulle de 3 secondes qui dit
+		// 'Crédit accordé' et qui le redirige vers l'écran des cartes. Et si
+		// jamais l'animateur refuse le crédit, alors l'infobulle [...] écrit
+		// 'Crédit refusé' [...]." Diffusé par GecoServer (POST .../approve et
+		// .../decline, voir broadcast(id, "creditRequest", ...)) - jamais filtré
+		// sur "pending" (ce statut n'arrive jamais par ce canal, une demande
+		// n'est diffusée qu'à sa CRÉATION - approve/decline - jamais en
+		// "pending"), donc pas besoin de le re-tester ici, contrairement à ce
+		// que son nom pourrait laisser penser.
+		if ((msg.type === "creditRequest") && state.player && (msg.payload.playerId === state.player.id)) {
+			showToast(msg.payload.status === "approved"
+				? t("playerView.credit_request_approved_toast") : t("playerView.credit_request_declined_toast"));
+			// Même garde que "Commencez !"/"Stop !" ci-dessous : ne jamais
+			// bousculer un achat/une vente EN COURS sur ce téléphone (modal carte
+			// ouverte ou scan actif) - la bascule vers Cartes n'a alors pas lieu,
+			// le joueur y retrouvera son nouveau solde normalement en y
+			// retournant lui-même.
+			refreshPlayer();
+			if (!state.cardModalItem && !state.scanStream) {
+				renderMyCards();
+				setActiveNav("navBtnCards");
+			}
+		}
 		// Révolution économique (22/09/2026, "rotation des valeurs" - voir
 		// Game.revolutionCount/cardPriceInDuTable) : contrairement au carré
 		// lui-même (animation propre au seul joueur concerné, ci-dessus), une

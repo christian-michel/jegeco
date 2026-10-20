@@ -1420,6 +1420,24 @@ public class GecoServer
 				throw new ForbiddenResponse("Jeton de joueur requis ou incorrect."); //$NON-NLS-1$
 			if (req.requestedPrincipal() <= 0)
 				throw new BadRequestResponse("Le montant demandé doit être positif."); //$NON-NLS-1$
+			// Règle remontée par l'utilisateur (20/10/2026, PDF "Retours - 20261020",
+			// point 2) : "lorsqu'un joueur a une dette (= il n'a pas remboursé
+			// l'intégralité de son crédit avec les intérêts), il ne peut pas
+			// contracter de nouveau crédit depuis son smartphone. S'il veut faire
+			// un crédit supplémentaire, il doit obligatoirement aller le demander à
+			// l'animateur." Vérifiée ICI (jamais seulement côté client, qui n'est
+			// qu'un raccourci UX - voir player-view.js) : le seul chemin qui
+			// contourne cette règle reste la demande MANUELLE directement par
+			// l'animateur (bouton "+" sur la ligne du joueur / étape "Nouveaux
+			// crédits" de l'assistant), jamais cette route-ci, réservée à
+			// l'initiative du JOUEUR. curDebt > 0 : même condition que
+			// GameService.isTradingAllowed/computeIndebtedPlayers côté app.js - un
+			// crédit payé seulement en intérêt (INTEREST_ONLY) laisse curDebt
+			// inchangé, donc toujours bloquant, cohérent avec "l'intégralité de son
+			// crédit AVEC les intérêts".
+			if (player.getCurDebt() > 0)
+				throw new BadRequestResponse( //$NON-NLS-1$
+						"Vous avez déjà une dette en cours : demandez un crédit supplémentaire directement à l'animateur."); //$NON-NLS-1$
 			final int requestId = mCreditRequestService.create(id, player.getId(), player.getName(),
 					req.requestedPrincipal());
 			// Notifie le tableau de bord animateur en direct (même canal que les
@@ -1818,6 +1836,12 @@ public class GecoServer
 			// arrêté (voir GameService.isTradingAllowed).
 			if (!mGameService.isTradingAllowed(game))
 				throw new BadRequestResponse("Les échanges sont actuellement en pause."); //$NON-NLS-1$
+			// Vérification serveur de la prison (20/10/2026, demande explicite de
+			// l'utilisateur - voir GameService.isPlayerInPrison pour le détail
+			// complet) : un joueur en prison ne peut pas même CRÉER une offre de
+			// vente.
+			if (mGameService.isPlayerInPrison(seller, game))
+				throw new BadRequestResponse("Ce joueur est en prison et ne peut pas échanger ce tour-ci."); //$NON-NLS-1$
 			final String code = mTradeOfferService.create(id, req.sellerPlayerId(), seller.getName(),
 					req.cardTypeId(), req.cardLevel(), req.cardName(), req.weakCoins(), req.mediumCoins(),
 					req.strongCoins(), req.weakGoodsWanted(), req.mediumGoodsWanted(), req.strongGoodsWanted(),
@@ -1883,6 +1907,15 @@ public class GecoServer
 			// aurait pu être détectée sans y toucher).
 			if (!mGameService.isTradingAllowed(game))
 				throw new BadRequestResponse("Les échanges sont actuellement en pause."); //$NON-NLS-1$
+			// Vérification serveur de la prison (20/10/2026, demande explicite de
+			// l'utilisateur - voir GameService.isPlayerInPrison) : un acheteur en
+			// prison ne peut pas valider d'achat, vérifié ICI aussi AVANT de
+			// consommer l'offre, même principe que isTradingAllowed juste
+			// au-dessus.
+			final Player buyerForPrisonCheck = game.getPlayers().stream()
+					.filter(p -> p.getId().equals(req.buyerPlayerId())).findFirst().orElse(null);
+			if ((buyerForPrisonCheck != null) && mGameService.isPlayerInPrison(buyerForPrisonCheck, game))
+				throw new BadRequestResponse("Ce joueur est en prison et ne peut pas échanger ce tour-ci."); //$NON-NLS-1$
 			// redeem() retire l'offre de façon atomique : un second appel avec le
 			// même code (rejeu, double-clic, deux acheteurs qui scannent le même
 			// QR...) échoue toujours, c'est la protection anti-rejeu principale
@@ -2033,6 +2066,19 @@ public class GecoServer
 			}
 			if (offer.sellerPlayerId() == req.buyerPlayerId())
 				throw new BadRequestResponse("Vous ne pouvez pas échanger avec vous-même."); //$NON-NLS-1$
+			// Vérification serveur de la prison (20/10/2026, demande explicite de
+			// l'utilisateur - voir GameService.isPlayerInPrison) : un échange troc
+			// transfère une carte dans LES DEUX sens, donc vérifié pour les DEUX
+			// joueurs - celui qui scanne (req.buyerPlayerId()) ET celui qui avait
+			// créé l'offre (offer.sellerPlayerId()), au cas où il serait passé en
+			// prison entre-temps (l'offre reste valide ~90s).
+			final Player swapOfferer = game.getPlayers().stream()
+					.filter(p -> p.getId() == offer.sellerPlayerId()).findFirst().orElse(null);
+			final Player swapRedeemer = game.getPlayers().stream()
+					.filter(p -> p.getId().equals(req.buyerPlayerId())).findFirst().orElse(null);
+			if (((swapOfferer != null) && mGameService.isPlayerInPrison(swapOfferer, game))
+					|| ((swapRedeemer != null) && mGameService.isPlayerInPrison(swapRedeemer, game)))
+				throw new BadRequestResponse("Un des deux joueurs est en prison et ne peut pas échanger ce tour-ci."); //$NON-NLS-1$
 			try
 			{
 				final Transaction transaction = mGameService.recordCardSwap(id, offer.sellerPlayerId(),

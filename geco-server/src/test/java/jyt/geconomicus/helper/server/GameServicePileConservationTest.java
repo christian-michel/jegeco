@@ -816,6 +816,80 @@ class GameServicePileConservationTest
 				"la pioche elle-même ne doit RIEN avoir changé après un refus"); //$NON-NLS-1$
 	}
 
+	/**
+	 * Vérification serveur de la prison (20/10/2026, demande explicite de
+	 * l'utilisateur : "Ajoute la vérification serveur de prisonUntilTurn sur
+	 * les routes d'échange" - trouvé par l'agent d'audit de la campagne
+	 * pile-exchange du 19/10/2026, voir CLAUDE.md et
+	 * GameService.isPlayerInPrison pour le raisonnement complet). Vérifie que
+	 * {@link GameService#exchangeWithPile} refuse un joueur en prison, avec
+	 * la même rigueur "aucun effet de bord" que les autres refus déjà testés
+	 * ci-dessus (ni la pioche ni l'inventaire ne doivent bouger), et que la
+	 * limite se lève bien une fois le tour de prison passé (même principe que
+	 * {@code inPrisonThisTurn} côté DTO, comparaison "&gt;=" sur
+	 * {@code prisonUntilTurn}).
+	 */
+	@Test
+	void testExchangeWithPileRefusesPlayerInPrison() throws Exception
+	{
+		final Game game = sService.createGame(Game.MONEY_DEBT, 12, "AnimTestPileExchangePrison", null, //$NON-NLS-1$
+				"test échange pioche joueur en prison", "2026-10-20", "Ceres", 1, 180, 1.0, false, 0, false, 0.5); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		final int gameId = game.getId();
+		final int alice = sService.addPlayer(gameId, "Alice").getId(); //$NON-NLS-1$
+
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		sService.captureDeckPlayerCountIfNeeded(gameId);
+		sService.dealStartingHandsForLibreIfNeeded(gameId, smallCatalog(10));
+
+		final Map<String, Integer> handBefore = sService.computePlayerCardInventory(gameId, alice);
+		final String givenCardTypeId = handBefore.keySet().iterator().next();
+		final String pileJsonBefore = sService.getGame(gameId).getSmartphoneCardPileJson();
+
+		// Pose prisonUntilTurn = tour courant + 1, exactement comme le fait
+		// Event.applyEvent() (cas PRISON) - voir Player.prisonUntilTurn, sa
+		// Javadoc, pour le raisonnement complet de ce "+1" (le tour EN COURS à
+		// cet instant précis est encore l'ancien tour).
+		final int turnNumberAtPrison = sService.getGame(gameId).getTurnNumber();
+		final jakarta.persistence.EntityManager em = sEmf.createEntityManager();
+		try
+		{
+			em.getTransaction().begin();
+			final Player player = em.find(Player.class, alice);
+			player.setPrisonUntilTurn(turnNumberAtPrison + 1);
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+
+		// --- Toujours en prison PENDANT l'entre-deux-tours (avant le TURN
+		// suivant) : prisonUntilTurn (N+1) >= turnNumber (encore N) - refusé. ---
+		final IllegalArgumentException refusedBeforeTurn = org.junit.jupiter.api.Assertions.assertThrows(
+				IllegalArgumentException.class, () -> sService.exchangeWithPile(gameId, alice, givenCardTypeId),
+				"un joueur en prison ne doit pas pouvoir échanger avec la pioche"); //$NON-NLS-1$
+		assertTrue(refusedBeforeTurn.getMessage().contains("prison"), refusedBeforeTurn.getMessage()); //$NON-NLS-1$
+		assertEquals(handBefore, sService.computePlayerCardInventory(gameId, alice),
+				"un refus pour cause de prison ne doit RIEN modifier à l'inventaire"); //$NON-NLS-1$
+		assertEquals(pileJsonBefore, sService.getGame(gameId).getSmartphoneCardPileJson(),
+				"un refus pour cause de prison ne doit RIEN modifier à la pioche"); //$NON-NLS-1$
+
+		// --- Nouveau tour (le tour DE prison lui-même, prisonUntilTurn ==
+		// turnNumber) : toujours bloqué, exactement comme inPrisonThisTurn côté
+		// DTO (comparaison ">=", jamais "=="). ---
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		assertEquals(turnNumberAtPrison + 1, sService.getGame(gameId).getTurnNumber());
+		org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+				() -> sService.exchangeWithPile(gameId, alice, givenCardTypeId),
+				"toujours en prison PENDANT le tour visé par prisonUntilTurn"); //$NON-NLS-1$
+
+		// --- Le tour SUIVANT : la prison est levée, l'échange redevient
+		// possible (même carte, même joueur - seul le temps a changé). ---
+		sService.recordEvent(gameId, "T", null, 0, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, 0, 0, 0); //$NON-NLS-1$
+		final var event = sService.exchangeWithPile(gameId, alice, givenCardTypeId);
+		assertEquals(givenCardTypeId, event.getGivenCardTypeId());
+	}
+
 	/** Petit raccourci commun aux tests de ce fichier qui rechargent un joueur précis après une opération GameService. */
 	private Player reloadPlayer(final int pGameId, final Integer pPlayerId)
 	{

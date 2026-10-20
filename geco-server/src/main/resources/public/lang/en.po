@@ -2073,6 +2073,16 @@ msgstr "Request for {amount} tokens"
 msgid "playerView.credit_request_new"
 msgstr "Make a new request"
 
+# ============ Credit-by-smartphone rules (20/10/2026, "Retours - 20261020" PDF) ============
+msgid "playerView.credit_request_already_indebted"
+msgstr "You already have an outstanding debt. For an additional credit, ask the animator directly."
+
+msgid "playerView.credit_request_approved_toast"
+msgstr "Credit approved"
+
+msgid "playerView.credit_request_declined_toast"
+msgstr "Credit declined"
+
 # ============ Host "Credit requests" panel (missing wiring fixed 10/10/2026) ============
 msgid "game.credit_requests_title"
 msgstr "Credit requests"

@@ -254,6 +254,39 @@ public class GameService
 	}
 
 	/**
+	 * Un joueur "en prison" (dette+smartphone, voir Player.prisonUntilTurn)
+	 * peut-il échanger - vendre/acheter (recordTransaction), échanger une
+	 * carte en troc (recordCardSwap) ou échanger avec la pioche
+	 * (exchangeWithPile) ?
+	 * <p>
+	 * AJOUTÉ le 20/10/2026, demande explicite de l'utilisateur ("Ajoute la
+	 * vérification serveur de prisonUntilTurn sur les routes d'échange") -
+	 * trouvé par l'agent d'audit de la campagne "échange avec la pioche" du
+	 * 19/10/2026 : jusqu'ici, la prison n'était qu'une UI BLOQUANTE côté
+	 * client (l'overlay plein écran de player-view.js) - rien ne l'empêchait
+	 * côté serveur, pour les DEUX routes de trade déjà existantes AVANT
+	 * l'échange-pioche. Pas une régression de ce dernier, une lacune
+	 * préexistante - corrigée ici pour les TROIS routes d'échange à la fois
+	 * (même raisonnement que isTradingAllowed ci-dessus, vérifiée à l'appel
+	 * HTTP, jamais dans GameService lui-même - voir GecoServer.java,
+	 * conforme à la convention déjà en place dans ce fichier).
+	 * <p>
+	 * Même formule EXACTE que {@code inPrisonThisTurn} dans
+	 * Dtos.PlayerSelfViewDto.from (comparaison "&gt;=", jamais "==" - voir
+	 * son commentaire daté du 11/10/2026 pour le raisonnement complet :
+	 * couvre à la fois l'entre-deux-tours, où prisonUntilTurn vaut déjà
+	 * turnNumber+1 AVANT que l'événement TURN n'incrémente ce dernier, et le
+	 * tour de blocage lui-même une fois ce TURN enregistré) : un joueur ne
+	 * doit jamais pouvoir échanger ni PENDANT l'entre-deux-tours où sa
+	 * prison vient d'être décidée, ni PENDANT le tour qui suit.
+	 */
+	public boolean isPlayerInPrison(final Player pPlayer, final Game pGame)
+	{
+		final Integer prisonUntilTurn = pPlayer.getPrisonUntilTurn();
+		return (prisonUntilTurn != null) && (prisonUntilTurn.intValue() >= pGame.getTurnNumber());
+	}
+
+	/**
 	 * Numéro du tour dont l'animateur a annoncé la fin (voir
 	 * {@link #markTurnEndAnnounced} et le commentaire du 18/10/2026 dans
 	 * {@link #isTradingAllowed}), par partie. Volontairement en mémoire, comme
@@ -3093,6 +3126,15 @@ public class GameService
 				throw new IllegalArgumentException("Ce joueur n'est plus actif dans la partie."); //$NON-NLS-1$
 			if (!isTradingAllowed(game))
 				throw new IllegalArgumentException("Les échanges sont actuellement en pause."); //$NON-NLS-1$
+			// Vérification serveur de la prison (20/10/2026, demande explicite de
+			// l'utilisateur - voir isPlayerInPrison) : placée ICI, à l'intérieur
+			// de GameService, à l'identique du isTradingAllowed juste au-dessus -
+			// ce mécanisme-ci, contrairement à recordTransaction/recordCardSwap,
+			// vérifie déjà isTradingAllowed lui-même plutôt que de s'en remettre
+			// entièrement à l'appelant HTTP (voir le commentaire juste en dessous
+			// sur l'authentification, qui elle reste à la charge de GecoServer).
+			if (isPlayerInPrison(player, game))
+				throw new IllegalArgumentException("Ce joueur est en prison et ne peut pas échanger ce tour-ci."); //$NON-NLS-1$
 			if (game.getSmartphoneCardPileJson() == null)
 				throw new IllegalArgumentException("La pioche n'est pas encore en place."); //$NON-NLS-1$
 

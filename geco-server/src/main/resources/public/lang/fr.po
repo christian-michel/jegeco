@@ -2077,6 +2077,16 @@ msgstr "Demande de {amount} jetons"
 msgid "playerView.credit_request_new"
 msgstr "Faire une nouvelle demande"
 
+# ============ Règles du crédit par smartphone (20/10/2026, PDF "Retours - 20261020") ============
+msgid "playerView.credit_request_already_indebted"
+msgstr "Vous avez déjà une dette en cours. Pour un crédit supplémentaire, adressez-vous directement à l'animateur."
+
+msgid "playerView.credit_request_approved_toast"
+msgstr "Crédit accordé"
+
+msgid "playerView.credit_request_declined_toast"
+msgstr "Crédit refusé"
+
 # ============ Panneau animateur "Demandes de credit" (fil manquant corrige le 10/10/2026) ============
 # Bug trouve pendant la campagne de test dette+smartphone demandee par
 # l'utilisateur : le joueur pouvait bien ENVOYER une demande (voir les cles

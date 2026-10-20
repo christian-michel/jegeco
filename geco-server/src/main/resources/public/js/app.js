@@ -2276,8 +2276,19 @@ async function openPlayerEventDialog(player, options = {}) {
 					errors.push(t("game.validation_principal_exceeds", { principal, debt: player.curDebt }));
 				if (interest > player.curInterest)
 					errors.push(t("game.validation_interest_exceeds", { interest, due: player.curInterest }));
-				if (principal + interest > game.moneyMass)
-					errors.push(t("game.validation_total_exceeds", { total: principal + interest, mass: game.moneyMass }));
+				// BUG TROUVÉ ET CORRIGÉ (20/10/2026, même cause et même correctif que
+				// renderIndebtedRow ci-dessus - voir son commentaire pour le détail
+				// complet du PDF "Retours - 20261020") : ce contrôle comparait
+				// systématiquement à game.moneyMass (la masse monétaire GLOBALE,
+				// pertinente pour la dette CLASSIQUE - un unique pot commun de
+				// jetons physiques), jamais au solde RÉEL du joueur (jetonWeak) en
+				// dette+SMARTPHONE - bloquant ici aussi, via ce formulaire manuel de
+				// secours ("+" sur une ligne de joueur), le remboursement le plus
+				// courant qui soit (un seul crédit en cours dans toute la partie,
+				// où moneyMass = principal seul est TOUJOURS < principal+intérêt).
+				const availableFunds = player.hasStartingAllocation ? player.jetonWeak : game.moneyMass;
+				if (principal + interest > availableFunds)
+					errors.push(t("game.validation_total_exceeds", { total: principal + interest, mass: availableFunds }));
 				if (errors.length > 0) {
 					const msgEl = el("fEvtValidationError");
 					msgEl.textContent = t("game.validation_error_prefix") + errors.join(" ; ") + ".";
@@ -2901,7 +2912,16 @@ async function renderGameDetail(gameId) {
 			// par défaut plutôt que pré-remplis - une valeur pré-remplie mais
 			// impossible à honorer serait trompeuse.
 			const isRepay = p.curDebt > 0;
-			const debtExceedsMoneyMass = p.curDebt + p.curInterest > game.moneyMass;
+			// BUG TROUVÉ ET CORRIGÉ (20/10/2026, même cause que renderIndebtedRow/
+			// openPlayerEventDialog ci-dessus) : comparait systématiquement à
+			// game.moneyMass (pertinent seulement pour la dette CLASSIQUE) -
+			// toujours vrai pour le cas le plus courant en dette+SMARTPHONE (un
+			// seul crédit en cours, moneyMass=principal < principal+intérêt),
+			// laissant les champs vides en permanence au lieu de pré-remplir le
+			// montant réellement dû pour un joueur qui a pourtant largement de
+			// quoi le rembourser sur son téléphone.
+			const availableFundsForPrefill = p.hasStartingAllocation ? p.jetonWeak : game.moneyMass;
+			const debtExceedsMoneyMass = p.curDebt + p.curInterest > availableFundsForPrefill;
 			// Remonté par un utilisateur : à l'entre-deux-tours (assistant terminé, ou
 			// fermé prématurément et donc administré manuellement), TOUTES les options
 			// redeviennent accessibles - sinon l'animateur serait bloqué. "Banqueroute"
@@ -5344,8 +5364,42 @@ async function openEndOfTurnWizard() {
 		const otherIndebted = indebted.filter((p) => !selectedDeathIds.includes(p.id));
 
 		function renderIndebtedRow(p, isDying) {
-			const canPayInterest = p.curInterest > 0 && p.curInterest <= game.moneyMass;
-			const canPayCredit = (p.curDebt + p.curInterest) <= game.moneyMass;
+			// BUG TROUVÉ ET CORRIGÉ (20/10/2026, remonté par l'utilisateur, PDF
+			// "Retours - 20261020" : "il ne semble pas possible de le rembourser
+			// car l'assistant de l'entre deux tours semble ne pas savoir qui a
+			// contracté le crédit par le smartphone") : ces deux conditions
+			// comparaient le montant dû À LA MASSE MONÉTAIRE GLOBALE de la
+			// partie (game.moneyMass) - un repère hérité du mode CLASSIQUE, où
+			// l'argent est un unique pot commun de jetons physiques dans la
+			// salle. En dette+SMARTPHONE, chaque joueur a son propre solde
+			// individuel (Player.jetonWeak) - comparer au total global n'a
+			// aucun sens et bloque le cas le plus courant de tous : UN SEUL
+			// crédit en cours dans toute la partie. NEW_CREDIT n'ajoute que le
+			// PRINCIPAL à moneyMass (jamais l'intérêt, voir Event.java) - donc
+			// moneyMass (3 pour un crédit de 3) est TOUJOURS strictement
+			// inférieure à curDebt+curInterest (3+1=4) pour ce cas le plus
+			// simple qui soit, quel que soit le solde RÉEL du joueur sur son
+			// téléphone : le bouton "Rembourser le crédit" ne s'affichait donc
+			// JAMAIS, même quand le joueur avait largement de quoi payer -
+			// reproduit en HTTP réel + Playwright (partie 2 joueurs, 1 crédit
+			// de 3+1, moneyMass=3 : canPayCredit = (3+1<=3) = false en
+			// permanence, à chaque tour, alors que jetonWeak=3 suffit presque
+			// et que le joueur peut avoir bien plus après quelques ventes).
+			// Incohérent avec le gestionnaire de clic juste en dessous
+			// (document.querySelectorAll(...).forEach), qui, lui, vérifie DÉJÀ
+			// correctement player.jetonWeak pour un joueur smartphone depuis le
+			// correctif du 11/10/2026 ("Bloquer au solde réel") - cette
+			// fonction d'AFFICHAGE n'avait simplement jamais été mise à jour en
+			// miroir, empêchant le bouton d'apparaître alors que le clic,
+			// s'il avait pu avoir lieu, aurait été accepté. Corrigé en
+			// utilisant la MÊME référence que le clic : le solde réel du
+			// joueur (jetonWeak) pour un joueur suivi par smartphone
+			// (hasStartingAllocation), la masse monétaire globale inchangée
+			// pour la dette CLASSIQUE (aucun solde individuel réel à y
+			// comparer dans ce mode).
+			const availableFunds = p.hasStartingAllocation ? p.jetonWeak : game.moneyMass;
+			const canPayInterest = p.curInterest > 0 && p.curInterest <= availableFunds;
+			const canPayCredit = (p.curDebt + p.curInterest) <= availableFunds;
 			return `
 				<li data-player-id="${p.id}" data-dying="${isDying ? "1" : "0"}">
 					<strong>${escapeHtml(p.name)}</strong>
