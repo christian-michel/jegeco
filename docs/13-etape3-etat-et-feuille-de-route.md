@@ -602,6 +602,23 @@ l'audit : aucune route de trade de ce dépôt (vente/achat, troc, pioche) ne
 contrôle `Player.prisonUntilTurn` côté serveur - décision utilisateur à
 venir, voir `CLAUDE.md`.
 
+### Remboursement de crédit dette+smartphone corrigé (20/10/2026)
+
+Bug réel remonté par l'utilisateur (PDF "Retours - 20261020") : le bouton
+"Rembourser le crédit" de l'assistant de fin de tour comparait le montant
+dû à la masse monétaire GLOBALE de la partie au lieu du solde réel du
+joueur, le rendant invisible en permanence dès qu'il n'y avait qu'un seul
+crédit en cours - voir `CLAUDE.md` pour le détail complet du correctif
+(commit `ea7c0d3`), des 3 règles de crédit vérifiées/complétées (montant
+fixe, blocage de redemande si déjà endetté, toast + redirection), de la
+vérification serveur de la prison ajoutée sur les 3 routes d'échange, et de
+la campagne de validation à deux agents (3 parties dette+smartphone, 2/8/17
+joueurs, 0 écart) qui a trouvé 3 bugs réels supplémentaires (une
+`ReferenceError` cassant silencieusement un filtre de l'assistant, un faux
+toast "Crédit refusé" à chaque soumission, et un crédit DOUBLE possible par
+double-tap - tous corrigés, commits `0535960` et `a66ca52`). 101 tests,
+0 échec après fusion.
+
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
 Par ordre approximatif de priorité, à ajuster selon les retours de test :

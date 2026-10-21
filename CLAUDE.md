@@ -668,3 +668,125 @@ ajoutes, pas seulement via ce script.
     couverture visuelle du panneau animateur incomplète pour dette/troc à
     6/16 joueurs (vérité terrain HTTP complète sur les 9 parties, preuve
     visuelle manquante pour ce sous-ensemble faute de temps).
+- **Corrigé le 20/10/2026** (remonté par l'utilisateur, PDF "Retours -
+  20261020", sur une vraie partie dette+smartphone) : le bouton "Rembourser
+  le crédit"/"Rembourser l'intérêt" de l'assistant de fin de tour (étape
+  "Bilan des joueurs endettés") ainsi que le formulaire manuel "+" sur une
+  ligne de joueur comparaient le montant dû d'un joueur à `game.moneyMass`
+  — la masse monétaire GLOBALE de toute la partie, pertinente pour la dette
+  CLASSIQUE (un unique pot commun de jetons physiques) mais dénuée de sens
+  en dette+SMARTPHONE, où chaque joueur a son propre solde individuel
+  (`Player.jetonWeak`). `NEW_CREDIT` n'ajoute que le PRINCIPAL à
+  `moneyMass` (jamais l'intérêt, voir `Event.java`) : pour le cas le plus
+  courant qui soit — un seul crédit en cours dans toute la partie —
+  `moneyMass` est donc TOUJOURS strictement inférieure à
+  principal+intérêt, quel que soit le solde réel du joueur sur son
+  téléphone. Le bouton de remboursement complet ne s'affichait donc JAMAIS
+  dans ce cas, poussant l'animateur vers "Ne peut pas payer"/banqueroute à
+  tort — cohérent avec l'événement "Banqueroute" visible dans le journal du
+  PDF joint par l'utilisateur. Incohérent avec le gestionnaire de clic du
+  bouton rapide, qui lui vérifiait DÉJÀ correctement `jetonWeak` depuis le
+  correctif du 11/10/2026 ("Bloquer au solde réel") — cette régression
+  d'affichage n'avait simplement jamais été mise à jour en miroir. Corrigé
+  aux trois endroits concernés (`renderIndebtedRow`, la validation du
+  formulaire manuel, son pré-remplissage, tous dans `app.js`) : référence
+  désormais le solde RÉEL du joueur (`jetonWeak`) pour un joueur suivi par
+  smartphone (`hasStartingAllocation`), `game.moneyMass` inchangé pour la
+  dette classique. Vérifié par reproduction HTTP réelle + Playwright
+  complète (AVANT : bouton invisible en permanence pour un joueur avec
+  jetonWeak=3 et une dette de 3+1, sur 5 tours consécutifs ; APRÈS : dès
+  qu'une vraie vente porte son solde à 5, le bouton apparaît et le clic
+  rembourse intégralement, round-trip vérifié par lecture directe de
+  l'état serveur). Commit `ea7c0d3`.
+  - **Trois règles de crédit du même PDF, vérifiées/complétées à cette
+    occasion** : montant fixe 3/intérêt 1 (déjà correct, confirmé, voir le
+    correctif du 14/10/2026) ; un joueur déjà endetté ne peut plus
+    redemander de crédit par smartphone — AJOUTÉ, vérifié CÔTÉ SERVEUR
+    (`POST /credit-requests` refuse si `curDebt > 0`) ET côté client (la
+    voie manuelle de l'animateur, bouton "+"/étape "Nouveaux crédits" de
+    l'assistant, reste totalement libre — c'est précisément le recours que
+    cette règle prévoit) ; toast "Crédit accordé"/"Crédit refusé" (3s) +
+    redirection vers l'écran Cartes à l'approbation/au refus d'une demande
+    — AJOUTÉ (nouveau handler WebSocket côté joueur, message
+    "creditRequest").
+  - **Ajouté dans le même commit, demande séparée de l'utilisateur** :
+    vérification SERVEUR de `Player.prisonUntilTurn` sur les trois routes
+    d'échange smartphone (vente/achat dette+libre, échange carte-contre-
+    carte troc, échange avec la pioche) — nouvelle méthode
+    `GameService.isPlayerInPrison` (même formule exacte que
+    `PlayerSelfViewDto.inPrisonThisTurn`, comparaison "&gt;="). Jusqu'ici
+    la prison n'était qu'une UI bloquante côté client — lacune préexistante
+    pour les deux routes de trade déjà existantes AVANT l'échange-pioche
+    (signalée par l'agent d'audit de la campagne pioche du 19/10/2026, voir
+    l'entrée du 18-19/10/2026 ci-dessus), pas une régression.
+  - **Campagne de validation à deux agents** (méthode désormais systématique
+    pour tout chantier de cette taille dans ce projet) : un premier agent de
+    contrôle a joué 3 parties dette+smartphone complètes (2, 8, 17 joueurs,
+    12 tours chacune), vérité terrain indépendante tenue tout du long — **0
+    écart** sur 53 demandes de crédit, 39 ventes, 164 échanges pioche, 3
+    prisons/morts/abandons/banqueroutes, 12 tentatives de contournement HTTP
+    direct de la prison (toutes refusées). Il a lui-même trouvé et corrigé un
+    bug réel pendant sa campagne (`ReferenceError: getPlayerStatusBadge is
+    not defined`, systématique à l'étape "Nouveaux crédits" de l'assistant —
+    une fonction définie comme closure dans `renderGameDetail()` mais
+    appelée depuis `openEndOfTurnWizard()`, hors de portée, avalée
+    silencieusement par un `try/catch` qui cassait au passage le filtre
+    censé exclure un joueur venant de passer en prison/banqueroute/décès de
+    la liste des crédits proposables - commit `0535960`).
+  - **L'agent d'audit indépendant, lui, a trouvé DEUX AUTRES bugs réels que
+    la campagne du premier agent n'avait PAS détectés** (exactement la
+    valeur de cette méthode à deux agents - voir CLAUDE.md, section
+    "Méthode de travail", pour les précédents du 18/09/2026 et du
+    19/10/2026) :
+    1. **Faux toast "Crédit refusé" à CHAQUE soumission d'une demande de
+       crédit par le joueur lui-même** (`player-view.js`) : `POST
+       /credit-requests` diffuse un message WebSocket "creditRequest"
+       (status="pending") dès la CRÉATION, pour notifier le tableau de bord
+       animateur en direct - reçu AUSSI par le téléphone du DEMANDEUR
+       lui-même (`broadcast()` ne l'exclut jamais). Le nouveau handler
+       (ajouté par le commit `ea7c0d3` ci-dessus) ne distinguait pas
+       "pending" d'un vrai refus (seul "approved" était testé, tout le
+       reste tombait dans la branche "Crédit refusé") - CONTRAIREMENT à ce
+       qu'affirmait son propre commentaire ("ce statut n'arrive jamais par
+       ce canal"). Reproduit en HTTP+WebSocket réel : chaque soumission
+       déclenchait immédiatement un toast "Crédit refusé" + bascule vers
+       Cartes, écrasant l'écran "En attente" tout juste affiché, alors
+       qu'aucune décision n'avait encore été prise. Corrigé en ne réagissant
+       plus qu'à "approved"/"declined" explicitement.
+    2. **Crédit DOUBLE possible par double-tap/relance réseau sur "Demander
+       un crédit"** (`CreditRequestService`, `GecoServer.java`) - le plus
+       sérieux des deux, même CLASSE de bug que celui déjà documenté
+       (11/10/2026, "Motif récurrent à surveiller") pour
+       `CreditRequestService` : la règle "déjà endetté" (ajoutée par
+       `ea7c0d3`) ne vérifie que `curDebt > 0`, qui ne redevient vrai
+       qu'APRÈS approbation - rien n'empêchait deux demandes "pending"
+       SIMULTANÉES pour le même joueur (aucune déduplication serveur,
+       aucun verrou client). Reproduit en HTTP réel avec une vraie
+       concurrence (`Promise.all`, deux `POST /credit-requests` au même
+       instant) : les deux réussissaient (201), toutes deux approuvables
+       séparément au tableau de bord animateur - après approbation des
+       deux, `curDebt=6`/`curInterest=2` au lieu de 3/1, crédit doublé,
+       mesuré. Corrigé par une réservation atomique PAR JOUEUR
+       (`CreditRequestService.createIfNoPending`,
+       `ConcurrentHashMap.compute` sur une clé composite gameId+playerId -
+       même principe que `tryClaim()`, déjà en place dans cette classe pour
+       la transition pending→processing), libérée dans `markResolved()` ;
+       défense en profondeur côté client aussi (bouton désactivé pendant
+       l'envoi). Nouveau test `CreditRequestServiceTest` (5 tests, dont un
+       test de concurrence RÉELLE à 30 threads via `CyclicBarrier`, même
+       méthode que `GameServiceConcurrentRedeemTest`) - vérifié qu'il
+       détecte bien la régression en réintroduisant temporairement l'ancien
+       code (30/30 réussissaient au lieu d'1/30 avant correctif). Commit
+       `a66ca52`.
+  - **Avis motivé des deux agents sur "un joueur en prison peut toujours
+    demander/recevoir un crédit par smartphone"** : PAS un bug - la règle
+    "pas de redemande si déjà endetté" ne s'applique objectivement pas à ce
+    joueur, puisque l'événement PRISON remet `curDebt`/`curInterest` à zéro
+    (même mécanisme que BANKRUPT, "la dette est effacée" - voir
+    `Event.java`). Documenté ici comme point explicitement examiné et
+    tranché, pas une lacune oubliée - la portée demandée par l'utilisateur
+    pour la vérification serveur de la prison ne mentionnait que
+    vente/achat/troc/pioche, jamais les demandes de crédit.
+  - Build final après fusion des trois commits (`ea7c0d3`, `0535960`,
+    `a66ca52`) : 101 tests, 0 échec (geco-engine + geco-server), script i18n
+    sans clé manquante.

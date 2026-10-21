@@ -4565,3 +4565,109 @@ applicatif trouvé, aucun commit produit par cet agent). `mvn clean
 package` réel après fusion : toujours vert, 95 tests. Rapports complets
 des deux agents (RAPPORT.md, AUDIT.md, scripts HTTP rejouables, captures
 d'écran) conservés hors dépôt (livrables de session, pas versionnés).
+
+### Remboursement de crédit dette+smartphone bloqué par la masse monétaire globale (20/10/2026)
+
+L'utilisateur joue une vraie partie dette+smartphone et remonte un PDF de
+retours ("Retours - 20261020") avec une capture d'écran précise : à
+Tour 5/8, un crédit visiblement accordé (masse monétaire = 3) mais
+"Montant global des crédits + intérêts" affiché à 0, et le bilan des
+joueurs endettés de l'assistant de fin de tour vide ("Aucun autre joueur
+endetté ce tour-ci"). Interprétation initiale de l'utilisateur :
+"l'assistant semble ne pas savoir qui a contracté le crédit par le
+smartphone".
+
+**Investigation** : une série de reproductions directes via l'API HTTP
+(création de partie, crédit demandé+approuvé, avance de tours via
+événements "T") montre que `curDebt`/`curInterest`/`totalCreditsOutstanding`
+restent corrects à chaque étape, y compris sur plusieurs tours consécutifs
+- contredisant l'hypothèse initiale. Une reproduction FIDÈLE via Playwright
+(vrais clics "Fin de tour", vrai parcours de l'assistant) confirme que le
+joueur APPARAÎT bien à chaque tour dans le bilan, avec "Rembourse
+l'intérêt" visible - mais **"Rembourse le crédit" (remboursement complet)
+n'apparaît JAMAIS**. Cause trouvée en lisant `renderIndebtedRow`
+(`app.js`) : `canPayCredit = (curDebt+curInterest) <= game.moneyMass` -
+or `NEW_CREDIT` n'ajoute que le PRINCIPAL à `moneyMass` (jamais
+l'intérêt), donc pour le cas le plus simple (un seul crédit en cours),
+`moneyMass` (= principal) est TOUJOURS strictement inférieure à
+principal+intérêt, quel que soit le solde RÉEL du joueur sur son
+téléphone (`Player.jetonWeak`) - `game.moneyMass` est le repère pertinent
+pour la dette CLASSIQUE (pot commun physique), pas pour la dette
+SMARTPHONE (solde individuel). Le même défaut existait dans le formulaire
+manuel "+" (validation ET pré-remplissage). Confirme le scénario complet
+: le journal d'événements du PDF montre bien une "Banqueroute — Max" -
+le joueur avait probablement de quoi rembourser après quelques ventes,
+mais le bouton ne s'est jamais affiché, forçant l'animateur vers "Ne peut
+pas payer".
+
+**Corrigé** (commit `ea7c0d3`) : les trois endroits utilisent désormais
+`Player.jetonWeak` pour un joueur smartphone (`hasStartingAllocation`),
+`game.moneyMass` inchangé pour la dette classique. Vérifié par un
+round-trip HTTP+Playwright complet : un joueur gagne de l'argent via une
+vraie vente, le bouton apparaît dès que son solde réel suffit, le clic
+rembourse intégralement (dette→0, solde et masse débités exactement du
+montant dû).
+
+**Trois autres points du même PDF traités dans le même commit** :
+montant de crédit fixe 3/intérêt 1 (déjà correct, confirmé) ; blocage
+SERVEUR d'une redemande de crédit par smartphone pour un joueur déjà
+endetté (`POST /credit-requests`, la voie manuelle de l'animateur reste
+libre) ; toast "Crédit accordé"/"Crédit refusé" (3s) + redirection vers
+l'écran Cartes (nouveau handler WebSocket côté joueur).
+
+**Demande séparée de l'utilisateur, même commit** : vérification SERVEUR
+de `Player.prisonUntilTurn` sur les trois routes d'échange smartphone
+(nouvelle méthode `GameService.isPlayerInPrison`) - jusqu'ici seule l'UI
+bloquait visuellement un joueur en prison, lacune préexistante signalée
+par l'agent d'audit de la campagne pile-exchange de la veille (pas une
+régression).
+
+**Campagne de validation à deux agents** (3 parties dette+smartphone
+complètes, 2/8/17 joueurs, 12 tours chacune, vérité terrain HTTP
+indépendante) : l'agent de contrôle mesure 0 écart sur 53 demandes de
+crédit/39 ventes/164 échanges pioche/3 prisons-morts-abandons-
+banqueroutes/12 contournements de prison tentés (tous refusés), et trouve
+lui-même un bug réel pendant sa campagne - `ReferenceError:
+getPlayerStatusBadge is not defined`, systématique à l'étape "Nouveaux
+crédits" de l'assistant (fonction définie comme closure dans
+`renderGameDetail()` mais appelée depuis `openEndOfTurnWizard()`, hors de
+portée, avalée par un `try/catch` qui cassait au passage le filtre
+d'exclusion des joueurs venant de passer en prison/banqueroute/décès) -
+corrigé, commit `0535960`.
+
+L'agent d'audit indépendant, lui, **ne confirme PAS la conclusion "0
+écart"** : il trouve deux bugs réels supplémentaires, non détectés par la
+campagne du premier agent, tous deux spécifiques aux demandes de crédit
+smartphone (commit `a66ca52`) :
+1. Un faux toast "Crédit refusé" à CHAQUE soumission d'une demande par le
+   joueur lui-même - le nouveau handler WebSocket ajouté par `ea7c0d3`
+   recevait aussi la diffusion faite à la CRÉATION de la demande
+   (status="pending", destinée au tableau de bord animateur) et la
+   traitait comme un refus (seul "approved" était testé). Corrigé en ne
+   réagissant qu'à "approved"/"declined" explicitement.
+2. Un crédit DOUBLE possible par double-tap/relance réseau : la règle
+   "déjà endetté" ajoutée par `ea7c0d3` ne vérifie que `curDebt > 0`, qui
+   ne redevient vrai qu'APRÈS approbation - rien n'empêchait deux
+   demandes "pending" simultanées pour le même joueur. Reproduit en HTTP
+   réel avec une vraie concurrence (`Promise.all`) : les deux requêtes
+   réussissaient, et après approbation des deux, `curDebt` doublait (6 au
+   lieu de 3) - exactement la même CLASSE de bug TOCTOU déjà documentée
+   pour `CreditRequestService` le 11/10/2026 ("Motif récurrent à
+   surveiller"). Corrigé par une réservation atomique par joueur
+   (`createIfNoPending`, `ConcurrentHashMap.compute`, même principe que
+   `tryClaim()` déjà en place) ; nouveau test de concurrence réelle à 30
+   threads (`CreditRequestServiceTest`), vérifié qu'il détecte bien la
+   régression en réintroduisant temporairement l'ancien code.
+
+Avis motivé des deux agents sur "un joueur en prison peut toujours
+demander un crédit par smartphone" : pas un bug - l'événement PRISON
+remet déjà `curDebt`/`curInterest` à zéro (même mécanisme que BANKRUPT),
+donc la règle "pas de redemande si déjà endetté" ne s'applique
+objectivement pas à lui ; documenté comme point explicitement tranché.
+
+**Fusion** : les trois commits (`ea7c0d3`, `0535960`, `a66ca52`)
+cherry-pickés proprement (aucun conflit) dans la branche de travail du
+dépôt principal. `mvn clean package` réel après fusion : vert, 101 tests
+(96 + 5 nouveaux pour `CreditRequestServiceTest`). Rapports complets des
+deux agents et captures d'écran conservés hors dépôt (livrables de
+session, pas versionnés).
