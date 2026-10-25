@@ -608,12 +608,32 @@ body {
    l'écran "Classement" dédié (liste complète, déjà sans contrainte de
    hauteur). */
 .leaderboard-list--scrollable { max-height: 260px; overflow-y: auto; padding-right: 2px; }
-.leaderboard-item { display: flex; align-items: center; justify-content: space-between; }
-.player-info { display: flex; align-items: center; gap: 12px; }
+.leaderboard-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.player-info { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .player-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
 .avatar-badge {
 	width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center;
 	justify-content: center; color: #fff; font-weight: 700; font-size: 0.85rem;
+	/* BUG TROUVÉ ET CORRIGÉ (25/10/2026, remonté par l'utilisateur : "des
+	   joueurs sont coupés en haut en bas et sur les côtés" dans le classement
+	   de l'écran d'accueil) : .player-info est un conteneur flex, et cette
+	   pastille (32x32) n'avait ni flex-shrink:0 ni flex-basis explicite - dès
+	   que .player-name (lui aussi flex, voir plus bas) manquait de place (nom
+	   long, écran étroit), le navigateur réduisait la LARGEUR de la pastille
+	   pour lui faire de la place (comportement par défaut flex-shrink:1 sur
+	   l'axe principal), sans jamais toucher sa HAUTEUR (fixée en dehors de
+	   l'axe flex) - le cercle (border-radius:50%, voir .avatar-badge-photo
+	   ci-dessous) devenait donc une ELLIPSE, et l'image/SVG à l'intérieur
+	   (width/height:100%, voir .avatar-img) suivait cette forme déformée :
+	   recadrée visiblement sur les côtés (ellipse plus étroite que haute) ET
+	   en haut/bas selon le degré de compression - jamais un simple effet
+	   object-fit:cover normal (qui, lui, recadre un portrait non carré de
+	   façon symétrique et prévisible, pas un bug). Corrigé par flex-shrink:0
+	   (la pastille garde TOUJOURS ses 32x32 exacts, c'est .player-name qui
+	   cède la place en se tronquant avec une ellipsis, voir .player-name
+	   ci-dessous) - vérifié par capture Playwright avec des noms de joueurs
+	   volontairement longs, avant/après. */
+	flex-shrink: 0;
 }
 .avatar-badge.me { box-shadow: 0 0 0 2px var(--primary-purple); }
 /* Portrait réel (24/10/2026, même PDF, page 1 : "remplacer les badges
@@ -624,11 +644,25 @@ body {
 	background: #fff; border-radius: 50%; overflow: hidden; font-size: 1.1rem;
 	box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
-.avatar-badge-photo .avatar-img { width: 100%; height: 100%; }
+/* object-fit:cover + object-position:center (25/10/2026, même correctif
+   que ci-dessus) : la règle générique .avatar-img (plus haut dans ce
+   fichier) pose déjà ces deux propriétés, mais les répéter ICI rend le
+   centrage du recadrage explicite pour ce contexte précis (portrait
+   potentiellement non carré dans une pastille de petite taille), plutôt que
+   de dépendre silencieusement d'une règle définie ailleurs dans le fichier. */
+.avatar-badge-photo .avatar-img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .bg-teal { background-color: #00838f; }
 .bg-pink { background-color: #a87994; }
 .bg-purple { background-color: #6c5ce7; }
-.player-name { font-size: 0.88rem; font-weight: 600; color: var(--text-dark); }
+.player-name {
+	font-size: 0.88rem; font-weight: 600; color: var(--text-dark);
+	/* Complète le correctif ci-dessus (.avatar-badge, flex-shrink:0) : c'est
+	   désormais bien le NOM qui cède la place sur un écran étroit/un nom
+	   long, jamais plus l'avatar - tronqué proprement avec une ellipsis
+	   plutôt que de déborder ou de forcer un retour à la ligne qui cassait
+	   l'alignement vertical de la ligne. */
+	min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .player-score { font-size: 0.92rem; font-weight: 700; color: var(--text-dark); }
 
 /* ============ Écran "Accueil" : ligne avatar+nom (24/10/2026, PDF "Retours
