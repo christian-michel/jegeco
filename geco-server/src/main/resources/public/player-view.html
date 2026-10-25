@@ -58,7 +58,33 @@
 	     l'avatar+nom et le classement scrollable (voir CSS), le bloc crédits restant
 	     réservé à la dette (hasStartingAllocation + moneySystem===1, voir isDebtGame()
 	     dans player-view.js). -->
-	<div id="viewContent" class="main-content">
+	<!-- BUG TROUVÉ ET CORRIGÉ (25/10/2026, en vérifiant la demande "le portrait
+	     avatar doit être le PNG" du 25/10/2026 ci-dessus par une vraie inscription
+	     joueur bout en bout) : contrairement aux 12 autres écrans de SCREENS
+	     (js/player-view.js), #viewContent n'avait JAMAIS la classe "hidden" dans
+	     le HTML au chargement initial. refreshPlayer() ne bascule sur le hub
+	     ("showScreen(\"viewContent\")", qui seul appelle updateAppHeader() et pose
+	     le titre "Accueil") QUE si TOUS les écrans de SCREENS sont "hidden" au
+	     moment de l'appel (pour ne pas interrompre un écran de vente/achat en
+	     cours lors d'un rafraîchissement périodique) - avec #viewContent déjà
+	     visible par défaut, cette condition était FAUSSE dès le tout premier
+	     appel, donc showScreen()/updateAppHeader() n'étaient JAMAIS exécutés au
+	     premier chargement : le titre d'en-tête restait bloqué sur le "—" statique
+	     de ce fichier EN PERMANENCE, jusqu'à ce que le joueur navigue manuellement
+	     vers un autre onglet puis revienne (seul chemin qui appelle réellement
+	     showScreen). Reproduit par une vraie inscription Playwright bout en bout
+	     (join.html -> démarrage de la partie -> navigation directe vers
+	     player-view.html?gameId=...&token=..., exactement le chemin réel d'un
+	     joueur qui scanne son QR ou rouvre son lien) : le solde/l'avatar/le
+	     classement s'affichaient bien (renderDashboard() tourne indépendamment de
+	     showScreen), mais le titre restait "—" au lieu de "Accueil" - contrairement
+	     à ce qu'affirmait le rapport de l'implémentation du PDF "Retours -
+	     20261024" page 1 ("titre déjà correct, pas un bug actuel"), jamais vérifié
+	     par un vrai chargement de page à l'époque. Corrigé en ajoutant "hidden" ici,
+	     cohérent avec les 12 autres écrans de SCREENS - le tout premier
+	     refreshPlayer() bascule désormais normalement dessus comme n'importe quel
+	     autre écran. -->
+	<div id="viewContent" class="main-content hidden">
 		<div class="home-identity-row" id="homeIdentityRow">
 			<div class="home-identity-avatar" id="homeIdentityAvatar"><span aria-hidden="true">🧑</span></div>
 			<span class="home-identity-name" id="homeIdentityName">—</span>
