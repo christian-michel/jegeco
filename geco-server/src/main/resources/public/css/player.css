@@ -635,7 +635,26 @@ body {
 	   volontairement longs, avant/après. */
 	flex-shrink: 0;
 }
-.avatar-badge.me { box-shadow: 0 0 0 2px var(--primary-purple); }
+/* BUG TROUVÉ ET CORRIGÉ (25/10/2026, remonté par l'utilisateur après le
+   correctif ci-dessus : "la bordure du CSS est toujours coupée... essaie de
+   faire en sorte que le bord de l'image violet de l'avatar ne soit pas
+   coupé") : un box-shadow (ombre portée EN DEHORS de la boîte de bordure,
+   donc hors de la zone de peinture normale de l'élément) ne survit pas à
+   overflow:hidden posé sur ce MÊME élément - or .avatar-badge-photo (plus
+   bas, variante "photo" systématiquement combinée à .me pour un joueur
+   suivi avec avatar réel) pose justement overflow:hidden pour rogner
+   proprement l'image en cercle. Le anneau violet se retrouvait donc
+   lui-même rogné, visible seulement par fragments selon le cadrage de
+   l'image (jamais un cercle complet). Suggestion de l'utilisateur reprise
+   telle quelle : outline (qui, contrairement à box-shadow, est posé par
+   dessus la boîte sans dépendre de l'empilement de peinture coupé par
+   overflow:hidden) + outline-offset NÉGATIF pour ramener l'anneau
+   ENTIÈREMENT à l'intérieur du cercle de 32x32 (jamais à cheval sur son
+   bord, qui serait justement la zone rognée par overflow:hidden) -
+   fonctionne de façon identique pour .avatar-badge (lettre colorée, pas de
+   overflow:hidden, mais garde le même mécanisme pour les deux variantes,
+   plus simple à maintenir qu'un cas particulier par variante). */
+.avatar-badge.me { outline: 2px solid var(--primary-purple); outline-offset: -2px; }
 /* Portrait réel (24/10/2026, même PDF, page 1 : "remplacer les badges
    'lettre colorée' du classement par de petits portraits avatar réels") -
    contenu injecté par buildProfileAvatarHtml() (img ou SVG), plus de fond
