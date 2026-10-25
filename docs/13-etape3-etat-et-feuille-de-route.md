@@ -619,6 +619,29 @@ toast "Crédit refusé" à chaque soumission, et un crédit DOUBLE possible par
 double-tap - tous corrigés, commits `0535960` et `a66ca52`). 101 tests,
 0 échec après fusion.
 
+### 10 points du PDF "Retours - 20261024" traités (25/10/2026)
+
+Refonte de l'écran Accueil/Mes cartes joueur (dette+smartphone : avatar+nom,
+sous-lignes crédit, classement complet avec avatars, bouton crédit déplacé),
+correction de l'éligibilité au crédit après mort/renaissance (seule la
+prison exclut désormais, plus "mort"/"banqueroute"), nouvelle formule de
+cible de saisie (principal+intérêt+pénalité de 2 unités) + algorithme de
+saisie monnaie-puis-cartes par recherche exhaustive (exact ou dépassement
+minimal, jamais moins) + 3 issues réelles avec effets de pioche partagée
+(saisie simple / banqueroute avec 4 cartes faibles neuves immédiates /
+prison avec 4 cartes faibles neuves à la libération), tentative de
+correctif CSS pour un flou d'affichage iOS (non vérifiable sur device
+réel), correctif défensif pour un "Stop !" manquant au dernier tour,
+clarification de la colonne "Transactions" (renommée "Opérations de
+crédit", distincte des achats/ventes), et QR personnel par joueur pour
+resynchroniser un téléphone après une reprise de joueurs - voir `CLAUDE.md`
+pour le détail complet des 10 points, y compris le bug réel de fenêtre de
+course PRISON/saisie-carte trouvé et corrigé par l'agent d'audit
+indépendant (commit `015bea2`). Campagne de validation à deux agents (3
+parties dette+smartphone, 2/6/16 joueurs, 90 vérifications + re-tests
+d'audit indépendants, 0 écart applicatif restant). 108 tests, 0 échec après
+fusion complète (`6b2d7a6`, `d70d5cb`, `c71a74c`, `015bea2`).
+
 ## Reste à faire (connu, pas encore commencé ou partiel)
 
 Par ordre approximatif de priorité, à ajuster selon les retours de test :

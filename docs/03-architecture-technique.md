@@ -4671,3 +4671,54 @@ dépôt principal. `mvn clean package` réel après fusion : vert, 101 tests
 (96 + 5 nouveaux pour `CreditRequestServiceTest`). Rapports complets des
 deux agents et captures d'écran conservés hors dépôt (livrables de
 session, pas versionnés).
+
+## 10 points du PDF "Retours - 20261024" (25/10/2026)
+
+Après une vraie partie dette+smartphone (5 joueurs) suivie d'une reprise des
+mêmes joueurs en libre+smartphone, l'utilisateur a envoyé un PDF de retours
+de 10 pages + un log serveur brut (`20261024.txt`, principalement des
+lignes de diagnostic `[DIAG achat]`/`[ERREUR 400] Solde insuffisant` déjà
+cohérentes avec le comportement attendu, non actionnables en elles-mêmes).
+
+**Méthode** : un premier agent (worktree isolé) a implémenté les 10 points
+en 3 commits (`6b2d7a6`, `d70d5cb`, `c71a74c`), avec build/tests/i18n
+vérifiés à chaque étape et des tests HTTP réels pour les points les plus
+critiques (saisie/banqueroute/prison). Un deuxième agent ("contrôle") a
+ensuite joué 3 parties dette+smartphone complètes (2/6/16 joueurs, 12
+tours) avec une vérité terrain Python indépendante (réimplémentation de la
+formule de cible et de l'algorithme de saisie), déclenchant délibérément 9
+scénarios "ne peut pas payer" (3 par issue) pour garantir une couverture
+complète sans dépendre du hasard des cartes distribuées - 90 vérifications,
+0 écart trouvé. Un troisième agent ("audit"), n'ayant vu ni le raisonnement
+ni les captures du second sans les revérifier lui-même, a mené sa propre
+relecture de code + ses propres tests de concurrence réelle + sa propre
+vérification visuelle Playwright du "Stop !" + l'ouverture et la comparaison
+par checksum de CHAQUE capture laissée par l'agent de contrôle - c'est cette
+dernière étape qui a révélé que deux captures "Prison" du second agent
+étaient en réalité identiques (overlay bloquant resté ouvert, jamais la
+bonne vue capturée), et c'est le test de concurrence qui a révélé le seul
+vrai bug applicatif de ce chantier (voir ci-dessous) - exactement le type de
+défaut qu'une relecture par le même agent n'aurait probablement pas
+détecté, comme les précédents de ce projet (18/09/2026, 19/10/2026,
+20/10/2026).
+
+**Seul bug réel trouvé** : la route d'enregistrement d'un événement C/B/P
+(`POST /events`) appelait `GameService.recordEvent` puis
+`GameService.resolveCannotPaySeizure` sous DEUX acquisitions séparées de
+`withGameLock`, laissant une fenêtre entre les deux où, pour PRISON,
+`Player.prisonUntilTurn` était déjà posé mais les cartes du joueur pas
+encore matériellement retirées de son inventaire - la vérification serveur
+de la prison côté vendeur (20/10/2026) ne jouant qu'à la CRÉATION d'une
+offre de vente, jamais à sa rédemption, l'achat d'une carte via une offre
+créée AVANT la mise en prison pouvait en théorie aboutir pendant cette
+fenêtre. Jamais observé en usage réel (fenêtre trop étroite en séquentiel)
+- un vrai trou de conception, détecté uniquement grâce à un test de
+concurrence réelle dédié (24 appels simultanés). Corrigé par fusion des deux
+étapes sous un seul verrou (`GameService.recordEventAndResolveCannotPaySeizure`,
+commit `015bea2`, cherry-pické proprement dans la branche principale).
+
+**Fusion** : `015bea2` cherry-pické sans conflit. `mvn clean package`/`mvn
+test` réels après fusion : vert, 108 tests. Script i18n : aucune clé
+manquante. Rapports complets des trois agents et captures d'écran conservés
+hors dépôt (livrables de session, pas versionnés) - voir `CLAUDE.md` pour le
+détail point par point des 10 corrections.

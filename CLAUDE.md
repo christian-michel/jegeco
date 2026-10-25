@@ -790,3 +790,173 @@ ajoutes, pas seulement via ce script.
   - Build final après fusion des trois commits (`ea7c0d3`, `0535960`,
     `a66ca52`) : 101 tests, 0 échec (geco-engine + geco-server), script i18n
     sans clé manquante.
+- **Implémenté/corrigé le 25/10/2026** (PDF "Retours - 20261024" + log serveur
+  joints, 10 points remontés après une vraie partie dette+smartphone à 5
+  joueurs suivie d'une reprise en libre+smartphone - commits `6b2d7a6`,
+  `d70d5cb`, `c71a74c`, `015bea2`) :
+  1. **Écran Accueil joueur** (dette+smartphone, et étendu par cohérence aux
+     3 systèmes smartphone) : avatar+nom en tête, sous-lignes grises "N
+     crédit(s) en cours"/"Reste à rembourser : principal + intérêt" sous la
+     carte Solde (dette uniquement), bouton "Demander un crédit" déplacé
+     juste sous la carte Solde, classement complet et scrollable (plus
+     limité aux 4 premiers inscrits) avec de vrais portraits avatar à la
+     place des badges lettre colorée.
+  2. Même bloc solde+crédits ajouté sur l'écran "Mes cartes".
+  3. **Éligibilité au crédit après mort/renaissance** : `blockedStatuses`
+     dans `renderStepCredits()` (étape "Nouveaux crédits" de l'assistant de
+     fin de tour, `app.js`) resserré à `["status-prison"]` seul - DEATH est
+     une renaissance INSTANTANÉE (le joueur reste actif, continue de
+     jouer), BANKRUPT continue aussi de jouer ce tour : aucun des deux ne
+     doit plus exclure un joueur de la liste des crédits proposables, seule
+     la PRISON (qui bloque réellement tout le tour suivant) le justifie.
+  4-5-6. **Nouvelle formule de saisie + algorithme de cartes + 3 issues**,
+     remplaçant l'ancien champ `fSeizureTarget` libre (préremplie à 0) et
+     l'ancien ordre glouton fort→moyen→faible : la cible de saisie est
+     désormais calculée automatiquement (`computeSeizureTargetPrefill`) =
+     `curDebt + curInterest + 2` (pénalité fixe de 2 unités) si ni intérêt
+     ni principal n'ont encore été remboursés, ou `curDebt + 2` si l'intérêt
+     seul l'a déjà été - toujours modifiable par l'animateur avant
+     validation, comme tous les autres préremplissages de ce projet
+     (exemples du PDF vérifiés : 3+1+2=6, 3+2=5). Le moteur n'ayant jamais
+     modélisé plusieurs crédits séparés par joueur (`curDebt`/`curInterest`
+     sont déjà des totaux agrégés, voir `NEW_CREDIT`/`REIMB_CREDIT` dans
+     `Event.java`) et un joueur suivi par smartphone ne pouvant plus avoir
+     qu'un crédit actif à la fois depuis le 20/10/2026, la pénalité ne
+     s'applique de fait qu'une seule fois sur le total - limite documentée,
+     pas une règle par-crédit réellement implémentée (n'a d'effet que si un
+     jour la contrainte "un seul crédit actif" change). L'algorithme de
+     saisie (nouvelle fonction remplaçant `computeAutoSeizure`) saisit
+     d'abord toute la monnaie du joueur, puis cherche par recherche
+     exhaustive (le nombre de cartes par joueur reste petit) la
+     combinaison de cartes qui atteint EXACTEMENT le reste si possible,
+     sinon celle qui le dépasse au MINIMUM (jamais moins que la cible) -
+     remplace l'ancien ordre glouton fort→moyen→faible, moins fiable pour
+     retrouver une correspondance exacte. Les cartes précises retirées sont
+     choisies ALÉATOIREMENT dans l'inventaire réel du joueur (nouvelle
+     méthode serveur `GameService.resolveCannotPaySeizure`, jamais côté
+     client) et remises à la pioche partagée de la partie - jamais détruites.
+     Trois issues désormais implémentées avec leurs effets réels de pioche :
+     **SAISIE simple** (≥4 cartes restent après saisie) → continue de jouer
+     normalement, inchangé ; **BANQUEROUTE** (<4 cartes restent) → ses
+     cartes restantes sont AUSSI saisies et remises à la pioche (le joueur
+     se retrouve à 0 carte), puis il reçoit IMMÉDIATEMENT 4 nouvelles cartes
+     aléatoires de valeur faible tirées de la pioche ; **PRISON** (la
+     saisie monnaie+cartes ne suffit toujours pas à couvrir la cible) →
+     TOUTES les cartes du joueur (pas seulement celles saisies) sont
+     remises à la pioche, le joueur est bloqué pour le tour suivant entier
+     (`Player.prisonUntilTurn`, mécanisme déjà existant), puis reçoit 4
+     nouvelles cartes faibles à sa libération (à l'annonce de fin de ce
+     tour). "tresforte" reste fusionnée avec "forte" (valeur 4) pour ce
+     calcul - limite préexistante documentée, pas réintroduite par ce
+     chantier.
+     - **Bug réel trouvé et corrigé par l'agent d'audit indépendant, le
+       jour même (commit `015bea2`, cherry-pické sur `c71a74c`)** : la
+       première version enregistrait l'événement C/B/P
+       (`GameService.recordEvent`) et résolvait les effets de pioche
+       (`resolveCannotPaySeizure`) sous DEUX acquisitions SÉPARÉES de
+       `withGameLock` - laissant une fenêtre réelle entre les deux où,
+       pour PRISON, `Player.prisonUntilTurn` est déjà posé mais les cartes
+       pas encore matériellement retirées de son inventaire. Comme la
+       vérification serveur de la prison côté VENDEUR (ajoutée le
+       20/10/2026) ne joue qu'à la CRÉATION d'une offre de vente, jamais à
+       sa RÉDEMPTION, l'achat d'une carte de ce vendeur via une offre déjà
+       créée AVANT sa mise en prison pouvait en théorie aboutir pendant
+       cette fenêtre - jamais observé dans les campagnes précédentes (trop
+       étroite en séquentiel), donc un vrai trou de conception plutôt
+       qu'un bug déjà rencontré en usage réel. Reproduit par un test dédié
+       qui observe explicitement la fenêtre avec l'ancien enchaînement
+       puis confirme sa fermeture après correctif
+       (`GameServicePrisonSellerRaceTest`), + un test de concurrence réelle
+       (24 appels simultanés sur le même joueur,
+       `GameServiceCannotPaySeizureConcurrencyTest`) + un test de
+       combinaison carré+saisie sur le même joueur
+       (`GameServiceSquareThenSeizureTest`, conservation stricte
+       confirmée). Corrigé en fusionnant les deux étapes sous un seul
+       verrou : nouvelle méthode
+       `GameService.recordEventAndResolveCannotPaySeizure`, désormais seule
+       utilisée par la route `POST /events` pour ces trois types
+       d'événement.
+  7. **Bug d'affichage iOS (textes des animations plein écran flous sur
+     Safari/Chrome iOS)** : diagnostic de lecture de code (non vérifiable
+     sur appareil Apple réel dans cet environnement) - le keyframe CSS
+     partagé `deathAnimStampSlam` (réutilisé par Stop!/Commencez!/Prison/
+     Mort/Renaissance) animait `filter: blur(10px) → blur(0)`, qui (a)
+     remplaçait entièrement le `drop-shadow` statique pendant toute
+     l'animation sans jamais y revenir (aucun palier ne redéclare `filter`
+     après 70%, `forwards` fige donc la dernière valeur explicite), et (b)
+     combine `filter: blur()` + `transform: scale()` sur un calque
+     `will-change` - un scénario documenté de bug de rendu WebKit (texte
+     qui reste rastérisé flou, jamais observé sur Blink/Android). Corrigé
+     en retirant `filter` du keyframe et des `will-change` associés ;
+     l'effet "coup de tampon" (zoom+rebond+rotation) reste inchangé sur
+     Android. Confirmé plausible par l'agent d'audit indépendant (aucune
+     autre explication plus probable trouvée, ex. police web non chargée)
+     - **toujours à confirmer par l'utilisateur sur sa prochaine partie
+       avec un vrai appareil Apple**, piste de secours notée si le
+       symptôme persiste : `-webkit-backface-visibility: hidden` sur le
+       même sélecteur (flou résiduel de sous-pixel WebKit sur texte
+       transformé).
+  8. **"Stop !" manquant au dernier tour** : aucune condition sur
+     `nbTurnsPlanned` trouvée dans le chemin d'annonce de fin de tour
+     (clic manuel ET expiration chrono sont identiques au dernier tour et
+     aux précédents) - correctif défensif appliqué (une seconde tentative
+     réseau, `announceTurnEndWithRetry`, délai 800ms, aux deux points
+     d'appel), hypothèse : le dernier tour est statistiquement le moment le
+     plus chargé en trafic réseau (fin de partie), rendant un échec
+     transitoire plus probable à cet instant précis. **Vérifié
+     visuellement par l'agent d'audit indépendant** (Playwright réel,
+     Chromium, pas seulement la route serveur) : l'animation "Stop !"
+     s'affiche bel et bien au dernier tour d'une partie de test
+     (captures `stop_01_before/02_during/03_after.png`) - à confirmer
+     aussi par l'utilisateur sur sa prochaine vraie partie si le symptôme
+     réseau d'origine n'était pas qu'un incident isolé.
+  9. **Cohérence des compteurs de transactions** (exemple donné : 7
+     "transactions" côté animateur contre 10 achats + 10 ventes côté
+     téléphone pour un même joueur) : pas un bug de calcul - la colonne
+     "Transactions" du tableau "Activité par joueur" de l'animateur ne
+     comptait QUE les événements liés au crédit (NEW_CREDIT/
+     INTEREST_ONLY/REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON), jamais les
+     achats/ventes de cartes entre joueurs (comptés séparément côté
+     téléphone) - deux métriques légitimement différentes, mal nommées.
+     Renommée en "Opérations de crédit" + phrase explicative ajoutée sous
+     le titre de la section (fr/en), pour que la distinction soit visible
+     plutôt qu'un écart silencieux.
+  10. **QR personnel par joueur** (pour resynchroniser le téléphone d'un
+      joueur repris d'une partie à l'autre, ex. dette→libre) : nouveau
+      bouton 📱 sur chaque ligne de joueur côté animateur, à côté du 🔗
+      déjà existant, ouvrant une popup avec le QR code du lien d'accès
+      personnel du joueur (`Player.accessToken`) - mécanisme déjà
+      générique aux 3 systèmes monétaires smartphone (aucune condition
+      dette/libre/troc nécessaire, vérifié). Vérifié en HTTP réel pour la
+      TOTALITÉ des joueurs repris dans une nouvelle partie : chaque token
+      résout bien l'identité du bon joueur dans la NOUVELLE partie et
+      répond 404 sur l'ANCIENNE - aucune fuite croisée entre parties.
+  - **Campagne de validation à deux agents** (méthode désormais
+    systématique dans ce projet pour tout chantier de cette taille) : un
+    premier agent de contrôle a joué 3 parties dette+smartphone complètes
+    (2/6/16 joueurs, 12 tours chacune) avec vérité terrain Python
+    indépendante (réimplémentation de la formule de cible/de l'algorithme
+    de saisie/de la classification), 90 vérifications automatiques, 0
+    écart trouvé - 9 scénarios "ne peut pas payer" déclenchés
+    délibérément (3×SAISIE, 3×BANQUEROUTE, 3×PRISON, dont le cas "intérêt
+    déjà remboursé" reproduit explicitement), plus une reprise de joueurs
+    vers une 4e partie en libre+smartphone testant le QR personnel (3/5
+    joueurs vérifiés par cet agent). Un second agent d'audit indépendant a
+    ensuite : mené un vrai test de concurrence (24 requêtes simultanées,
+    confirmant la robustesse de `withGameLock`) qui a révélé le bug de
+    course PRISON/saisie ci-dessus et l'a corrigé ; vérifié visuellement
+    (Playwright réel) le "Stop !" du dernier tour ; ouvert et comparé par
+    checksum TOUTES les captures de l'agent de contrôle - trouvant que
+    `j3_prison-cards.png`/`j3_prison-home.png` étaient bit-pour-bit
+    identiques (l'overlay "Prison !" était resté bloquant à l'écran,
+    exactement le piège déjà documenté le 18-19/10/2026 : ces deux
+    captures n'avaient en réalité jamais montré les écrans "Mes cartes"/
+    "Accueil" pour ce joueur - les RÉSULTATS numériques du premier agent
+    restent fiables, seule sa PREUVE VISUELLE pour ce scénario précis
+    était incomplète) ; re-testé indépendamment chaque issue (saisie/
+    banqueroute/prison+libération), le QR personnel pour la TOTALITÉ des
+    5 joueurs repris (pas 3/5), l'éligibilité crédit après DEATH sur 2
+    scénarios distincts, et la combinaison carré+saisie sur un même
+    joueur (conservation stricte confirmée). Suite complète relancée
+    indépendamment par les deux agents : 108 tests, 0 échec, script i18n
+    sans clé manquante.
