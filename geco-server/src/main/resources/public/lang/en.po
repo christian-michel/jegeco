@@ -439,6 +439,18 @@ msgstr "Rename this player"
 msgid "game.player_copy_link_title"
 msgstr "Copy this player's individual link"
 
+msgid "game.player_qr_title"
+msgstr "This player's personal QR code (resync their phone)"
+
+msgid "game.player_qr_dialog_title"
+msgstr "{name}'s personal QR"
+
+msgid "game.player_qr_dialog_intro"
+msgstr "Scan with this player's phone to (re)join this game in their role - useful after reusing players from a previous game."
+
+msgid "game.qr_unavailable"
+msgstr "QR unavailable (library not loaded)"
+
 msgid "game.pin_badge_title"
 msgstr "Click to copy this game's PIN code"
 
@@ -868,6 +880,15 @@ msgstr "Validate"
 msgid "common.cancel"
 msgstr "Cancel"
 
+msgid "common.close"
+msgstr "Close"
+
+msgid "common.copy_link"
+msgstr "Copy link"
+
+msgid "common.copied"
+msgstr "Copied"
+
 # ============ End-of-turn assistant ============
 msgid "wiz.continue_btn"
 msgstr "Continue"
@@ -1204,7 +1225,13 @@ msgid "report.activity_col_player"
 msgstr "Player"
 
 msgid "report.activity_col_transactions"
-msgstr "Transactions"
+msgstr "Credit operations"
+
+msgid "report.activity_col_transactions_title"
+msgstr "Loan, repayment, interest, seizure, prison - not card purchases/sales"
+
+msgid "report.activity_disclaimer"
+msgstr "This table only counts credit operations (loan, repayment, interest, seizure, prison) - not card purchases/sales, see \"Monetary exchanges\" below."
 
 msgid "report.activity_col_borrowed"
 msgstr "Borrowed (total)"

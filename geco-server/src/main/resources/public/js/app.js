@@ -2900,16 +2900,27 @@ async function renderGameDetail(gameId) {
 				<button type="button" class="event-action-btn event-action-delete" title="${escapeHtml(t("game.player_delete_title"))}">✕</button>
 				${isDebt ? `<button type="button" class="event-action-btn" title="${escapeHtml(t("game.player_add_event_title"))}">+</button>` : ""}
 				${p.accessToken ? `<button type="button" class="event-action-btn" title="${escapeHtml(t("game.player_copy_link_title"))}">🔗</button>` : ""}
+				${p.accessToken ? `<button type="button" class="event-action-btn" title="${escapeHtml(t("game.player_qr_title"))}">📱</button>` : ""}
 			</span>`;
 		const buttons = li.querySelectorAll(".event-action-btn");
 		const renameBtn = buttons[0];
 		const deleteBtn = buttons[1];
 		// Remonté par un utilisateur : lien individuel du joueur (voir Player.accessToken)
 		// - le bouton "+" (événement pour ce joueur) n'existe qu'en monnaie dette, donc sa
-		// position dans la liste des boutons dépend du système ; on prend toujours le
-		// DERNIER bouton présent pour le lien, plutôt qu'un index fixe qui se déciderait
-		// mal selon les cas.
-		const linkBtn = p.accessToken ? buttons[buttons.length - 1] : null;
+		// position dans la liste des boutons dépend du système ; on prend toujours les
+		// DEUX DERNIERS boutons présents pour le lien/QR (jamais un index fixe qui se
+		// déciderait mal selon les cas).
+		// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 10) :
+		// "au démarrage d'une nouvelle partie en reprenant les joueurs d'une partie
+		// précédente... il n'existe pas de moyen de resynchroniser le téléphone de
+		// CHAQUE joueur vers cette nouvelle partie" - le lien personnel
+		// (Player.accessToken, déjà utilisé par le bouton 🔗 existant) est GÉNÉRIQUE
+		// aux trois systèmes monétaires (p.accessToken n'est jamais conditionné au
+		// système, voir Player.java) : ce nouveau bouton 📱 (QR de ce même lien,
+		// même bibliothèque vendorisée que renderInviteQr()) l'est donc aussi, sans
+		// aucune condition sur isDebt/isTroc/isLibre.
+		const qrBtn = p.accessToken ? buttons[buttons.length - 1] : null;
+		const linkBtn = p.accessToken ? buttons[buttons.length - 2] : null;
 		const eventBtn = isDebt ? buttons[2] : null; // absent (undefined) en monnaie libre/troc
 		renameBtn.onclick = () => openRenamePlayerDialog(p);
 		deleteBtn.onclick = () => confirmDeletePlayer(p);
@@ -2920,6 +2931,7 @@ async function renderGameDetail(gameId) {
 				setTimeout(() => { linkBtn.textContent = "🔗"; }, 1500);
 			});
 		};
+		if (qrBtn) qrBtn.onclick = () => openPlayerQrDialog(game.id, p);
 		// Remonté par un utilisateur, avec un document de spécification détaillé :
 		// pas de crédit/remboursement/mort géré au niveau d'un joueur individuel en
 		// monnaie libre (tout passe par l'assistant de fin de tour, étape DU) -
@@ -3328,6 +3340,39 @@ async function renderConnect() {
 // distinct de renderConnect() ci-dessus, qui ne fait que tester la
 // joignabilité réseau sans connaître de partie précise. Bascule
 // affiché/masqué (voir btnInvitePlayers) plutôt qu'une modale.
+// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 10) :
+// QR code personnel par joueur, pour resynchroniser SON téléphone vers une
+// nouvelle partie après une "reprise des joueurs" (le QR/lien d'inscription
+// partagé ne concerne qu'un nouveau joueur, jamais un joueur déjà repris -
+// voir buildPlayerLink()/Player.accessToken, déjà générique aux trois
+// systèmes monétaires). Même bibliothèque QR vendorisée que renderInviteQr()
+// ci-dessous, affichée dans la boîte de dialogue générique plutôt qu'un
+// nouveau panneau dédié (usage ponctuel, un seul joueur à la fois).
+async function openPlayerQrDialog(gameId, player) {
+	const t = window.GecoI18n.t;
+	openDialog(t("game.player_qr_dialog_title", { name: player.name }), `
+		<p style="font-size:0.85rem;color:var(--text-dim);">${escapeHtml(t("game.player_qr_dialog_intro"))}</p>
+		<div class="invite-qr-box" id="playerQrCode" style="margin:0.5rem auto;"></div>
+		<div class="invite-qr-url" id="playerQrUrl" style="word-break:break-all;font-size:0.78rem;"></div>
+		<button type="button" id="btnCopyPlayerQrLink" class="btn btn-small">📋 ${escapeHtml(t("common.copy_link"))}</button>
+	`, async () => {}, null);
+	el("dlgOk").classList.add("hidden");
+	el("dlgCancel").textContent = t("common.close");
+	const link = await buildPlayerLink(gameId, player.accessToken);
+	el("playerQrUrl").textContent = link;
+	if (typeof QRCode !== "undefined") {
+		new QRCode(el("playerQrCode"), { text: link, width: 180, height: 180 });
+	} else {
+		el("playerQrCode").textContent = t("game.qr_unavailable");
+	}
+	el("btnCopyPlayerQrLink").onclick = () => {
+		navigator.clipboard.writeText(link).then(() => {
+			el("btnCopyPlayerQrLink").textContent = "✓ " + t("common.copied");
+			setTimeout(() => { el("btnCopyPlayerQrLink").textContent = "📋 " + t("common.copy_link"); }, 1500);
+		});
+	};
+}
+
 async function renderInviteQr(gameId) {
 	const panel = el("inviteQrPanel");
 	const isOpening = panel.classList.contains("hidden");
@@ -4484,6 +4529,45 @@ function playSynthesizedWhistle(kind) {
 	}
 }
 
+// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 8) :
+// l'animation plein écran "Stop !" ne se déclenche pas sur les téléphones au
+// tout DERNIER tour d'une partie dette+smartphone. Relecture complète des
+// deux chemins qui l'annoncent (clic manuel "Fin de tour" et expiration
+// naturelle du chrono, ci-dessous) ainsi que de isTradingAllowed/
+// markTurnEndAnnounced côté serveur : aucune des deux ne teste explicitement
+// turnNumber par rapport à nbTurnsPlanned avant d'appeler Api.announceTurnEnd
+// - le chemin est donc, par construction, identique pour le dernier tour et
+// pour les précédents. Hypothèse retenue, documentée ici plutôt que de
+// laisser le correctif en suspens (non reproduit en conditions contrôlées
+// dans cet environnement, sans plusieurs vrais téléphones/WebSocket) :
+// Api.announceTurnEnd(...) était un appel "fire-and-forget" SANS AUCUNE
+// nouvelle tentative - une seule erreur réseau (déjà documentée comme un cas
+// fréquent dans ce projet, voir CLAUDE.md "accrocs wifi") suffit à perdre
+// silencieusement la diffusion WS "turn_ending" vers les téléphones, sans
+// aucun indice visible pour l'animateur (juste une ligne dans la console du
+// navigateur). Le DERNIER tour d'une partie est statistiquement le moment le
+// plus chargé (plusieurs achats/ventes de dernière minute, bilan des
+// crédits, inventaires de fin de partie, souvent beaucoup de trafic réseau
+// simultané) - un échec transitoire y est donc plus probable qu'à un tour
+// ordinaire, ce qui correspondrait au symptôme observé ("au tout dernier
+// tour" plutôt que "parfois, n'importe quand"). Corrigé en ajoutant une
+// nouvelle tentative (une seule, après un court délai) avant d'abandonner -
+// la même robustesse que ce fire-and-forget méritait déjà, dernier tour ou
+// pas.
+async function announceTurnEndWithRetry(gameId) {
+	try {
+		await Api.announceTurnEnd(gameId);
+	} catch (err) {
+		console.error("Annonce \"fin de tour\" (animation smartphone) : premier essai échoué, nouvelle tentative :", err);
+		try {
+			await new Promise((r) => setTimeout(r, 800));
+			await Api.announceTurnEnd(gameId);
+		} catch (err2) {
+			console.error("Annonce \"fin de tour\" (animation smartphone) impossible après 2 tentatives :", err2);
+		}
+	}
+}
+
 function startTurnTimer(game) {
 	stopTurnTimer();
 	// Remonté par un utilisateur : coup de sifflet parasite en cliquant sur
@@ -4540,8 +4624,7 @@ function startTurnTimer(game) {
 			// ne doit jamais bloquer l'affichage local de l'info-bulle/
 			// l'ouverture de l'assistant juste en dessous, qui restent
 			// strictement inchangés quoi qu'il arrive côté serveur.
-			Api.announceTurnEnd(state.currentGameId).catch((err) =>
-				console.error("Annonce \"fin de tour\" (animation smartphone) impossible :", err));
+			announceTurnEndWithRetry(state.currentGameId);
 			const toast = el("turnEndToast");
 			// Remonté par un utilisateur, avec un document de spécification détaillé :
 			// au dernier tour de la partie, l'info-bulle affiche "Fin du dernier tour"
@@ -6157,7 +6240,18 @@ async function openEndOfTurnWizard() {
 			eligiblePlayers = sortByName(game.players.filter((p) => {
 				if (!p.active || selectedDeathIds.includes(p.id)) return false;
 				const status = getPlayerStatusBadge(p, game);
-				const blockedStatuses = ["status-prison", "status-bankrupt", "status-dead"];
+				// Remonte par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 3) :
+				// "lorsqu'un joueur meurt et renait a l'entre-deux tours, il faut qu'il
+				// puisse faire un credit. Seul le joueur en prison ne doit pas s'afficher."
+				// En dette+smartphone, DEATH = mort ET renaissance INSTANTANEES dans le meme
+				// evenement (voir Event.java, cas DEATH) : le joueur reste `active` et
+				// continue de jouer normalement ce tour-ci - "status-dead" ne doit donc PLUS
+				// l'exclure. Meme raisonnement pour "status-bankrupt" (page 6 du meme PDF) :
+				// une banqueroute personnelle simple (cas 2 de la page 6) lui redonne 4
+				// cartes et il continue de jouer ce tour - seule la PRISON (cas 3) lui fait
+				// vraiment manquer un tour entier, donc seule "status-prison" doit encore
+				// exclure le joueur de la liste des credits proposables.
+				const blockedStatuses = ["status-prison"];
 				return !status || !blockedStatuses.includes(status.cls);
 			}));
 		} catch (err) {
@@ -6694,8 +6788,7 @@ function bindActions() {
 		// Animation "Stop !" plein écran sur les smartphones (10/10/2026) -
 		// même appel fire-and-forget que le chemin automatique ci-dessous
 		// (update()), pour ce déclenchement manuel.
-		Api.announceTurnEnd(state.currentGameId).catch((err) =>
-			console.error("Annonce \"fin de tour\" (animation smartphone) impossible :", err));
+		announceTurnEndWithRetry(state.currentGameId);
 		// BUG TROUVÉ ET CORRIGÉ (21/09/2026, remonté par l'utilisateur : "au
 		// moment où [un joueur] renaît, l'application donne un coup de sifflet
 		// [...] il ne faut pas le faire ici") : contrairement au chemin

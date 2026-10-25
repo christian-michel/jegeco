@@ -812,11 +812,24 @@
 						<h3 class="chart-title" data-i18n="report.activity_title">Activité par joueur</h3>
 						<span id="activityGlobalVolume" class="event-meta"></span>
 					</div>
+					<!-- Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024",
+					     page 9, exemple "MeuhMeuh" : 7 "transactions" ici contre 10 achats
+					     + 10 ventes sur l'écran Profil du téléphone) : cette colonne ne
+					     compte en réalité QUE les événements liés au CRÉDIT
+					     (NEW_CREDIT/INTEREST_ONLY/REIMB_CREDIT/CANNOT_PAY/BANKRUPT/PRISON,
+					     voir StatsService.computeActivityReport) - jamais les achats/
+					     ventes de cartes (ceux-là sont couverts par la section "Échanges
+					     monétaires" plus bas, basée sur les vraies Transaction). Le terme
+					     générique "Transactions" laissait croire aux deux écrans qu'ils
+					     mesuraient la même chose alors qu'il s'agit de deux réalités
+					     légitimement différentes - renommé pour lever l'ambiguïté plutôt
+					     que de laisser cet écart silencieux, avec une phrase explicite. -->
+					<p style="font-size:0.78rem;color:var(--text-dim);margin:0 0 0.5rem;" data-i18n="report.activity_disclaimer">Ce tableau ne compte que les opérations de crédit (emprunt, remboursement, intérêt, saisie, prison) - pas les achats/ventes de cartes, voir "Échanges monétaires" ci-dessous.</p>
 					<table class="activity-table">
 						<thead>
 							<tr>
 								<th data-i18n="report.activity_col_player">Joueur</th>
-								<th data-i18n="report.activity_col_transactions">Transactions</th>
+								<th data-i18n="report.activity_col_transactions" data-i18n-title="report.activity_col_transactions_title">Opérations de crédit</th>
 								<th id="activityBorrowedCol" data-i18n="report.activity_col_borrowed">Emprunté (total)</th>
 								<th data-i18n="report.activity_col_volume">Volume brassé</th>
 							</tr>

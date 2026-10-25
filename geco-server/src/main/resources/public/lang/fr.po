@@ -441,6 +441,18 @@ msgstr "Renommer ce joueur"
 msgid "game.player_copy_link_title"
 msgstr "Copier le lien individuel de ce joueur"
 
+msgid "game.player_qr_title"
+msgstr "QR code personnel de ce joueur (resynchroniser son téléphone)"
+
+msgid "game.player_qr_dialog_title"
+msgstr "QR personnel de {name}"
+
+msgid "game.player_qr_dialog_intro"
+msgstr "À scanner avec le téléphone de ce joueur pour (re)rejoindre cette partie avec son rôle - utile après une reprise des joueurs d'une partie précédente."
+
+msgid "game.qr_unavailable"
+msgstr "QR indisponible (bibliothèque non chargée)"
+
 msgid "game.pin_badge_title"
 msgstr "Cliquer pour copier le code PIN de cette partie"
 
@@ -870,6 +882,15 @@ msgstr "Valider"
 msgid "common.cancel"
 msgstr "Annuler"
 
+msgid "common.close"
+msgstr "Fermer"
+
+msgid "common.copy_link"
+msgstr "Copier le lien"
+
+msgid "common.copied"
+msgstr "Copié"
+
 # ============ Assistant de fin de tour ============
 msgid "wiz.continue_btn"
 msgstr "Continuer"
@@ -1206,7 +1227,13 @@ msgid "report.activity_col_player"
 msgstr "Joueur"
 
 msgid "report.activity_col_transactions"
-msgstr "Transactions"
+msgstr "Opérations de crédit"
+
+msgid "report.activity_col_transactions_title"
+msgstr "Emprunt, remboursement, intérêt, saisie, prison - pas les achats/ventes de cartes"
+
+msgid "report.activity_disclaimer"
+msgstr "Ce tableau ne compte que les opérations de crédit (emprunt, remboursement, intérêt, saisie, prison) - pas les achats/ventes de cartes, voir \"Échanges monétaires\" ci-dessous."
 
 msgid "report.activity_col_borrowed"
 msgstr "Emprunté (total)"
