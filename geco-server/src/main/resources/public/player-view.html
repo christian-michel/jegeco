@@ -51,7 +51,19 @@
 	<div id="screensContainer">
 
 	<!-- ===== Onglet "Accueil" : Tableau de bord ===== -->
+	<!-- Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 1) :
+	     refonte de l'écran d'accueil - ligne avatar+nom en haut, bouton "Demander
+	     un crédit" déplacé juste sous la carte Solde (dette uniquement), classement
+	     en dernier. Appliqué de façon cohérente aux trois systèmes smartphone pour
+	     l'avatar+nom et le classement scrollable (voir CSS), le bloc crédits restant
+	     réservé à la dette (hasStartingAllocation + moneySystem===1, voir isDebtGame()
+	     dans player-view.js). -->
 	<div id="viewContent" class="main-content">
+		<div class="home-identity-row" id="homeIdentityRow">
+			<div class="home-identity-avatar" id="homeIdentityAvatar"><span aria-hidden="true">🧑</span></div>
+			<span class="home-identity-name" id="homeIdentityName">—</span>
+		</div>
+
 		<section class="card balance-card" id="balanceCard">
 			<div>
 				<span class="card-subtitle" id="balanceCardSubtitle" data-i18n="trade.balance_label">Solde</span>
@@ -74,9 +86,23 @@
 				<!-- Décomposition en jetons physiques (31/08/2026) - voir
 				     renderDashboard()/computeTokenBreakdown() dans player-view.js. -->
 				<div class="token-breakdown" id="balanceCardBreakdown"></div>
+				<!-- Sous-lignes "crédits en cours"/"reste à rembourser" (24/10/2026,
+				     PDF "Retours - 20261024", page 1) - dette+smartphone uniquement,
+				     voir renderDashboard() dans player-view.js. -->
+				<div class="balance-credit-sublines hidden" id="balanceCreditSublines">
+					<div class="balance-credit-subline" id="balanceCreditCountLine"></div>
+					<div class="balance-credit-subline" id="balanceCreditRemainingLine"></div>
+				</div>
 			</div>
 			<div class="coin-icon-wrapper" aria-hidden="true">🪙</div>
 		</section>
+
+		<!-- Étape 3, monnaie dette uniquement (voir isDebtGame()) : demande de
+		     crédit auprès de l'animateur/la banque. Déplacé juste sous la carte
+		     Solde (24/10/2026, PDF "Retours - 20261024", page 1 : "déplacer le
+		     bouton 'Demander un crédit' vers le haut, juste sous la carte
+		     Solde"). -->
+		<button type="button" id="btnOpenCreditRequest" class="btn-secondary btn-block hidden" data-i18n="playerView.credit_request_btn">🏦 Demander un crédit</button>
 
 		<!-- Évolution du solde sur CE tour (voir renderDashboard) - masquée
 		     tant qu'aucune transaction n'a encore eu lieu ce tour. -->
@@ -102,18 +128,15 @@
 			<div class="activity-footer"><span class="activity-time" id="activityTime"></span></div>
 		</section>
 
+		<div id="playerDetails"></div>
+
 		<!-- Classement (aperçu, voir GameService.computeLeaderboard) - masqué
-		     s'il n'y a pas encore de joueurs actifs. -->
+		     s'il n'y a pas encore de joueurs actifs. Déplacé en dernier
+		     (24/10/2026, même PDF, mockup page 1). -->
 		<section class="card leaderboard-card hidden" id="dashLeaderboardCard">
 			<h2 class="card-subtitle mb-12" data-i18n="playerView.nav_leaderboard">Classement de la partie</h2>
 			<ul class="leaderboard-list" id="dashLeaderboardList"></ul>
 		</section>
-
-		<div id="playerDetails"></div>
-
-		<!-- Étape 3, monnaie dette uniquement (voir isDebtGame()) : demande de
-		     crédit auprès de l'animateur/la banque. -->
-		<button type="button" id="btnOpenCreditRequest" class="btn-secondary btn-block hidden" data-i18n="playerView.credit_request_btn">🏦 Demander un crédit</button>
 
 		<p style="font-size:0.72rem;color:var(--text-muted);margin-top:0.4rem;text-align:center;" data-i18n="playerView.footnote">
 			Cette page se rafraîchit automatiquement. Gardez ce lien pour toute la partie.
@@ -166,6 +189,23 @@
 	     Voir renderMyCards() dans player-view.js - bascule entre les deux vues
 	     (myCardsViewMode) et le critère de tri en liste (myCardsSortMode). -->
 	<div id="myCardsScreen" class="hidden">
+		<!-- Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024",
+		     page 2) : "sur l'écran 'Mes cartes', ajoute la même info (solde,
+		     nombre de crédits en cours, montant restant à rembourser) qui est
+		     déjà sur l'écran d'accueil" - même bloc, même style, dette+
+		     smartphone uniquement (voir renderMyCards() dans player-view.js). -->
+		<div class="card balance-card my-cards-credit-summary hidden" id="myCardsCreditSummary">
+			<div>
+				<span class="card-subtitle" data-i18n="trade.balance_label">Solde</span>
+				<div class="balance-amount"><span id="myCardsCreditBalanceValue">0</span></div>
+				<span class="balance-unit" id="myCardsCreditUnitLabel" data-i18n="playerView.stat_unit_monetary">unités monétaires</span>
+				<div class="balance-credit-sublines" id="myCardsCreditSublines">
+					<div class="balance-credit-subline" id="myCardsCreditCountLine"></div>
+					<div class="balance-credit-subline" id="myCardsCreditRemainingLine"></div>
+				</div>
+			</div>
+			<div class="coin-icon-wrapper" aria-hidden="true">🪙</div>
+		</div>
 		<!-- Étape 3 : vendre une carte se fait désormais exclusivement en
 		     cliquant dessus (voir openCardModal -> retournement -> QR) - le
 		     bouton "Vendre une carte" a été retiré (remonté par l'utilisateur,

@@ -409,7 +409,14 @@ async function refreshPlayer() {
 		el("btnOpenCreditRequest").classList.toggle("hidden", !isDebtGame());
 		const details = el("playerDetails");
 		let detailsHtml = "";
-		if ((state.player.curDebt > 0) || (state.player.curInterest > 0))
+		// Remonte par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 1) :
+		// cette meme information (credit en cours + reste a rembourser) est
+		// desormais affichee directement SOUS la carte Solde (voir
+		// balanceCreditSublines, renderDashboard() ci-dessous) - ce paragraphe
+		// generique n'est donc plus necessaire pour la dette (seul systeme ou
+		// curDebt/curInterest sont renseignes), garde "au cas ou" pour tout
+		// autre systeme futur plutot que supprime.
+		if (!isDebtGame() && ((state.player.curDebt > 0) || (state.player.curInterest > 0)))
 			detailsHtml += `<p>${t("playerView.current_credit", { debt: state.player.curDebt, interest: state.player.curInterest })}</p>`;
 		details.innerHTML = detailsHtml;
 		await Promise.all([renderDashboard(), renderProfile()]);
@@ -500,9 +507,45 @@ async function refreshPlayer() {
 // l'utilisateur le 30/08/2026 (repris quasi verbatim, voir player.css).
 // ============================================================
 async function renderDashboard() {
+	// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 1) :
+	// "ajouter le portrait avatar du joueur... avec son nom affiché à droite"
+	// sur l'écran d'accueil - même style que l'écran "Profil" existant
+	// (buildProfileAvatarHtml(), réutilisé tel quel). Appliqué aux TROIS
+	// systèmes monétaires smartphone (demande explicite : "ces changements
+	// concernent potentiellement aussi libre/troc pour la cohérence
+	// visuelle"), jamais conditionné à isDebtGame().
+	el("homeIdentityAvatar").innerHTML = buildProfileAvatarHtml(state.player.avatarConfigJson);
+	el("homeIdentityName").textContent = state.player.name;
+
 	// Le solde en jetons n'a de sens qu'en dette/libre - le troc n'a jamais de
 	// jetons par principe (voir docs/10-etape-plugins-troc.md, règle 3).
 	el("balanceCard").classList.toggle("hidden", isTrocGame());
+	// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 1) :
+	// sous le nombre d'unités monétaires de la carte "Solde", ajouter en
+	// petites lignes grises le nombre de crédits en cours et le montant
+	// restant à rembourser (dette+smartphone uniquement - curDebt/curInterest
+	// ne sont renseignés que pour ce système). HYPOTHÈSE documentée : le
+	// moteur (Player.curDebt/curInterest) agrège déjà tous les crédits en
+	// cours d'un même joueur en un seul total (voir Event.java, NEW_CREDIT/
+	// REIMB_CREDIT, toujours des += / -=), sans distinguer plusieurs crédits
+	// séparés - et depuis le correctif du 20/10/2026 ("un joueur déjà endetté
+	// ne peut plus redemander de crédit par smartphone", vérifié CÔTÉ
+	// SERVEUR), un joueur suivi par smartphone ne peut en pratique jamais
+	// avoir plus d'UN crédit actif à la fois par ce canal. "Nombre de crédits
+	// en cours" est donc toujours 0 ou 1 ici - affiché comme tel, jamais
+	// recalculé à partir d'un historique d'événements séparé qui n'existe
+	// pas côté client.
+	if (isDebtGame()) {
+		const hasCredit = (state.player.curDebt > 0) || (state.player.curInterest > 0);
+		el("balanceCreditSublines").classList.toggle("hidden", !hasCredit);
+		if (hasCredit) {
+			el("balanceCreditCountLine").textContent = t("playerView.home_credit_count_line", { n: 1 });
+			el("balanceCreditRemainingLine").textContent = t("playerView.home_credit_remaining_line",
+				{ principal: state.player.curDebt, interest: state.player.curInterest });
+		}
+	} else {
+		el("balanceCreditSublines").classList.add("hidden");
+	}
 	if (!isTrocGame()) {
 		// Remonté par l'utilisateur (08/09/2026) : "il faut aussi retirer
 		// l'affichage des jetons faibles moyens et forts sur les écrans
@@ -860,6 +903,23 @@ const LEVEL_VALUE = { faible: 3, moyenne: 6, forte: 12, tresforte: 24 };
 
 async function renderMyCards() {
 	showScreen("myCardsScreen");
+	// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 2) :
+	// même bloc solde+crédits que l'écran d'accueil (voir renderDashboard()),
+	// dette+smartphone uniquement.
+	if (isDebtGame()) {
+		el("myCardsCreditSummary").classList.remove("hidden");
+		el("myCardsCreditBalanceValue").textContent = state.player.tradeBalance;
+		el("myCardsCreditUnitLabel").textContent = t("playerView.stat_unit_coins");
+		const hasCredit = (state.player.curDebt > 0) || (state.player.curInterest > 0);
+		el("myCardsCreditSublines").classList.toggle("hidden", !hasCredit);
+		if (hasCredit) {
+			el("myCardsCreditCountLine").textContent = t("playerView.home_credit_count_line", { n: 1 });
+			el("myCardsCreditRemainingLine").textContent = t("playerView.home_credit_remaining_line",
+				{ principal: state.player.curDebt, interest: state.player.curInterest });
+		}
+	} else {
+		el("myCardsCreditSummary").classList.add("hidden");
+	}
 	if (!state.myCardsViewMode) state.myCardsViewMode = "grid";
 	// Remonté par l'utilisateur (31/08/2026) : "il faut faire de valeur
 	// l'affichage par défaut" - auparavant "catégorie".
@@ -1493,18 +1553,32 @@ async function renderLeaderboardInto(pCardWrapperId, pListId, pLimit) {
 			return;
 		}
 		wrapper.classList.remove("hidden");
-		if (pLimit) entries = entries.slice(0, pLimit);
+		// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 1) :
+		// "la section Classement de l'écran d'accueil doit montrer TOUS les
+		// joueurs (ou être scrollable), pas seulement les 4 premiers inscrits" -
+		// pLimit n'est plus utilisé pour TRONQUER la liste (aucun appelant ne
+		// perd d'information), seulement pour savoir si on est sur l'aperçu du
+		// tableau de bord (CSS .leaderboard-list--scrollable, hauteur limitée +
+		// défilement) ou sur l'écran "Classement" dédié (liste complète, pas de
+		// défilement imposé par une hauteur fixe).
+		list.classList.toggle("leaderboard-list--scrollable", !!pLimit);
 		// Couleurs de badge tournantes (voir .avatar-badge, mockup de référence)
-		// - purement décoratif, un simple repère visuel par position dans la
-		// liste plutôt qu'un système de couleur par joueur à faire persister.
+		// - gardées comme REPLI uniquement désormais : remplacées par un vrai
+		// portrait avatar dès qu'il est disponible (même demande, page 1 :
+		// "remplacer les badges 'lettre colorée' du classement par de petits
+		// portraits avatar réels" - réutilise buildProfileAvatarHtml(), déjà
+		// utilisé par l'écran Profil, jamais une seconde implémentation).
 		const badgeColors = ["bg-teal", "bg-pink", "bg-purple"];
 		list.innerHTML = entries.map((e, i) => {
 			const isMe = e.playerId === state.player.id;
 			const initial = escapeHtmlLocal((e.playerName || "?").charAt(0).toUpperCase());
+			const avatarHtml = e.avatarConfigJson
+				? `<div class="avatar-badge avatar-badge-photo ${isMe ? "me" : ""}">${buildProfileAvatarHtml(e.avatarConfigJson)}</div>`
+				: `<div class="avatar-badge ${badgeColors[i % badgeColors.length]} ${isMe ? "me" : ""}">${initial}</div>`;
 			return `
 			<li class="leaderboard-item">
 				<div class="player-info">
-					<div class="avatar-badge ${badgeColors[i % badgeColors.length]} ${isMe ? "me" : ""}">${initial}</div>
+					${avatarHtml}
 					<span class="player-name">${escapeHtmlLocal(e.playerName)}${isMe ? ` (${escapeHtmlLocal(t("playerView.leaderboard_you"))})` : ""}</span>
 				</div>
 				<span class="player-score">${e.value}</span>

@@ -1703,6 +1703,12 @@ msgstr "{n} goods"
 msgid "playerView.current_credit"
 msgstr "Current credit: {debt} (interest: {interest})"
 
+msgid "playerView.home_credit_count_line"
+msgstr "{n} credit in progress"
+
+msgid "playerView.home_credit_remaining_line"
+msgstr "Remaining to repay: {principal} (principal) + {interest} (interest)"
+
 # ============ Step 3: trading hub (sell / scan a QR code) ============
 msgid "trade.btn_sell"
 msgstr "Sell a card"

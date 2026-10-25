@@ -1707,6 +1707,12 @@ msgstr "{n} biens"
 msgid "playerView.current_credit"
 msgstr "Crédit en cours : {debt} (intérêts : {interest})"
 
+msgid "playerView.home_credit_count_line"
+msgstr "{n} crédit en cours"
+
+msgid "playerView.home_credit_remaining_line"
+msgstr "Reste à rembourser : {principal} (principal) + {interest} (intérêt)"
+
 # ============ Étape 3 : hub d'échange (vendre / scanner un QR) ============
 msgid "trade.btn_sell"
 msgstr "Vendre une carte"

@@ -1948,14 +1948,14 @@ public class GameService
 			}
 			else
 				value = computeTradeBalance(pGameId, p.getId());
-			entries.add(new Dtos.LeaderboardEntryDto(p.getId(), p.getName(), value, 0));
+			entries.add(new Dtos.LeaderboardEntryDto(p.getId(), p.getName(), value, 0, p.getAvatarConfigJson()));
 		}
 		entries.sort((a, b) -> Double.compare(b.value(), a.value()));
 		final List<Dtos.LeaderboardEntryDto> ranked = new java.util.ArrayList<>();
 		for (int i = 0; i < entries.size(); i++)
 		{
 			final Dtos.LeaderboardEntryDto e = entries.get(i);
-			ranked.add(new Dtos.LeaderboardEntryDto(e.playerId(), e.playerName(), e.value(), i + 1));
+			ranked.add(new Dtos.LeaderboardEntryDto(e.playerId(), e.playerName(), e.value(), i + 1, e.avatarConfigJson()));
 		}
 		return ranked;
 	}

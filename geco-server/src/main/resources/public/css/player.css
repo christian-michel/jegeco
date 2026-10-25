@@ -601,6 +601,13 @@ body {
 .activity-time { font-size: 0.74rem; color: var(--text-muted); }
 
 .leaderboard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+/* Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 1) :
+   "la section Classement de l'écran d'accueil doit montrer TOUS les joueurs
+   (ou être scrollable)" - utilisée uniquement pour l'APERÇU du tableau de
+   bord (voir renderLeaderboardInto() dans player-view.js), jamais pour
+   l'écran "Classement" dédié (liste complète, déjà sans contrainte de
+   hauteur). */
+.leaderboard-list--scrollable { max-height: 260px; overflow-y: auto; padding-right: 2px; }
 .leaderboard-item { display: flex; align-items: center; justify-content: space-between; }
 .player-info { display: flex; align-items: center; gap: 12px; }
 .player-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
@@ -609,11 +616,41 @@ body {
 	justify-content: center; color: #fff; font-weight: 700; font-size: 0.85rem;
 }
 .avatar-badge.me { box-shadow: 0 0 0 2px var(--primary-purple); }
+/* Portrait réel (24/10/2026, même PDF, page 1 : "remplacer les badges
+   'lettre colorée' du classement par de petits portraits avatar réels") -
+   contenu injecté par buildProfileAvatarHtml() (img ou SVG), plus de fond
+   coloré/initiale, juste un cadre rond cohérent avec .avatar-wrapper. */
+.avatar-badge-photo {
+	background: #fff; border-radius: 50%; overflow: hidden; font-size: 1.1rem;
+	box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+.avatar-badge-photo .avatar-img { width: 100%; height: 100%; }
 .bg-teal { background-color: #00838f; }
 .bg-pink { background-color: #a87994; }
 .bg-purple { background-color: #6c5ce7; }
 .player-name { font-size: 0.88rem; font-weight: 600; color: var(--text-dark); }
 .player-score { font-size: 0.92rem; font-weight: 700; color: var(--text-dark); }
+
+/* ============ Écran "Accueil" : ligne avatar+nom (24/10/2026, PDF "Retours
+   - 20261024", page 1) - même style que .avatar-wrapper du Profil, en plus
+   petit, avec le nom du joueur juste à droite. ============ */
+.home-identity-row { display: flex; align-items: center; gap: 12px; margin: 0.2rem 0 0.9rem; }
+.home-identity-avatar {
+	width: 52px; height: 52px; border-radius: 50%; background: #fff; padding: 3px;
+	box-shadow: 0 3px 10px rgba(0,0,0,0.08); display: flex; align-items: center;
+	justify-content: center; font-size: 1.5rem; flex-shrink: 0;
+}
+.home-identity-avatar .avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.home-identity-name { font-size: 1.05rem; font-weight: 700; color: var(--text-dark); }
+
+/* Sous-lignes "crédits en cours"/"reste à rembourser" de la carte Solde
+   (même PDF, page 1 et page 2) - dette+smartphone uniquement. */
+.balance-credit-sublines { margin-top: 6px; }
+.balance-credit-subline { font-size: 0.74rem; color: var(--text-muted); line-height: 1.35; }
+
+/* Même bloc Solde+crédits, réutilisé sur l'écran "Mes cartes" (page 2 du
+   même PDF) - juste un peu d'espace avant la barre de filtres grille/liste. */
+.my-cards-credit-summary { margin: 0.85rem 1.1rem 0; }
 
 /* ============ Écran : Mes cartes (grille + liste) ============ */
 .cards-filter-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.1rem 0.6rem; }

@@ -541,7 +541,13 @@ public class Dtos
 	// affiche systématiquement des UNITÉS MONÉTAIRES (voir jetonsToMoney
 	// côté client). int -> double : cette conversion peut être fractionnaire
 	// dès que weakCoinValue != 1 (ex. 7 jetons à weakCoinValue=0.4 = 2.8).
-	public record LeaderboardEntryDto(Integer playerId, String playerName, double value, int rank)
+	// avatarConfigJson ajouté le 24/10/2026 (PDF "Retours - 20261024", page 1 -
+	// "remplacer les badges 'lettre colorée' du classement par de petits
+	// portraits avatar réels") : réutilisé tel quel par buildProfileAvatarHtml()
+	// côté client (player-view.js), déjà utilisé par l'écran Profil - jamais
+	// recalculé séparément ici.
+	public record LeaderboardEntryDto(Integer playerId, String playerName, double value, int rank,
+			String avatarConfigJson)
 	{
 	}
 
