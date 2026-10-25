@@ -2092,34 +2092,82 @@ function openPlayerQuitDialog() {
 // pertinents pour un joueur individuel sont proposés (voir PLAYER_EVENT_TYPES).
 
 // Algorithme de saisie automatique ("Ne peut pas payer"), précisé par un
-// utilisateur : étant donné ce que le joueur possède (jetons + cartes faibles/
-// moyennes/fortes) et le montant que la banque décide de saisir, le programme
-// prélève automatiquement dans cet ordre strict : les jetons d'abord, puis les
-// cartes fortes (valeur 4), puis moyennes (valeur 2), puis faibles (valeur 1) -
-// une carte entière est toujours prélevée en entier (jamais de fraction de
-// carte), donc le montant réellement récupéré peut dépasser la cible visée.
+// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", pages 4-5) :
+// nouvel algorithme de saisie, remplace l'ordre glouton fort->moyen->faible
+// d'origine. Étant donné ce que le joueur possède (jetons + cartes faibles/
+// moyennes/fortes, valeurs 1/2/4) et le montant visé par la banque :
+//   1. saisir d'abord TOUS les jetons (monnaie) du joueur - inchangé ;
+//   2. puis compléter via les cartes de façon OPTIMALE : une combinaison qui
+//      atteint EXACTEMENT le reste si c'est possible, sinon la combinaison la
+//      plus proche qui le DÉPASSE au minimum (jamais en dessous) - recherche
+//      exhaustive sur les comptes de cartes fortes/moyennes (petits nombres
+//      par joueur), le nombre de faibles nécessaire s'en déduisant
+//      directement plutôt que d'être lui aussi énuméré.
+// HYPOTHÈSE documentée (le barème de ce point n'a pas été précisé dans le
+// PDF) : à overshoot égal entre plusieurs combinaisons, on préfère celle qui
+// saisit le MOINS de cartes au total (plus simple à exécuter physiquement/
+// moins de cartes à retirer au joueur) - n'affecte jamais le résultat
+// recherché (reste couvert au mieux), seulement lequel de plusieurs optima
+// équivalents est choisi quand il y en a plusieurs.
+// Niveau "tresforte" : toujours fusionné avec "forte" dans holdings.strongCards
+// (même choix que l'ancien algorithme et que computeCannotPayPrefill, qui
+// alimente holdings depuis l'inventaire réel du joueur) - une carte tresforte
+// vaut donc ici 4, comme une forte, jamais 8. Limite préexistante, non
+// réintroduite par ce correctif : aucune partie réelle observée jusqu'ici
+// n'active ce niveau en dette+smartphone (voir plugins/dette/manifest.json).
+function bestCardCombinationForRemaining(holdings, remaining) {
+	if (remaining <= 0) return { strong: 0, medium: 0, weak: 0 };
+	let best = null;
+	for (let s = 0; s <= holdings.strongCards; s++) {
+		const afterStrong = remaining - (4 * s);
+		for (let m = 0; m <= holdings.mediumCards; m++) {
+			const afterMedium = afterStrong - (2 * m);
+			// Nombre minimal de cartes faibles pour atteindre/dépasser la cible avec
+			// ce choix de (s, m) - jamais plus que ce que le joueur possède.
+			const w = Math.max(0, Math.min(holdings.weakCards, afterMedium));
+			const value = (4 * s) + (2 * m) + w;
+			const totalCards = s + m + w;
+			const candidate = { strong: s, medium: m, weak: w, value, totalCards };
+			if (!best) { best = candidate; continue; }
+			const bestReaches = best.value >= remaining;
+			const candReaches = candidate.value >= remaining;
+			if (candReaches && !bestReaches) { best = candidate; continue; }
+			if (!candReaches && bestReaches) continue;
+			if (candReaches && bestReaches) {
+				// Les deux atteignent la cible : on préfère le plus petit dépassement
+				// (0 = exact), puis, à égalité, le moins de cartes au total.
+				if (candidate.value < best.value
+					|| ((candidate.value === best.value) && (candidate.totalCards < best.totalCards)))
+					best = candidate;
+			} else {
+				// Ni l'un ni l'autre n'atteint la cible (le joueur n'a tout simplement
+				// pas assez de cartes) : on se rapproche le plus possible PAR LE HAUT
+				// de ce qui est atteignable, donc on préfère la plus grande valeur
+				// récupérée (jamais moins que ce que le joueur peut réellement donner).
+				if (candidate.value > best.value) best = candidate;
+			}
+		}
+	}
+	return best;
+}
+
 function computeAutoSeizure(holdings, targetAmount) {
 	let remaining = targetAmount;
 	const seizedCoins = Math.max(0, Math.min(remaining, holdings.money));
 	remaining -= seizedCoins;
 
-	let seizedStrong = 0;
-	while (remaining > 0 && seizedStrong < holdings.strongCards) { seizedStrong++; remaining -= 4; }
-	let seizedMedium = 0;
-	while (remaining > 0 && seizedMedium < holdings.mediumCards) { seizedMedium++; remaining -= 2; }
-	let seizedWeak = 0;
-	while (remaining > 0 && seizedWeak < holdings.weakCards) { seizedWeak++; remaining -= 1; }
+	const combo = bestCardCombinationForRemaining(holdings, remaining);
+	const seizedStrong = combo.strong;
+	const seizedMedium = combo.medium;
+	const seizedWeak = combo.weak;
 
 	const recoveredValue = seizedCoins + seizedStrong * 4 + seizedMedium * 2 + seizedWeak;
 	// Remonté par un utilisateur, avec un document de spécification détaillé : une
 	// carte saisie en entier peut faire dépasser le montant visé (ex. une carte
 	// forte de 4 saisie pour couvrir un reste de 1) - la banque doit alors rendre
-	// la différence. Note technique : une répartition automatique en dénominations
-	// précises n'est pas fiable ici (l'algorithme épuise toujours les jetons/
-	// cartes les plus petits disponibles avant de devoir dépasser la cible avec
-	// une carte plus grosse, donc il ne reste quasiment jamais de petites
-	// coupures à rendre) - on expose donc le montant du trop-perçu tel quel,
-	// l'animateur choisit physiquement comment le rendre.
+	// la différence. L'algorithme ci-dessus minimise déjà ce dépassement (exact
+	// quand c'est possible) - on expose le reliquat éventuel tel quel, l'animateur
+	// choisit physiquement comment le rendre.
 	const overshoot = Math.max(0, recoveredValue - targetAmount);
 
 	return {
@@ -2131,10 +2179,37 @@ function computeAutoSeizure(holdings, targetAmount) {
 	};
 }
 
+// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 4) :
+// calcule automatiquement la "Valeur que la banque décide de saisir"
+// (préremplissage de fSeizureTarget, toujours modifiable par l'animateur) :
+//   - intérêt ET principal non remboursés : principal + intérêt + 2 (ex. 3+1+2=6) ;
+//   - intérêt déjà remboursé, principal restant : principal + 2 (ex. 3+2=5).
+// Les deux formules se réduisent en réalité à UNE SEULE : player.curDebt/
+// curInterest ne contiennent déjà QUE ce qui reste dû (REIMB_CREDIT les
+// décrémente au fur et à mesure, voir Event.java) - "intérêt déjà remboursé"
+// correspond exactement à curInterest===0, donc "principal + intérêt + 2"
+// avec curInterest=0 redonne directement "principal + 2", sans disjonction de
+// cas nécessaire dans le code.
+// Plusieurs crédits en cours (règle 3 du PDF) : le moteur agrège déjà tous les
+// crédits d'un joueur en un seul total (curDebt/curInterest, toujours des
+// +=/-=, jamais de crédits distincts stockés séparément - voir NEW_CREDIT/
+// REIMB_CREDIT dans Event.java) - la pénalité de 2 s'applique donc UNE SEULE
+// FOIS sur ce total agrégé, jamais une fois par crédit individuel (le moteur
+// ne permettant pas de les distinguer). Depuis le correctif du 20/10/2026
+// ("un joueur déjà endetté ne peut plus redemander de crédit par
+// smartphone"), ce cas à plusieurs crédits ne peut en pratique plus survenir
+// que via la voie manuelle animateur (qui peut cumuler plusieurs NEW_CREDIT
+// sans cette garde) - la formule reste correcte dans ce cas aussi (toujours
+// une seule pénalité sur le total agrégé), seulement moins fréquente.
+function computeSeizureTargetPrefill(player) {
+	const owed = Math.max(0, player.curDebt) + Math.max(0, player.curInterest);
+	return owed > 0 ? owed + 2 : 0;
+}
+
 // Classification automatique Saisie / Banqueroute / Prison, confirmée par
 // l'utilisateur avec un exemple précis : une fois la saisie automatique
 // calculée (voir computeAutoSeizure ci-dessus) :
-//   - si la valeur récupérée ne couvre pas la dette totale (principal + intérêt)
+//   - si la valeur récupérée ne couvre pas la CIBLE visée par la banque
 //     → PRISON, le joueur perd tout ce qu'il lui restait ;
 //   - sinon, si moins de 4 cartes lui restent → BANQUEROUTE (faillite
 //     personnelle, passe un tour) ;
@@ -2145,12 +2220,18 @@ function computeAutoSeizure(holdings, targetAmount) {
 // de banqueroute ou de prison après le dernier tour de la partie" (tout le monde
 // quitte de toute façon). Dans ces deux cas, exemptOfStatus=true : la banque
 // saisit toujours, mais jamais de classification banqueroute/prison.
-function classifyCannotPay(player, seizureResult, exemptOfStatus) {
+// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 6) :
+// la comparaison se fait désormais contre pTargetAmount (la "Valeur que la
+// banque décide de saisir", champ fSeizureTarget - préremplie par
+// computeSeizureTargetPrefill mais toujours modifiable par l'animateur),
+// jamais contre owed=curDebt+curInterest seul - page 6, cas 3 : "la saisie ne
+// suffit pas à couvrir LA CIBLE", qui inclut la pénalité de 2, plus stricte
+// que la seule dette due.
+function classifyCannotPay(player, seizureResult, exemptOfStatus, pTargetAmount) {
 	const t = window.GecoI18n.t;
-	const owed = player.curDebt + player.curInterest;
 	if (exemptOfStatus)
 		return { code: "C", label: t("event.outcome.seizure_simple_label"), reason: t("event.outcome.seizure_simple_reason") };
-	if (seizureResult.recoveredValue < owed)
+	if (seizureResult.recoveredValue < pTargetAmount)
 		return { code: "P", label: t("event.outcome.prison_label"), reason: t("event.outcome.prison_reason") };
 	if (seizureResult.cardsRemaining < 4)
 		return { code: "B", label: t("event.outcome.bankrupt_label"), reason: t("event.outcome.bankrupt_reason") };
@@ -2218,6 +2299,11 @@ async function openPlayerEventDialog(player, options = {}) {
 	const pfWeak = cannotPayPrefill ? cannotPayPrefill.weak : 0;
 	const pfMedium = cannotPayPrefill ? cannotPayPrefill.medium : 0;
 	const pfStrong = cannotPayPrefill ? cannotPayPrefill.strong : 0;
+	// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 4) :
+	// préremplit la cible de saisie automatiquement (voir
+	// computeSeizureTargetPrefill ci-dessus) au lieu de 0 - toujours
+	// modifiable par l'animateur ensuite, comme les autres champs préremplis.
+	const pfSeizureTarget = allowed.includes("C") ? computeSeizureTargetPrefill(player) : 0;
 
 	openDialog(t("game.player_dialog_title", { name: escapeHtml(player.name) }), `
 		${playerTypes.length > 1 ? `<label>${t("game.field_event_type")}</label><select id="fEvtType">${typeOptions}</select>`
@@ -2241,7 +2327,7 @@ async function openPlayerEventDialog(player, options = {}) {
 			<label>${t("game.field_player_strong")}</label>
 			<input id="fPlayerStrongCards" type="number" value="${pfStrong}">
 			<label>${t("game.field_seizure_target")}</label>
-			<input id="fSeizureTarget" type="number" value="0">
+			<input id="fSeizureTarget" type="number" value="${pfSeizureTarget}">
 			<p class="cannot-pay-inventory-title">${t("game.cannotpay_inventory_title")}</p>
 			<p id="cannotPaySeizureDetail" style="font-size:0.82rem;color:var(--text-dim)"></p>
 			<p id="cannotPayOutcome" style="font-size:0.85rem;font-weight:700;margin-top:0.4rem;"></p>
@@ -2257,7 +2343,7 @@ async function openPlayerEventDialog(player, options = {}) {
 			};
 			const target = parseInt(el("fSeizureTarget").value || "0", 10);
 			const seizure = computeAutoSeizure(holdings, target);
-			const outcome = classifyCannotPay(player, seizure, options.exemptOfStatus);
+			const outcome = classifyCannotPay(player, seizure, options.exemptOfStatus, target);
 			await Api.recordEvent(state.currentGameId, {
 				type: outcome.code, playerId: player.id, principal: seizure.seizedCoins, interest: 0,
 				weakCards: seizure.seizedWeak, mediumCards: seizure.seizedMedium, strongCards: seizure.seizedStrong,
@@ -2341,7 +2427,7 @@ async function openPlayerEventDialog(player, options = {}) {
 		};
 		const target = parseInt(el("fSeizureTarget").value || "0", 10);
 		const seizure = computeAutoSeizure(holdings, target);
-		const outcome = classifyCannotPay(player, seizure, options.exemptOfStatus);
+		const outcome = classifyCannotPay(player, seizure, options.exemptOfStatus, target);
 		el("cannotPaySeizureDetail").textContent = t("game.seizure_detail", {
 			coins: seizure.seizedCoins, strong: seizure.seizedStrong, medium: seizure.seizedMedium,
 			weak: seizure.seizedWeak, recovered: seizure.recoveredValue, remaining: seizure.cardsRemaining,

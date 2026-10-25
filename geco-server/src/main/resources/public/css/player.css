@@ -1048,13 +1048,55 @@ body {
 
 .death-anim-title-host {
 	position: relative; z-index: 1; width: 82%; max-width: 420px;
-	opacity: 0; will-change: transform, opacity, filter;
+	opacity: 0; will-change: transform, opacity;
 	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
 }
 .death-anim-title-host.stamp-in { animation: deathAnimStampSlam 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
+/* Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page 7) :
+   sur Apple (iPad/iPhone, Safari ET Chrome iOS - les deux reposent sur le
+   même moteur WebKit imposé par Apple, contrairement à Android où Chrome
+   utilise Blink) les textes de CES animations plein écran ("Stop !",
+   "Commencez !", "Prison !" - et par construction aussi "Mort du joueur"/
+   "Renaissance !", qui partagent CE MÊME keyframe, voir les sélecteurs
+   .stamp-in plus bas dans ce fichier) apparaissent flous ou invisibles,
+   alors que tout fonctionne normalement sur Android. DIAGNOSTIC (non
+   vérifiable sur un vrai appareil Apple dans cet environnement, documenté
+   ici en toute transparence) : deux défauts cumulés, tous deux dans CE
+   keyframe, avant ce correctif.
+   1) `filter: blur(10px)` -> `filter: blur(0)` ANIME LA PROPRIÉTÉ `filter`
+      SUR UN ÉLÉMENT dont le style de base (voir .death-anim-title-host,
+      .turnstart-anim-title-host&co ci-dessous) déclare DÉJÀ un `filter:
+      drop-shadow(...)` statique. Une animation CSS sur `filter` REMPLACE
+      entièrement la valeur de la propriété pendant toute sa durée (elle ne
+      s'additionne PAS à la valeur statique) - le drop-shadow disparaît donc
+      pendant les 380ms de l'animation, ce qui est déjà une perte visuelle
+      mineure en soi, mais surtout : aucun des paliers 85%/100% ne redéclare
+      `filter` - par la spécification CSS Animations, la propriété reste
+      alors figée à sa dernière valeur EXPLICITE (celle du palier 70%, donc
+      "blur(0)") une fois l'animation terminée (`forwards`), et ne revient
+      JAMAIS au drop-shadow statique d'origine. 2) `will-change: ...,
+      filter` (voir les mêmes sélecteurs) demande explicitement au moteur de
+      préparer une couche composée séparément accélérée GPU pour la
+      propriété `filter` - combinée à `transform: scale()` qui change
+      radicalement la taille du calque PENDANT MÊME temps que `filter: blur()`
+      est actif (de 3.4x à ~1x, un flou appliqué à un texte qui rétrécit
+      fortement en même temps), c'est un scénario CONNU pour déclencher un
+      bug de rendu WebKit où le texte reste rastérisé à la résolution du
+      calque flou intermédiaire (son "bitmap" mis en cache ne se
+      re-rastérise jamais à pleine netteté une fois le flou retiré) - décrit
+      à plusieurs reprises dans la communauté WebKit pour des animations
+      combinant `filter: blur()` + `transform: scale()` sur un même calque,
+      spécifiquement sur Safari/WebKit (jamais sur Blink/Android, cohérent
+      avec le symptôme observé). Corrigé en retirant `filter` de CE
+      keyframe : l'effet "coup de tampon" (zoom qui rétrécit + léger rebond
+      + rotation) reste intégralement inchangé sur Android, qui n'affichait
+      jamais ce défaut - seul le fondu flou->net à l'entrée (un simple
+      agrément visuel, jamais nécessaire à la lisibilité) est retiré, ET le
+      drop-shadow statique n'est plus jamais écrasé ni perdu après
+      l'animation (bénéfice correctif, sur les deux plateformes). */
 @keyframes deathAnimStampSlam {
-	0%   { opacity: 0; transform: scale(3.4) translateY(-30px) rotate(-3deg); filter: blur(10px); }
-	70%  { opacity: 1; transform: scale(0.94) translateY(4px) rotate(-0.5deg); filter: blur(0); }
+	0%   { opacity: 0; transform: scale(3.4) translateY(-30px) rotate(-3deg); }
+	70%  { opacity: 1; transform: scale(0.94) translateY(4px) rotate(-0.5deg); }
 	85%  { transform: scale(1.05) translateY(-2px) rotate(-0.5deg); }
 	100% { opacity: 1; transform: scale(1) translateY(0) rotate(-0.5deg); }
 }
@@ -1231,7 +1273,7 @@ body {
 	   libre pour l'animation du coup de tampon ci-dessous). */
 	position: absolute; left: 0; right: 0; top: 18%; margin: 0 auto;
 	z-index: 2; width: 82%; max-width: 420px;
-	opacity: 0; will-change: transform, opacity, filter;
+	opacity: 0; will-change: transform, opacity;
 	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.4));
 }
 .rebirth-anim-title-host.stamp-in { animation: deathAnimStampSlam 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }
@@ -1320,7 +1362,7 @@ body {
 	   TURNSTART_ANIM_EXPLODE_MS/TURNEND_ANIM_EXPLODE_MS côté JS, à garder
 	   synchronisées. */
 	transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.55s ease-out;
-	will-change: transform, filter;
+	will-change: transform;
 }
 .turnstart-anim-zoom { background-image: url("/img/turnstart-background.jpg"); }
 .turnend-anim-zoom { background-image: url("/img/turnend-background.jpg"); }
@@ -1354,7 +1396,7 @@ body {
 .turnstart-anim-title-host, .turnend-anim-title-host {
 	position: absolute; left: 0; right: 0; top: 10%; margin: 0 auto;
 	z-index: 2; width: 86%; max-width: 420px;
-	opacity: 0; will-change: transform, opacity, filter;
+	opacity: 0; will-change: transform, opacity;
 	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.5));
 }
 .turnstart-anim-title-host.stamp-in, .turnend-anim-title-host.stamp-in {
@@ -1432,7 +1474,7 @@ body {
 
 .prison-anim-title-host {
 	position: relative; z-index: 1; width: 82%; max-width: 420px;
-	opacity: 0; will-change: transform, opacity, filter;
+	opacity: 0; will-change: transform, opacity;
 	filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
 }
 .prison-anim-title-host.stamp-in { animation: deathAnimStampSlam 380ms cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards; }

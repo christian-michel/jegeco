@@ -2297,13 +2297,55 @@ public class GameService
 			final Game game = em.find(Game.class, pGameId);
 			if (game == null)
 				return;
+			// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", page
+			// 6, cas 3) : "à la fin de ce tour..., il reçoit 4 NOUVELLES cartes
+			// aléatoires de valeur faible tirées de la pioche" - un joueur en prison
+			// (dette+smartphone) a TOUJOURS la main vide à ce stade (voir
+			// resolveCannotPaySeizureUnlocked ci-dessus, qui lui a tout saisi au
+			// moment de l'événement PRISON, sans lui redonner de carte) : chargée
+			// UNE SEULE FOIS par partie (pas par joueur libéré) pour éviter de
+			// relire/réécrire la pioche partagée plusieurs fois inutilement si
+			// plusieurs joueurs sortent de prison le même tour.
+			java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel = null;
+			boolean pilesDirty = false;
 			em.getTransaction().begin();
 			for (final Player player : game.getPlayers())
 			{
 				if ((player.getPrisonUntilTurn() != null)
 						&& (player.getPrisonUntilTurn().intValue() == game.getTurnNumber()))
+				{
 					player.setPrisonUntilTurn(null);
+					if ((game.getMoneySystem() == Game.MONEY_DEBT) && (player.getStartingCardsJson() != null)
+							&& (game.getSmartphoneCardPileJson() != null))
+					{
+						final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+						if (pilesByLevel == null)
+						{
+							try
+							{
+								pilesByLevel = mapper.readValue(game.getSmartphoneCardPileJson(),
+										new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.Map<String, Integer>>>()
+										{
+										});
+							}
+							catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+							{
+								pilesByLevel = null; // donnée corrompue : on abandonne juste la distribution de cartes, jamais la libération elle-même
+							}
+						}
+						if (pilesByLevel != null)
+						{
+							final java.util.Map<String, Integer> freshHand = dealFreshHandForPlayer(pilesByLevel);
+							writeJsonQuietly(mapper, freshHand, player::setStartingCardsJson);
+							player.setCardInventoryResetAt(new java.util.Date());
+							pilesDirty = true;
+						}
+					}
+				}
 			}
+			if (pilesDirty && (pilesByLevel != null))
+				writeJsonQuietly(new com.fasterxml.jackson.databind.ObjectMapper(), pilesByLevel,
+						game::setSmartphoneCardPileJson);
 			em.getTransaction().commit();
 		}
 		finally
@@ -2356,6 +2398,179 @@ public class GameService
 	// dans CET ordre fixe, jusqu'à "tresforte" qui reste le sommet).
 	private static final java.util.List<String> LEVEL_ORDER = java.util.List.of("faible", "moyenne", "forte", //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 			"tresforte"); //$NON-NLS-1$
+
+	/**
+	 * Effets de pioche de la saisie "Ne peut pas payer" (dette+smartphone) -
+	 * remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", pages
+	 * 5-6). Appelée par GecoServer juste APRÈS avoir enregistré l'événement
+	 * C/B/P lui-même (voir recordEvent) - ne modifie jamais l'événement,
+	 * seulement l'inventaire RÉEL de cartes du joueur. Jamais pour la dette
+	 * CLASSIQUE (pas de notion de carte suivie par smartphone) : no-op
+	 * silencieux si le joueur ou la partie ne sont pas concernés.
+	 * <p>
+	 * Réutilise EXACTEMENT le même mécanisme que la mort/renaissance (voir
+	 * recordEventUnlocked, cas DEATH/QUIT, plus haut dans ce fichier) :
+	 * {@code Player.cardInventoryResetAt} + {@code startingCardsJson} -
+	 * jamais une suppression directe d'un inventaire stocké (qui n'existe
+	 * pas, voir {@link #computePlayerCardInventory}, toujours DÉRIVÉ de
+	 * l'historique). Les cartes précises retirées sont choisies AU HASARD
+	 * parmi celles réellement détenues par le joueur à chaque niveau (page 5,
+	 * point 4 : "le joueur n'a pas son mot à dire") et remises dans LEUR
+	 * pioche de niveau - jamais perdues, exactement comme pour un carré ou
+	 * une mort.
+	 * <ul>
+	 * <li><b>"C"</b> (simple saisie, page 6 cas 1) : retire seulement
+	 * pSeizedWeak/pSeizedMedium/pSeizedStrong cartes, clampées au RÉEL
+	 * inventaire du joueur (jamais de confiance aveugle dans ce que le client
+	 * a calculé/envoyé) ;</li>
+	 * <li><b>"B"</b> (banqueroute personnelle, cas 2) : retire EN PLUS tout ce
+	 * qu'il lui reste après cette saisie ciblée (il se retrouve à 0 carte),
+	 * puis pioche IMMÉDIATEMENT 4 nouvelles cartes faibles ;</li>
+	 * <li><b>"P"</b> (prison, cas 3) : ignore les comptes demandés, retire
+	 * TOUTES les cartes du joueur sans exception - les 4 nouvelles cartes ne
+	 * sont PAS distribuées ici mais à la libération (voir
+	 * {@link #clearExpiredPrisonStatusUnlocked}, qui les ajoute pour tout
+	 * joueur dette+smartphone dont la prison vient de se terminer).</li>
+	 * </ul>
+	 */
+	// Verrou par partie : voir mGameLocks/withGameLock (27/09/2026).
+	public void resolveCannotPaySeizure(final int pGameId, final int pPlayerId, final String pOutcomeCode,
+			final int pSeizedWeak, final int pSeizedMedium, final int pSeizedStrong)
+	{
+		withGameLock(pGameId, () -> {
+			resolveCannotPaySeizureUnlocked(pGameId, pPlayerId, pOutcomeCode, pSeizedWeak, pSeizedMedium,
+					pSeizedStrong);
+			return null;
+		});
+	}
+
+	private void resolveCannotPaySeizureUnlocked(final int pGameId, final int pPlayerId, final String pOutcomeCode,
+			final int pSeizedWeak, final int pSeizedMedium, final int pSeizedStrong)
+	{
+		final EntityManager em = mEntityManagerFactory.createEntityManager();
+		try
+		{
+			final Game game = em.find(Game.class, pGameId);
+			final Player player = em.find(Player.class, pPlayerId);
+			if ((game == null) || (player == null) || (game.getMoneySystem() != Game.MONEY_DEBT)
+					|| (player.getStartingCardsJson() == null) || (game.getSmartphoneCardPileJson() == null))
+				return; // dette CLASSIQUE, ou joueur pas (encore) suivi par smartphone : rien à faire ici
+
+			final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+			final java.util.Map<String, java.util.Map<String, Integer>> pilesByLevel;
+			try
+			{
+				pilesByLevel = mapper.readValue(game.getSmartphoneCardPileJson(),
+						new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, java.util.Map<String, Integer>>>()
+						{
+						});
+			}
+			catch (final com.fasterxml.jackson.core.JsonProcessingException e)
+			{
+				return; // donnée corrompue : on abandonne silencieusement plutôt que de planter
+			}
+
+			final java.util.Map<String, Integer> owned = new java.util.LinkedHashMap<>(
+					computePlayerCardInventory(em, pGameId, pPlayerId));
+
+			final boolean isPrison = "P".equals(pOutcomeCode); //$NON-NLS-1$
+			final boolean isBankrupt = "B".equals(pOutcomeCode); //$NON-NLS-1$
+
+			em.getTransaction().begin();
+			if (isPrison)
+			{
+				// Cas 3 (page 6) : TOUT est saisi, sans exception, quels que soient les
+				// comptes demandés - "la saisie ne suffit pas... TOUTES les cartes du
+				// joueur sont remises dans la pioche".
+				for (final java.util.Map.Entry<String, Integer> e : new java.util.LinkedHashMap<>(owned).entrySet())
+					returnCardsToPile(pilesByLevel, e.getKey(), e.getValue());
+				owned.clear();
+			}
+			else
+			{
+				seizeRandomOwnedCards(owned, pilesByLevel, "faible", pSeizedWeak); //$NON-NLS-1$
+				seizeRandomOwnedCards(owned, pilesByLevel, "moyenne", pSeizedMedium); //$NON-NLS-1$
+				// "forte" et "tresforte" sont fusionnées en une seule "carte forte"
+				// (valeur 4) depuis l'origine de computeAutoSeizure côté client (voir
+				// son commentaire daté, HYPOTHÈSE documentée) - même simplification
+				// reprise ici pour le retrait réel : on retire d'abord parmi les
+				// "forte" possédées, puis parmi les "tresforte" si le compte n'est pas
+				// encore atteint.
+				final int seizedAmongForte = seizeRandomOwnedCards(owned, pilesByLevel, "forte", pSeizedStrong); //$NON-NLS-1$
+				seizeRandomOwnedCards(owned, pilesByLevel, "tresforte", pSeizedStrong - seizedAmongForte); //$NON-NLS-1$
+
+				if (isBankrupt)
+				{
+					// Cas 2 (page 6) : "ses cartes restantes sont AUSSI saisies" - tout ce
+					// qu'il reste après la saisie ciblée ci-dessus repart à la pioche.
+					for (final java.util.Map.Entry<String, Integer> e : new java.util.LinkedHashMap<>(owned)
+							.entrySet())
+						returnCardsToPile(pilesByLevel, e.getKey(), e.getValue());
+					owned.clear();
+					// "puis il reçoit 4 NOUVELLES cartes aléatoires de valeur faible" -
+					// immédiatement, contrairement à la prison (distribuées à la
+					// libération, voir clearExpiredPrisonStatusUnlocked).
+					final java.util.Map<String, Integer> freshHand = dealFreshHandForPlayer(pilesByLevel);
+					for (final java.util.Map.Entry<String, Integer> e : freshHand.entrySet())
+						owned.merge(e.getKey(), e.getValue(), Integer::sum);
+				}
+			}
+
+			writeJsonQuietly(mapper, pilesByLevel, game::setSmartphoneCardPileJson);
+			writeJsonQuietly(mapper, owned, player::setStartingCardsJson);
+			player.setCardInventoryResetAt(new java.util.Date());
+			em.getTransaction().commit();
+		}
+		finally
+		{
+			em.close();
+		}
+	}
+
+	// Retire jusqu'à pCount cartes POSSÉDÉES par le joueur à ce niveau précis,
+	// choisies AU HASARD parmi ses modèles réellement détenus (page 5, point 4
+	// du PDF ci-dessus - "le joueur n'a pas son mot à dire") - remises à la
+	// pioche partagée de ce même niveau. Modifie pOwned et pPilesByLevel EN
+	// PLACE. Retourne le nombre réellement retiré (peut être < pCount si le
+	// joueur n'a pas assez de cartes à ce niveau - ne devrait pas arriver si
+	// le calcul amont est cohérent avec son inventaire réel, mais jamais de
+	// confiance aveugle dans ce que le client a envoyé).
+	private int seizeRandomOwnedCards(final java.util.Map<String, Integer> pOwned,
+			final java.util.Map<String, java.util.Map<String, Integer>> pPilesByLevel, final String pLevel,
+			final int pCount)
+	{
+		if (pCount <= 0)
+			return 0;
+		final java.util.List<String> candidates = new java.util.ArrayList<>();
+		for (final java.util.Map.Entry<String, Integer> e : pOwned.entrySet())
+			if (pLevel.equals(findLevelOfCard(pPilesByLevel, e.getKey())))
+				for (int i = 0; i < e.getValue(); i++)
+					candidates.add(e.getKey());
+		java.util.Collections.shuffle(candidates, new java.util.Random());
+		int seized = 0;
+		for (final String cardId : candidates)
+		{
+			if (seized >= pCount)
+				break;
+			pOwned.merge(cardId, -1, Integer::sum);
+			if (pOwned.get(cardId) <= 0)
+				pOwned.remove(cardId);
+			returnCardsToPile(pPilesByLevel, cardId, 1);
+			seized++;
+		}
+		return seized;
+	}
+
+	private void returnCardsToPile(final java.util.Map<String, java.util.Map<String, Integer>> pPilesByLevel,
+			final String pCardTypeId, final int pCount)
+	{
+		if (pCount <= 0)
+			return;
+		final String level = findLevelOfCard(pPilesByLevel, pCardTypeId);
+		if (level == null)
+			return;
+		pPilesByLevel.get(level).merge(pCardTypeId, pCount, Integer::sum);
+	}
 
 	/**
 	 * Étape 3, monnaie libre, mode smartphone : détecte et encaisse
