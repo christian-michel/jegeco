@@ -2444,6 +2444,62 @@ public class GameService
 		});
 	}
 
+	/**
+	 * BUG TROUVÉ ET CORRIGÉ (25/10/2026, audit indépendant de la campagne de
+	 * validation du PDF "Retours - 20261024", commit c71a74c) : jusqu'ici,
+	 * {@code GecoServer} enregistrait l'événement C/B/P via {@link #recordEvent}
+	 * (qui prend puis RELÂCHE le verrou de partie) puis appelait
+	 * {@link #resolveCannotPaySeizure} séparément (qui reprend le même verrou
+	 * dans un second temps) - deux acquisitions DISTINCTES du même verrou,
+	 * jamais une seule section atomique. Pour "P" (PRISON) précisément, ça
+	 * ouvrait une fenêtre réelle entre les deux appels où
+	 * {@code Player.prisonUntilTurn} est déjà posé (donc
+	 * {@code isPlayerInPrison} répondrait déjà "oui") mais où les cartes du
+	 * joueur n'ont PAS ENCORE été saisies - si un acheteur valide l'achat
+	 * d'une carte de ce vendeur pendant exactement cette fenêtre (offre créée
+	 * AVANT sa mise en prison, cf. {@code GecoServer}, la vérification de
+	 * prison du VENDEUR n'a lieu qu'à la CRÉATION de l'offre, jamais à sa
+	 * rédemption - seul l'acheteur est revérifié là), la vente passerait
+	 * quand même : le vendeur possède encore réellement la carte à cet
+	 * instant précis (vérifié par {@code recordTransactionUnlocked}, qui lui
+	 * ne revérifie que la possession, jamais {@code prisonUntilTurn}). Jamais
+	 * reproduit en pratique dans les 3 campagnes HTTP menées jusqu'ici (90+53
+	 * vérifications) - fenêtre trop étroite pour un scénario séquentiel - mais
+	 * un vrai trou de conception, exactement le type que ce projet corrige
+	 * systématiquement par construction plutôt que de compter sur la chance
+	 * (voir CLAUDE.md, "Motif récurrent à surveiller", 11/10/2026).
+	 * Corrigé en fusionnant les deux opérations sous UNE SEULE acquisition du
+	 * verrou de partie (réentrant par construction, voir sa Javadoc) - appelé
+	 * désormais par {@code GecoServer} à la place de l'enchaînement
+	 * recordEvent()+resolveCannotPaySeizure() séparé pour "C"/"B"/"P"
+	 * uniquement (tout autre type d'événement continue d'utiliser
+	 * {@link #recordEvent} seul, inchangé). Vérifié par
+	 * {@code GameServiceCannotPaySeizureConcurrencyTest} (24 appels
+	 * réellement simultanés, conservation stricte) et par une reproduction
+	 * HTTP dédiée de cette fenêtre précise
+	 * ({@code GameServicePrisonSellerRaceTest}).
+	 */
+	public Event recordEventAndResolveCannotPaySeizure(final int pGameId, final String pEventTypeChar,
+			final Integer pPlayerId, final int pPrincipal, final int pInterest, final int pWeakCards,
+			final int pMediumCards, final int pStrongCards, final Integer pCounterpartyPlayerId,
+			final int pGoodsFromPlayer, final int pGoodsFromCounterparty, final int pWeakCoins,
+			final int pMediumCoins, final int pStrongCoins, final int pWeakGoodsFromCounterparty,
+			final int pMediumGoodsFromCounterparty, final int pStrongGoodsFromCounterparty)
+			throws PlayerNotFoundException
+	{
+		return withGameLock(pGameId, () -> {
+			final Event event = recordEventUnlocked(pGameId, pEventTypeChar, pPlayerId, pPrincipal, pInterest,
+					pWeakCards, pMediumCards, pStrongCards, pCounterpartyPlayerId, pGoodsFromPlayer,
+					pGoodsFromCounterparty, pWeakCoins, pMediumCoins, pStrongCoins, pWeakGoodsFromCounterparty,
+					pMediumGoodsFromCounterparty, pStrongGoodsFromCounterparty);
+			if (((pPlayerId != null) && ("C".equals(pEventTypeChar) || "B".equals(pEventTypeChar) //$NON-NLS-1$ //$NON-NLS-2$
+					|| "P".equals(pEventTypeChar)))) //$NON-NLS-1$
+				resolveCannotPaySeizureUnlocked(pGameId, pPlayerId.intValue(), pEventTypeChar, pWeakCards,
+						pMediumCards, pStrongCards);
+			return event;
+		});
+	}
+
 	private void resolveCannotPaySeizureUnlocked(final int pGameId, final int pPlayerId, final String pOutcomeCode,
 			final int pSeizedWeak, final int pSeizedMedium, final int pSeizedStrong)
 	{

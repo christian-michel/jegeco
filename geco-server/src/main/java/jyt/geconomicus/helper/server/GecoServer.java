@@ -1712,23 +1712,23 @@ public class GecoServer
 			// mGameService.recordEvent() directement sans jamais passer par cette
 			// route - même correctif appliqué là-bas séparément.
 			performSmartphoneMiseEnPlaceIfNeeded(id);
-			final Event event = mGameService.recordEvent(id, req.type(), req.playerId(), req.principal(),
-					req.interest(), req.weakCards(), req.mediumCards(), req.strongCards(),
+			// BUG TROUVÉ ET CORRIGÉ (25/10/2026, audit indépendant de la campagne de
+			// validation du PDF "Retours - 20261024", commit c71a74c) : enregistrer
+			// l'événement C/B/P puis résoudre la saisie de cartes réelle par DEUX
+			// appels séparés (chacun reprenant son propre verrou de partie) laissait
+			// une fenêtre entre les deux où Player.prisonUntilTurn est déjà posé mais
+			// où les cartes du joueur n'ont pas encore été retirées - un achat de ce
+			// vendeur (offre créée AVANT sa mise en prison, jamais revérifiée côté
+			// VENDEUR à la rédemption, voir isPlayerInPrison plus bas dans ce
+			// fichier) pouvait alors passer. Voir
+			// GameService.recordEventAndResolveCannotPaySeizure, sa Javadoc, pour le
+			// détail complet - fusionne désormais les deux opérations sous UNE
+			// SEULE acquisition du verrou.
+			final Event event = mGameService.recordEventAndResolveCannotPaySeizure(id, req.type(), req.playerId(),
+					req.principal(), req.interest(), req.weakCards(), req.mediumCards(), req.strongCards(),
 					req.counterpartyPlayerId(), req.goodsFromPlayer(), req.goodsFromCounterparty(),
 					req.weakCoins(), req.mediumCoins(), req.strongCoins(),
 					req.weakGoodsFromCounterparty(), req.mediumGoodsFromCounterparty(), req.strongGoodsFromCounterparty());
-			// Remonté par l'utilisateur (24/10/2026, PDF "Retours - 20261024", pages
-			// 5-6) : une fois l'événement C/B/P (Ne peut pas payer / Banqueroute /
-			// Prison) enregistré ci-dessus, exécute les effets de pioche réels
-			// associés (cartes précises retirées au joueur et remises dans la
-			// pioche partagée, nouvelles cartes distribuées en banqueroute - voir
-			// GameService.resolveCannotPaySeizure, sa Javadoc pour le détail
-			// complet) - no-op silencieux pour la dette CLASSIQUE ou un joueur pas
-			// suivi par smartphone (vérifié DANS cette méthode, jamais ici).
-			if (("C".equals(req.type()) || "B".equals(req.type()) || "P".equals(req.type())) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-					&& (req.playerId() != null))
-				mGameService.resolveCannotPaySeizure(id, req.playerId(), req.type(), req.weakCards(),
-						req.mediumCards(), req.strongCards());
 			broadcast(id, "event", EventDto.from(event)); //$NON-NLS-1$
 			// Animation "Mort du joueur" (26/09/2026, demande utilisateur : "à
 			// l'entre deux tours, lorsque les morts sont annoncés... les
